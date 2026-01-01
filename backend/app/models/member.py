@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy.orm import relationship
 from app.models.base import Base
 
 
@@ -11,3 +12,9 @@ class Member(Base):
     email = Column(String(200), nullable=True)
     role = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Foreign key to users table (optional - a member may or may not have a user account)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, unique=True)
+    
+    # Relationship back to User
+    user = relationship("User", back_populates="member")
