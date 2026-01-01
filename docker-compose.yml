@@ -1,0 +1,54 @@
+
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: temple_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-templedb}
+      POSTGRES_USER: ${POSTGRES_USER:-templeuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-templepass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-templeuser} -d ${POSTGRES_DB:-templedb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: temple_backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-templeuser}:${POSTGRES_PASSWORD:-templepass}@postgres:5432/${POSTGRES_DB:-templedb}
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-prod-very-secret}
+      ENV: production
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
+    container_name: temple_frontend
+    restart: always
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
+      - INTERNAL_API_BASE_URL=http://backend:8000/api/v1
+      - NODE_ENV=production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+pydantic
+python-dotenv
+python-jose
+passlib[argon2]
+alembic==1.13.1
+qrcode[pil]
+email-validator>=2.1.0
+xhtml2pdf
+reportlab

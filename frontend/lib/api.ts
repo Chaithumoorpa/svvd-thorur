@@ -2,9 +2,7 @@ import axios from 'axios';
 
 const baseURL = typeof window === 'undefined'
   ? (process.env.INTERNAL_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://backend:8000/api/v1')
-  : (process.env.NEXT_PUBLIC_API_BASE_URL && !process.env.NEXT_PUBLIC_API_BASE_URL.includes('backend')
-    ? process.env.NEXT_PUBLIC_API_BASE_URL
-    : '/api/v1');
+  : '/api/v1';
 
 if (!baseURL && typeof window === 'undefined') {
   // eslint-disable-next-line no-console
@@ -319,12 +317,13 @@ export interface FinanceSummary {
 }
 
 export interface LedgerEntry {
+  id: string;
   date: string;
-  particulars: string;
-  voucher_no: string;
-  credit: number;
-  debit: number;
-  balance: number;
+  type: 'INCOME' | 'EXPENSE';
+  category_or_source: string;
+  description: string;
+  amount: number;
+  payment_mode: string;
 }
 
 export async function addIncome(data: any) {
