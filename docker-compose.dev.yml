@@ -21,6 +21,7 @@ services:
       DEBUG: "true"
       DATABASE_URL: postgresql://templeuser:templepass@postgres:5432/templedb
       SECRET_KEY: dev-secret-key-change-this-in-production-12345678
+      CORS_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000","http://localhost:8000","http://127.0.0.1:8000"]'
       SQLALCHEMY_ECHO: "true"
       LOG_LEVEL: DEBUG
       ENABLE_DOCS: "true"
