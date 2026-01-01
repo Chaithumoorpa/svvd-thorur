@@ -14,8 +14,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    env_file:
-      - ./backend/.env.development
     environment:
       ENV: development
       DEBUG: "true"
