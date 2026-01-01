@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     
     # CORS
-    CORS_ORIGINS: str = Field(
-        default="http://localhost:3000,http://127.0.0.1:3000",
+    CORS_ORIGINS: List[str] = Field(
+        default=["http://localhost:3000", "http://127.0.0.1:3000"],
         env="CORS_ORIGINS"
     )
     
