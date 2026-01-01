@@ -1,0 +1,52 @@
+# Docker Compose - Development Environment
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: templedb
+      POSTGRES_USER: templeuser
+      POSTGRES_PASSWORD: templepass
+    ports:
+      - "5432:5432"  # Expose PostgreSQL for local development tools
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development  # Use development stage if multi-stage build
+    env_file:
+      - ./backend/.env.development
+    environment:
+      ENV: development
+      DEBUG: "true"
+      DATABASE_URL: postgresql://templeuser:templepass@postgres:5432/templedb
+      SECRET_KEY: dev-secret-key-change-this-in-production-12345678
+      SQLALCHEMY_ECHO: "true"
+      LOG_LEVEL: DEBUG
+      ENABLE_DOCS: "true"
+      ALEMBIC_CONFIG: alembic.dev.ini
+    volumes:
+      # Mount source code for hot reload (optional, requires uvicorn --reload)
+      - ./backend/app:/app/app:ro
+      - ./backend/alembic:/app/alembic:ro
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development  # Use development stage if multi-stage build
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=/api/v1
+      - INTERNAL_API_BASE_URL=http://backend:8000/api/v1
+      - NODE_ENV=development
+      - NEXT_PUBLIC_ENV=development
+      - NEXT_PUBLIC_ENABLE_DEBUG_BANNER=true
+      - NEXT_PUBLIC_ENABLE_API_LOGGING=true
+    volumes:
+      # Mount source code for hot reload
+      - ./frontend/app:/app/app:ro
+      - ./frontend/components:/app/components:ro
+      - ./frontend/lib:/app/lib:ro
+    command: npm run dev

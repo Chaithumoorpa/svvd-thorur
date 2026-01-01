@@ -3,6 +3,7 @@ uvicorn[standard]
 sqlalchemy
 psycopg2-binary
 pydantic
+pydantic-settings
 python-dotenv
 python-jose
 passlib[argon2]

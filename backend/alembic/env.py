@@ -7,9 +7,8 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# 👇👇👇 THIS IS THE CRITICAL FIX 👇👇👇
+# Make /app visible to Alembic
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-# 👆👆👆 THIS MAKES /app VISIBLE TO ALEMBIC 👆👆👆
 
 # this is the Alembic Config object
 config = context.config
@@ -18,18 +17,16 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# ---- IMPORT MODELS EXPLICITLY ----
+# Import models explicitly
 from app.models.base import Base
 import app.models  # This triggers the imports in __init__.py
 
 target_metadata = Base.metadata
 
-
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+# Override sqlalchemy.url from environment variable if present
+from app.core.config import settings
+if settings.DATABASE_URL:
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 
 def run_migrations_offline() -> None:
@@ -63,15 +60,26 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # Get configuration with environment-aware settings
+    configuration = config.get_section(config.config_ini_section, {})
+    
+    # Override with DATABASE_URL from environment
+    if settings.DATABASE_URL:
+        configuration["sqlalchemy.url"] = settings.DATABASE_URL
+    
+    # Set echo based on environment
+    configuration["sqlalchemy.echo"] = str(settings.SQLALCHEMY_ECHO)
+    
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection, 
+            target_metadata=target_metadata
         )
 
         with context.begin_transaction():
