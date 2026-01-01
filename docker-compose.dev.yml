@@ -14,7 +14,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: development  # Use development stage if multi-stage build
     env_file:
       - ./backend/.env.development
     environment:
@@ -36,7 +35,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: development  # Use development stage if multi-stage build
     environment:
       - NEXT_PUBLIC_API_BASE_URL=/api/v1
       - INTERNAL_API_BASE_URL=http://backend:8000/api/v1
