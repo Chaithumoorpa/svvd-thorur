@@ -97,8 +97,57 @@ export async function deleteFestival(id: number) {
   return res.data;
 }
 
-export async function getAnnouncements() {
-  const res = await api.get('/announcements');
+// Announcements API
+export interface Announcement {
+  id: number;
+  title: string;
+  message: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnnouncementCreate {
+  title: string;
+  message?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface AnnouncementUpdate {
+  title?: string;
+  message?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  is_active?: boolean;
+}
+
+export async function getAnnouncements(showAll: boolean = false) {
+  const res = await api.get<Announcement[]>('/announcements/', {
+    params: { show_all: showAll }
+  });
+  return res.data;
+}
+
+export async function getAnnouncement(id: number) {
+  const res = await api.get<Announcement>(`/announcements/${id}`);
+  return res.data;
+}
+
+export async function createAnnouncement(data: AnnouncementCreate) {
+  const res = await api.post<Announcement>('/announcements/', data);
+  return res.data;
+}
+
+export async function updateAnnouncement(id: number, data: AnnouncementUpdate) {
+  const res = await api.put<Announcement>(`/announcements/${id}`, data);
+  return res.data;
+}
+
+export async function deleteAnnouncement(id: number) {
+  const res = await api.delete<Announcement>(`/announcements/${id}`);
   return res.data;
 }
 

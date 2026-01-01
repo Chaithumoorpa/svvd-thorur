@@ -2,17 +2,16 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Edit2, Trash2, X, Plus, Save, AlertCircle, Megaphone } from 'lucide-react';
-import { api } from '@/lib/api';
+import {
+  Announcement,
+  AnnouncementCreate,
+  getAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement
+} from '@/lib/api';
 
-interface Announcement {
-  id: number;
-  title: string;
-  message: string;
-  start_date: string | null;
-  end_date: string | null;
-  is_active: boolean;
-  created_at: string;
-}
+
 
 export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -30,8 +29,8 @@ export default function AnnouncementsPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get<Announcement[]>('/announcements/', { params: { show_all: true } });
-      setAnnouncements(response.data);
+      const data = await getAnnouncements(true); // show_all = true for admin
+      setAnnouncements(data);
     } catch (err: any) {
       const message = err.response?.data?.detail || err.message || 'Failed to fetch announcements';
       setError(message);
@@ -74,11 +73,10 @@ export default function AnnouncementsPage() {
     setError(null);
 
     try {
-      // Create clean payload matching backend schema exactly
-      // Backend expects: title, message, start_date (optional), end_date (optional)
-      const payload = {
-        title: currentAnnouncement.title,
-        message: currentAnnouncement.message,
+      // Create clean payload matching backend schema
+      const payload: AnnouncementCreate = {
+        title: currentAnnouncement.title || '',
+        message: currentAnnouncement.message || null,
         start_date: currentAnnouncement.start_date || null,
         end_date: currentAnnouncement.end_date || null,
       };
@@ -86,10 +84,10 @@ export default function AnnouncementsPage() {
       console.log('Announcement operation:', currentAnnouncement.id ? 'UPDATE' : 'CREATE', payload);
 
       if (currentAnnouncement.id) {
-        await api.put(`/announcements/${currentAnnouncement.id}`, payload);
+        await updateAnnouncement(currentAnnouncement.id, payload);
         setSuccess('Announcement updated successfully');
       } else {
-        await api.post('/announcements/', payload);
+        await createAnnouncement(payload);
         setSuccess('Announcement created successfully');
       }
       handleCloseModal();
@@ -117,7 +115,7 @@ export default function AnnouncementsPage() {
     if (idToDelete === null) return;
 
     try {
-      await api.delete(`/announcements/${idToDelete}`);
+      await deleteAnnouncement(idToDelete);
       setSuccess('Announcement deleted successfully');
       fetchAnnouncements();
       setTimeout(() => setSuccess(null), 3000);
