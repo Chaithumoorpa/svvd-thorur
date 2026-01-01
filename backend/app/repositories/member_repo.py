@@ -19,13 +19,6 @@ class MemberRepository(BaseRepository):
             .first()
         )
 
-    def get_by_user_id(self, user_id: int):
-        return (
-            self.db.query(Member)
-            .filter(Member.user_id == user_id)
-            .first()
-        )
-
     def create(self, member: Member):
         self.db.add(member)
         self.db.commit()

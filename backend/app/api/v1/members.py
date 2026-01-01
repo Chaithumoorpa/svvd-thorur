@@ -11,7 +11,7 @@ from app.schemas.member import (
 )
 from app.models.user import User
 
-router = APIRouter(prefix="/admin/members", tags=["Admin Members"])
+router = APIRouter(prefix="/temple-members", tags=["Temple Members"])
 
 
 @router.get("/", response_model=List[MemberOut])

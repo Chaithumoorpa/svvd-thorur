@@ -196,8 +196,7 @@ def get_member_service(
     db: Session = Depends(get_db),
 ) -> MemberService:
     repo = MemberRepository(db)
-    user_repo = UserRepository(db) # I need to import UserRepository here too
-    return MemberService(repo, user_repo)
+    return MemberService(repo)
 
 
 def get_donor_repository(

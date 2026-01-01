@@ -1,35 +1,30 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 
 
 class MemberBase(BaseModel):
-    full_name: str
-    designation: Optional[str] = None
-    department: Optional[str] = None
-    joining_date: Optional[datetime] = None
-    address: Optional[str] = None
-    emergency_contact: Optional[str] = None
-    is_active: bool = True
+    name: str
+    phone: str
+    email: Optional[str] = None
+    role: Optional[str] = None
 
 
 class MemberCreate(MemberBase):
-    user_id: int
+    pass
 
 
 class MemberUpdate(BaseModel):
-    full_name: Optional[str] = None
-    designation: Optional[str] = None
-    department: Optional[str] = None
-    joining_date: Optional[datetime] = None
-    address: Optional[str] = None
-    emergency_contact: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
     is_active: Optional[bool] = None
 
 
 class MemberOut(MemberBase):
     id: int
-    user_id: int
+    is_active: bool
     created_at: datetime
     updated_at: datetime
 
