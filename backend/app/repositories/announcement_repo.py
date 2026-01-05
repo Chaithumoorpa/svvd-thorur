@@ -6,14 +6,26 @@ from app.repositories.base import BaseRepository
 class AnnouncementRepository(BaseRepository):
 
     def get_all_active(self):
+        """
+        Get all active announcements ordered by creation date (newest first).
+        This ensures stable ordering for frontend display and prevents UI misalignment.
+        """
         return (
             self.db.query(Announcement)
             .filter(Announcement.is_active == True)
+            .order_by(Announcement.created_at.desc())  # Newest announcements first
             .all()
         )
 
     def get_all(self):
-        return self.db.query(Announcement).all()
+        """
+        Get all announcements (admin view) ordered by creation date (newest first).
+        """
+        return (
+            self.db.query(Announcement)
+            .order_by(Announcement.created_at.desc())
+            .all()
+        )
 
     def get_by_id(self, announcement_id: int):
         return (
