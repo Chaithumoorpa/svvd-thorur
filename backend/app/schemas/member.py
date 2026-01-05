@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
@@ -7,7 +7,7 @@ class MemberBase(BaseModel):
     name: str
     phone: str
     email: Optional[str] = None
-    role: Optional[str] = None
+    position: Optional[str] = None  # e.g., Trustee, Priest, Staff
 
 
 class MemberCreate(MemberBase):
@@ -18,7 +18,7 @@ class MemberUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
-    role: Optional[str] = None
+    position: Optional[str] = None
     is_active: Optional[bool] = None
 
 

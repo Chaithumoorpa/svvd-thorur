@@ -5,6 +5,10 @@ from app.models.base import Base
 
 
 class User(Base):
+    """
+    User = Identity (someone who can log in).
+    Separate from Member/Donor which are Entities.
+    """
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -17,8 +21,9 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
     must_change_password = Column(Boolean, default=False, nullable=False)
     
-    # Relationship
-    member = relationship("Member", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    # Relationships
+    member = relationship("Member", back_populates="user", uselist=False)
+    announcements = relationship("Announcement", back_populates="created_by")
     
     @property
     def is_super_admin(self) -> bool:
