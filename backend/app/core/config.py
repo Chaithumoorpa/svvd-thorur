@@ -1,7 +1,17 @@
 import os
 from typing import List
 from pydantic_settings import BaseSettings
-from pydantic import Field, validator
+from pydantic import Field, model_validator, validator
+
+# Values that must never be used as the JWT signing key in production.
+# They are published in this repository, so anyone could forge admin tokens.
+INSECURE_SECRET_KEYS = {
+    "",
+    "your-secret-key-change-in-production",
+    "change-this-in-prod-very-secret",
+    "dev-secret-key-change-this-in-production-12345678",
+}
+MIN_SECRET_KEY_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -42,9 +52,30 @@ class Settings(BaseSettings):
     ENABLE_RATE_LIMITING: bool = Field(default=False, env="ENABLE_RATE_LIMITING")
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, env="RATE_LIMIT_PER_MINUTE")
     
+    # Number of reverse proxies in front of this app that append to
+    # X-Forwarded-For (e.g. 1 for Nginx/Caddy -> app). 0 means "trust nobody":
+    # the header is ignored and the TCP peer address is used. Never trust the
+    # left-most entry - clients control it.
+    TRUSTED_PROXY_HOPS: int = Field(default=0, ge=0, le=5, env="TRUSTED_PROXY_HOPS")
+
     # Alembic
     ALEMBIC_CONFIG: str = Field(default="alembic.ini", env="ALEMBIC_CONFIG")
-    
+
+    @model_validator(mode="after")
+    def reject_insecure_secret_in_production(self):
+        """Fail fast instead of running production with a guessable signing key."""
+        if self.ENV.lower() == "production":
+            if (
+                self.SECRET_KEY in INSECURE_SECRET_KEYS
+                or len(self.SECRET_KEY) < MIN_SECRET_KEY_LENGTH
+            ):
+                raise ValueError(
+                    "SECRET_KEY is empty, a published default, or shorter than "
+                    f"{MIN_SECRET_KEY_LENGTH} characters. Generate one with: "
+                    "python3 -c \"import secrets; print(secrets.token_urlsafe(32))\""
+                )
+        return self
+
     @validator("CORS_ORIGINS", pre=True)
     def parse_cors_origins(cls, v):
         """Parse comma-separated CORS origins into a list."""

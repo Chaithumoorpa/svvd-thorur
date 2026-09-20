@@ -1,6 +1,10 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
 from enum import Enum
+
+# Matches the users table column sizes so oversize input gets a 422, not a DB error (500).
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 128
 
 class UserRole(str, Enum):
     SUPER_ADMIN = "SUPER_ADMIN"
@@ -35,7 +39,11 @@ class UserBase(BaseModel):
         return list(set(v))
 
 class UserCreate(UserBase):
-    password: str
+    # Constraints live on the *input* schema only. UserOut inherits UserBase, so
+    # tightening the base would make responses fail for pre-existing accounts.
+    username: str = Field(..., min_length=3, max_length=100)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
 
 class UserLogin(BaseModel):
     username: str
@@ -57,4 +65,4 @@ class TokenOut(Token):
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str
+    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)

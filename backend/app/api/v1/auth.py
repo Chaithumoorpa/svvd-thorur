@@ -5,7 +5,13 @@ import logging
 
 from app.utils.dependencies import get_db, get_current_user, require_super_admin
 from app.models.user import User
-from app.utils.rate_limiter import login_limiter, register_limiter, get_client_ip
+from app.utils.rate_limiter import (
+    login_limiter,
+    login_user_limiter,
+    register_limiter,
+    get_client_ip,
+    enforce,
+)
 from app.repositories.user_repo import UserRepository
 from app.services.auth_service import AuthService
 from app.schemas.user import UserCreate, UserLogin, TokenOut, PasswordChange, UserOut
@@ -25,22 +31,22 @@ def get_auth_service(
 @router.post("/login", response_model=TokenOut)
 def login(
     payload: UserLogin,
+    request: Request,
     service: AuthService = Depends(get_auth_service),
-    request: Request = None,
 ):
     """
     Login with username and password.
     Returns JWT access token.
-    Rate limited: 5 requests per minute per IP.
+    Rate limited: 5 attempts per minute per IP, and 10 per 15 minutes per username.
     """
-    # Rate limiting check
     client_ip = get_client_ip(request)
-    if not login_limiter.is_allowed(client_ip):
-        raise HTTPException(
-            status_code=429,
-            detail="Too many login attempts. Please try again in a minute."
-        )
-    
+    enforce(login_limiter, client_ip, "Too many login attempts. Please try again in a minute.")
+    enforce(
+        login_user_limiter,
+        payload.username.strip().lower(),
+        "Too many login attempts for this account. Please try again later.",
+    )
+
     user = service.authenticate_user(payload)
     token = service.create_access_token(user)
     
@@ -71,21 +77,16 @@ def list_users_admin(
 @router.post("/register", response_model=UserOut)
 def register(
     payload: UserCreate,
+    request: Request,
     service: AuthService = Depends(get_auth_service),
-    request: Request = None
 ):
     """
-    Register a new general user.
+    Register a new general user (always GENERAL_USER; any `roles` sent are ignored).
     Rate limited: 5 requests per minute per IP.
     """
-    # Rate limiting check
     client_ip = get_client_ip(request)
-    if not register_limiter.is_allowed(client_ip):
-        raise HTTPException(
-            status_code=429,
-            detail="Too many registration attempts. Please try again in a minute."
-        )
-    
+    enforce(register_limiter, client_ip, "Too many registration attempts. Please try again in a minute.")
+
     logger.info(f"New user registration: username={payload.username}")
     
     user = service.create_general_user(payload)

@@ -27,9 +27,14 @@ services:
       ENABLE_RATE_LIMITING: "true"
       RATE_LIMIT_PER_MINUTE: "60"
       ALEMBIC_CONFIG: alembic.prod.ini
+      # Number of reverse proxies in front of the backend that append to
+      # X-Forwarded-For. 1 = Nginx/Caddy -> backend (the documented setup).
+      # Use 2 if all traffic goes Nginx -> Next.js -> backend. Wrong value =
+      # everyone shares one rate-limit bucket (too high) or XFF can be spoofed (too low).
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
       CORS_ORIGINS: https://svvdthorur.org
     # No volume mounts in production - use built image
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --log-level warning
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --log-level warning  # rate limits are per worker; keep this small
     restart: always
 
   frontend:

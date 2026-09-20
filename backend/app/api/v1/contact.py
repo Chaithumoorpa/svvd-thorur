@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import List, Optional
 from app.utils.dependencies import get_contact_service, require_admin
+from app.utils.rate_limiter import contact_limiter, get_client_ip, enforce
 from app.services.contact_service import ContactService
 from app.schemas.contact import ContactCreate, ContactOut, ContactUpdate
 from app.models.contact import ContactStatus
@@ -11,9 +12,15 @@ router = APIRouter(prefix="/contacts", tags=["Contact Us"])
 @router.post("/", response_model=ContactOut)
 def submit_contact_message(
     payload: ContactCreate,
+    request: Request,
     service: ContactService = Depends(get_contact_service),
 ):
-    """Public endpoint to submit a contact message."""
+    """Public endpoint to submit a contact message. Limited to 5 per hour per IP."""
+    enforce(
+        contact_limiter,
+        get_client_ip(request),
+        "Too many messages sent from this address. Please try again later.",
+    )
     return service.submit_message(payload)
 
 @router.get("/", response_model=List[ContactOut])

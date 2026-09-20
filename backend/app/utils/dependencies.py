@@ -1,4 +1,4 @@
-from typing import Generator
+from typing import Generator, Optional
 import logging
 from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException
@@ -83,6 +83,25 @@ def get_current_user(
     
     logger.debug(f"User authenticated: {user.username} (id={user_id}, roles={user.roles})")
     return user
+
+
+optional_security = HTTPBearer(auto_error=False)
+
+
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """
+    Return the logged-in user if a valid token was sent, otherwise None.
+    For public endpoints that show extra data to admins (never raises).
+    """
+    if credentials is None:
+        return None
+    try:
+        return get_current_user(credentials, db)
+    except HTTPException:
+        return None
 
 
 def require_admin(

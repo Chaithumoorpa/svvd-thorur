@@ -77,3 +77,7 @@ Thumbs.db
 # Alembic
 # Keep alembic/ directory but ignore local config overrides
 alembic.local.ini
+
+# Coverage / build artefacts
+coverage.xml
+*.tsbuildinfo

@@ -1,5 +1,5 @@
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime, time
 from sqlalchemy.orm import Session
 from app.repositories.finance_repo import FinanceRepository
 from app.schemas.finance import IncomeTransactionCreate, ExpenseTransactionCreate, FinanceSummary
@@ -68,6 +68,13 @@ class FinanceService:
                 "payment_mode": e.payment_mode.value
             })
             
-        # Sort by date descending
-        ledger.sort(key=lambda x: x["date"], reverse=True)
+        # Sort by date descending. Incomes carry a datetime (received_at) but
+        # expenses only a date (expense_date); comparing the two raised
+        # "TypeError: can't compare datetime.datetime to datetime.date", so the
+        # ledger endpoint returned HTTP 500 as soon as both kinds existed.
+        def sort_key(entry):
+            d = entry["date"]
+            return d if isinstance(d, datetime) else datetime.combine(d, time.min)
+
+        ledger.sort(key=sort_key, reverse=True)
         return ledger

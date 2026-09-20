@@ -1,13 +1,16 @@
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-import os
+from app.core.config import settings
 
 # Password hashing (using argon2 instead of bcrypt to avoid compatibility issues)
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
-# JWT secrets & settings
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+# JWT secrets & settings.
+# Single source of truth: settings (which reads env vars *and* .env). The old
+# os.getenv() fallback silently signed tokens with a published default key when
+# SECRET_KEY was only present in a .env file.
+SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 

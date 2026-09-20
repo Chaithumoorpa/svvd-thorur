@@ -3,17 +3,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import DeityCarousel from '@/components/DeityCarousel';
-import { getAnnouncements, getFestivals, getPoojas, Festival } from '@/lib/api';
+import { getAnnouncements, getFestivals, getPoojas, Festival, Announcement } from '@/lib/api';
 
 /* ---------------- TYPES ---------------- */
-
-type Announcement = {
-  id: number;
-  title: string;
-  message: string;
-  start_date?: string;
-  is_active: boolean;
-};
 
 type Pooja = {
   id: number;
