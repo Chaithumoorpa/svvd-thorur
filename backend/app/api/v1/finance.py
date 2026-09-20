@@ -2,7 +2,9 @@ from typing import List, Optional
 from datetime import date
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
-from app.utils.dependencies import get_db, require_admin, require_trustee, require_super_admin
+from app.core.pagination import PageParams, page_params, set_total
+from app.core.rbac import Permission
+from app.utils.dependencies import AuditContext, get_audit, get_db, require_permission
 from app.services.finance_service import FinanceService
 from app.services.finance_report_service import FinanceReportService
 from app.services.ledger_service import LedgerService
@@ -12,43 +14,54 @@ from app.schemas.finance import (
     FinanceSummary, LedgerEntry
 )
 from app.models.user import User
-import csv
-import io
 
 router = APIRouter()
 
-@router.post("/income", response_model=IncomeTransactionOut, dependencies=[Depends(require_admin)])
+_read = require_permission(Permission.FINANCE_READ)
+_write = require_permission(Permission.FINANCE_WRITE)
+
+@router.post("/income", response_model=IncomeTransactionOut, status_code=201)
 def add_income(
     income_in: IncomeTransactionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    audit: AuditContext = Depends(get_audit),
+    current_user: User = Depends(_write),
 ):
-    return FinanceService.add_income(db, income_in, current_user.id)
+    row = FinanceService.add_income(db, income_in, current_user.id)
+    audit.log("CREATE", "income", row.id, f"Recorded income Rs. {row.amount} ({row.source_type.value})",
+              {"amount": row.amount, "source": row.source_type, "mode": row.payment_mode})
+    return row
 
-@router.post("/expense", response_model=ExpenseTransactionOut, dependencies=[Depends(require_admin)])
+@router.post("/expense", response_model=ExpenseTransactionOut, status_code=201)
 def add_expense(
     expense_in: ExpenseTransactionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    audit: AuditContext = Depends(get_audit),
+    current_user: User = Depends(_write),
 ):
-    return FinanceService.add_expense(db, expense_in, current_user.id)
+    row = FinanceService.add_expense(db, expense_in, current_user.id)
+    audit.log("CREATE", "expense", row.id, f"Recorded expense Rs. {row.amount} ({row.category.value})",
+              {"amount": row.amount, "category": row.category, "paid_to": row.paid_to})
+    return row
 
-@router.get("/summary", response_model=FinanceSummary, dependencies=[Depends(require_trustee)])
+@router.get("/summary", response_model=FinanceSummary, dependencies=[Depends(_read)])
 def get_summary(db: Session = Depends(get_db)):
     return FinanceService.get_summary(db)
 
-@router.get("/ledger", response_model=List[LedgerEntry], dependencies=[Depends(require_trustee)])
+@router.get("/ledger", response_model=List[LedgerEntry], dependencies=[Depends(_read)])
 def get_ledger(
-    start_date: Optional[date] = Query(None, description="Start Date"),
-    end_date: Optional[date] = Query(None, description="End Date"),
-    db: Session = Depends(get_db)
+    response: Response,
+    start_date: Optional[date] = Query(None, description="Start Date (inclusive)"),
+    end_date: Optional[date] = Query(None, description="End Date (inclusive)"),
+    params: PageParams = Depends(page_params),
+    db: Session = Depends(get_db),
 ):
-    """
-    Get simple transaction list for dashboard views.
-    """
-    return FinanceService.get_ledger(db, start_date, end_date)
+    """Paginated transaction list (newest first). Total count in `X-Total-Count`."""
+    entries, total = FinanceService.get_ledger_page(db, start_date, end_date, params)
+    set_total(response, total)
+    return entries
 
-@router.get("/ledger/csv", dependencies=[Depends(require_trustee)])
+@router.get("/ledger/csv", dependencies=[Depends(_read)])
 def get_ledger_csv(
     start_date: date = Query(..., description="Start Date"),
     end_date: date = Query(..., description="End Date"),
@@ -65,7 +78,7 @@ def get_ledger_csv(
     response.headers["Content-Type"] = "text/csv"
     return response
 
-@router.get("/ledger/pdf", dependencies=[Depends(require_trustee)])
+@router.get("/ledger/pdf", dependencies=[Depends(_read)])
 def get_ledger_pdf(
     start_date: date = Query(..., description="Start Date"),
     end_date: date = Query(..., description="End Date"),
@@ -85,7 +98,7 @@ def get_ledger_pdf(
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
-@router.get("/reports/monthly", dependencies=[Depends(require_trustee)])
+@router.get("/reports/monthly", dependencies=[Depends(_read)])
 def get_monthly_report(
     year: int = Query(..., description="Year (e.g., 2025)"),
     month: int = Query(..., ge=1, le=12, description="Month (1-12)"),
@@ -97,7 +110,7 @@ def get_monthly_report(
     """
     return FinanceReportService.generate_monthly_json(db, year, month)
 
-@router.get("/reports/monthly/pdf", dependencies=[Depends(require_trustee)])
+@router.get("/reports/monthly/pdf", dependencies=[Depends(_read)])
 def get_monthly_report_pdf(
     year: int = Query(..., description="Year (e.g., 2025)"),
     month: int = Query(..., ge=1, le=12, description="Month (1-12)"),

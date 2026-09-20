@@ -4,9 +4,13 @@ from typing import List, Optional
 from uuid import UUID
 from datetime import date, datetime
 
-from app.utils.dependencies import get_db, require_admin, get_seva_ticket_service
+from app.core.pagination import PageParams, page_params, paginate, set_total
+from app.core.rbac import Permission
+from app.utils.dependencies import AuditContext, get_audit, get_seva_ticket_service, require_permission
+from app.utils.rate_limiter import booking_limiter, get_client_ip
 from app.services.seva_ticket_service import SevaTicketService
 from app.schemas.seva_ticket import (
+    SevaBookingPublic,
     SevaTicketCreate, 
     SevaTicketOut, 
     SevaTicketFilter, 
@@ -15,26 +19,24 @@ from app.schemas.seva_ticket import (
     TicketStatus
 )
 from app.models.user import User
-from app.utils.rate_limiter import booking_limiter, get_client_ip, enforce
 
 router = APIRouter(prefix="/seva-tickets", tags=["Seva Tickets"])
+
+_manage = require_permission(Permission.TICKETS_MANAGE)
 
 
 @router.post("/", response_model=SevaTicketOut)
 def book_seva_ticket(
-    payload: SevaTicketCreate,
+    payload: SevaBookingPublic,
     request: Request,
     service: SevaTicketService = Depends(get_seva_ticket_service),
 ):
     """
-    Public endpoint to book a seva ticket.
-    No authentication required. Limited to 10 bookings per hour per IP.
+    Public endpoint to book a FREE seva. Price/payment/seva name are decided server-side.
+    Rate limited per IP.
     """
-    enforce(
-        booking_limiter,
-        get_client_ip(request),
-        "Too many bookings from this address. Please try again later.",
-    )
+    if not booking_limiter.is_allowed(get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many bookings. Please try again later.")
     return service.book_ticket(payload)
 
 
@@ -42,42 +44,39 @@ def book_seva_ticket(
 def create_admin_seva_ticket(
     payload: SevaTicketCreate,
     service: SevaTicketService = Depends(get_seva_ticket_service),
-    admin_user: User = Depends(require_admin),
+    audit: AuditContext = Depends(get_audit),
+    admin_user: User = Depends(_manage),
 ):
-    """
-    Admin endpoint to manually generate a seva ticket at the counter.
-    Requires ADMIN or SUPER_ADMIN role.
-    """
-    return service.create_counter_ticket(payload, admin_user)
+    """Counter ticket (staff). Requires the tickets:manage permission."""
+    ticket = service.create_counter_ticket(payload, admin_user)
+    audit.log("CREATE", "seva_ticket", ticket.id, f"Issued counter ticket {ticket.ticket_number}",
+              {"amount": ticket.amount, "payment": ticket.payment_status})
+    return ticket
 
 
 @router.get("/", response_model=List[SevaTicketOut])
 def list_seva_tickets(
+    response: Response,
     seva_id: Optional[int] = None,
     seva_date: Optional[date] = None,
     status: Optional[TicketStatus] = None,
-    mobile: Optional[str] = None,
+    mobile: Optional[str] = Query(None, max_length=20),
     service: SevaTicketService = Depends(get_seva_ticket_service),
-    admin_user: User = Depends(require_admin),
+    params: PageParams = Depends(page_params),
+    _: User = Depends(_manage),
 ):
-    """
-    Admin endpoint to list tickets with filters.
-    Requires ADMIN or SUPER_ADMIN role.
-    """
-    filters = SevaTicketFilter(
-        seva_id=seva_id,
-        seva_date=seva_date,
-        status=status,
-        mobile_number=mobile
-    )
-    return service.list_tickets(filters)
+    """Paginated ticket list with filters (tickets:manage)."""
+    filters = SevaTicketFilter(seva_id=seva_id, seva_date=seva_date, status=status, mobile_number=mobile)
+    items, total = paginate(service.query_tickets(filters), params)
+    set_total(response, total)
+    return items
 
 
 @router.get("/{ticket_id}", response_model=SevaTicketOut)
 def get_ticket_details(
     ticket_id: UUID,
     service: SevaTicketService = Depends(get_seva_ticket_service),
-    admin_user: User = Depends(require_admin),
+    _: User = Depends(_manage),
 ):
     """
     Admin endpoint to view ticket details.
@@ -89,7 +88,8 @@ def get_ticket_details(
 def scan_ticket(
     payload: ScanRequest,
     service: SevaTicketService = Depends(get_seva_ticket_service),
-    admin_user: User = Depends(require_admin),
+    audit: AuditContext = Depends(get_audit),
+    admin_user: User = Depends(_manage),
 ):
     """
     Admin endpoint to scan and validate a QR code.
@@ -97,6 +97,7 @@ def scan_ticket(
     """
     try:
         ticket = service.scan_ticket(payload.qr_token)
+        audit.log("SCAN", "seva_ticket", ticket.id, f"Scanned ticket {ticket.ticket_number}")
         return ScanResponse(
             success=True,
             message="Ticket successfully validated and marked as USED",
@@ -114,7 +115,7 @@ def scan_ticket(
 def print_ticket(
     ticket_id: UUID,
     service: SevaTicketService = Depends(get_seva_ticket_service),
-    admin_user: User = Depends(require_admin),
+    _: User = Depends(_manage),
 ):
     """
     Admin endpoint to generate a printable ticket (HTML view).
@@ -131,7 +132,7 @@ def get_ticket_pdf(
     ticket_id: UUID,
     action: str = Query("print", enum=["download", "print"]),
     service: SevaTicketService = Depends(get_seva_ticket_service),
-    admin_user: User = Depends(require_admin),
+    _: User = Depends(_manage),
 ):
     """
     Admin endpoint to generate a PDF ticket.

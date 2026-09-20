@@ -14,7 +14,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     env_file:
-      - ./backend/.env.production
+      - path: ./backend/.env.production
+        required: false
     environment:
       ENV: production
       DEBUG: "false"
@@ -25,7 +26,7 @@ services:
       ENABLE_DOCS: "false"
       ENABLE_SECURITY_HEADERS: "true"
       ENABLE_RATE_LIMITING: "true"
-      RATE_LIMIT_PER_MINUTE: "60"
+      RATE_LIMIT_PER_MINUTE: "120"
       ALEMBIC_CONFIG: alembic.prod.ini
       # Number of reverse proxies in front of the backend that append to
       # X-Forwarded-For. 1 = Nginx/Caddy -> backend (the documented setup).

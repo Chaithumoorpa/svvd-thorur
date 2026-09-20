@@ -1,9 +1,10 @@
-from sqlalchemy import Column, Integer, String, Date, Time, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Date, Time, ForeignKey, Numeric, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 import enum
 
 from app.models.base import Base
+from app.models.types import MONEY_PRECISION, MONEY_SCALE
 
 
 class PaymentStatus(str, enum.Enum):
@@ -42,7 +43,7 @@ class SevaTicket(Base):
     
     # Payment
     payment_status = Column(SQLEnum(PaymentStatus), nullable=False, default=PaymentStatus.FREE)
-    amount = Column(Integer, default=0, nullable=False)  # Amount in INR
+    amount = Column(Numeric(MONEY_PRECISION, MONEY_SCALE), default=0, nullable=False)  # INR
     
     # Status & Security
     status = Column(SQLEnum(TicketStatus), nullable=False, default=TicketStatus.ACTIVE, index=True)

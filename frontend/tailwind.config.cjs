@@ -10,7 +10,13 @@ module.exports = {
       colors: {
         templeGold: '#efb538ff',
         templeWhite: '#F5F1E8',
-        templeDark: '#0B1220'
+        templeDark: '#0B1220',
+        maroon: { DEFAULT: '#7a1c1c', dark: '#5a1010', light: '#a83232' },
+        saffron: { DEFAULT: '#d97a1f', light: '#f2b45a' },
+        cream: '#fbf6ec',
+      },
+      fontFamily: {
+        serif: ['Georgia', 'Cambria', '"Times New Roman"', 'serif'],
       },
       keyframes: {
         slideIn: {

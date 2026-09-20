@@ -1,31 +1,28 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-import time
 import logging
-
-from app.utils.dependencies import get_db, get_current_user, require_super_admin
-from app.models.user import User
-from app.utils.rate_limiter import (
-    login_limiter,
-    login_user_limiter,
-    register_limiter,
-    get_client_ip,
-    enforce,
-)
-from app.repositories.user_repo import UserRepository
-from app.services.auth_service import AuthService
-from app.schemas.user import UserCreate, UserLogin, TokenOut, PasswordChange, UserOut
 from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.pagination import PageParams, page_params, paginate, set_total
+from app.core.rbac import Permission, permissions_for
+from app.models.user import User
+from app.repositories.user_repo import UserRepository
+from app.schemas.user import (
+    PasswordChange, PublicRegister, TokenOut, UserCreate, UserLogin, UserOut, UserUpdate,
+)
+from app.services.audit_service import AuditService
+from app.services.auth_service import AuthService
+from app.utils.dependencies import AuditContext, get_audit, get_current_user, get_db, require_permission
+from app.utils.rate_limiter import get_client_ip, login_limiter, register_limiter
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 logger = logging.getLogger(__name__)
 
 
-def get_auth_service(
-    db: Session = Depends(get_db),
-) -> AuthService:
-    repo = UserRepository(db)
-    return AuthService(repo)
+def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
+    return AuthService(UserRepository(db))
 
 
 @router.post("/login", response_model=TokenOut)
@@ -33,111 +30,98 @@ def login(
     payload: UserLogin,
     request: Request,
     service: AuthService = Depends(get_auth_service),
+    db: Session = Depends(get_db),
 ):
-    """
-    Login with username and password.
-    Returns JWT access token.
-    Rate limited: 5 attempts per minute per IP, and 10 per 15 minutes per username.
-    """
-    client_ip = get_client_ip(request)
-    enforce(login_limiter, client_ip, "Too many login attempts. Please try again in a minute.")
-    enforce(
-        login_user_limiter,
-        payload.username.strip().lower(),
-        "Too many login attempts for this account. Please try again later.",
-    )
+    """Login with username and password. Rate limited per client IP."""
+    if not login_limiter.is_allowed(get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please try again in a minute.")
 
     user = service.authenticate_user(payload)
-    token = service.create_access_token(user)
-    
-    logger.info(
-        f"User logged in: username={user.username}, "
-        f"roles={user.roles}, must_change_password={user.must_change_password}"
-    )
-    
+    AuditService(db).record(user, "LOGIN", "user", user.id, f"{user.username} signed in", request=request)
     return {
-        "access_token": token, 
+        "access_token": service.create_access_token(user),
         "token_type": "bearer",
-        "must_change_password": user.must_change_password
+        "must_change_password": user.must_change_password,
     }
 
 
-@router.get("/admin/users", response_model=List[UserOut])
-def list_users_admin(
-    service: AuthService = Depends(get_auth_service),
-    current_user: User = Depends(require_super_admin)
-):
-    """
-    List all users. Restricted to SUPER_ADMIN.
-    """
-    logger.info(f"Users list requested by admin: {current_user.username}")
-    return service.list_users()
-
-
-@router.post("/register", response_model=UserOut)
+@router.post("/register", response_model=UserOut, status_code=201)
 def register(
-    payload: UserCreate,
+    payload: PublicRegister,
     request: Request,
     service: AuthService = Depends(get_auth_service),
 ):
-    """
-    Register a new general user (always GENERAL_USER; any `roles` sent are ignored).
-    Rate limited: 5 requests per minute per IP.
-    """
-    client_ip = get_client_ip(request)
-    enforce(register_limiter, client_ip, "Too many registration attempts. Please try again in a minute.")
-
-    logger.info(f"New user registration: username={payload.username}")
-    
-    user = service.create_general_user(payload)
-    return user
+    """Public self-registration. Always creates a GENERAL_USER (no admin access)."""
+    if not settings.ALLOW_PUBLIC_REGISTRATION:
+        raise HTTPException(status_code=403, detail="Registration is disabled")
+    if not register_limiter.is_allowed(get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many registration attempts. Please try again in a minute.")
+    return service.create_general_user(payload)
 
 
-@router.post("/admin/users", response_model=UserOut)
-def create_user_admin(
-    payload: UserCreate,
-    service: AuthService = Depends(get_auth_service),
-    current_user: User = Depends(require_super_admin)
-):
-    """
-    Create a new user with specific roles. Restricted to SUPER_ADMIN.
-    """
-    logger.info(
-        f"Admin user creation: by={current_user.username}, "
-        f"new_username={payload.username}, roles={payload.roles}"
-    )
-    
-    user = service.create_admin_user(payload)
-    return user
+@router.get("/verify", response_model=dict)
+def verify_token(current_user: User = Depends(get_current_user)):
+    """Current user + effective permissions. The frontend uses this to decide what UI to show."""
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "roles": current_user.roles,
+        "permissions": sorted(p.value for p in permissions_for(current_user.roles)),
+        "is_admin": current_user.is_admin,
+        "is_super_admin": current_user.is_super_admin,
+        "is_trustee": current_user.is_trustee,
+        "must_change_password": current_user.must_change_password,
+        "last_login": current_user.last_login.isoformat() if current_user.last_login else None,
+    }
+
 
 @router.post("/change-password", response_model=dict)
 def change_password(
     payload: PasswordChange,
+    request: Request,
     service: AuthService = Depends(get_auth_service),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """
-    Change password for the current user.
-    """
     service.change_password(current_user, payload)
+    AuditService(db).record(current_user, "PASSWORD_CHANGE", "user", current_user.id,
+                            f"{current_user.username} changed their password", request=request)
     return {"message": "Password changed successfully"}
 
 
-@router.get("/verify", response_model=dict)
-def verify_token(
-    current_user: User = Depends(get_current_user)
+# ------------------------------------------------------------------ user management
+@router.get("/admin/users", response_model=List[UserOut])
+def list_users_admin(
+    response: Response,
+    service: AuthService = Depends(get_auth_service),
+    params: PageParams = Depends(page_params),
+    _: User = Depends(require_permission(Permission.USERS_MANAGE)),
 ):
-    """
-    Verify current token and return user info.
-    Used by frontend to check auth status.
-    """
-    return {
-        "id": current_user.id,
-        "username": current_user.username,
-        "roles": current_user.roles,  # Array of roles
-        "is_admin": current_user.is_admin,  # True if ADMIN or SUPER_ADMIN
-        "is_super_admin": current_user.is_super_admin,  # True if SUPER_ADMIN
-        "is_trustee": current_user.is_trustee,  # True if TRUSTEE
-        "must_change_password": current_user.must_change_password,
-        "last_login": current_user.last_login.isoformat() if current_user.last_login else None
-    }
+    users, total = paginate(service.query_users(), params)
+    set_total(response, total)
+    return users
+
+
+@router.post("/admin/users", response_model=UserOut, status_code=201)
+def create_user_admin(
+    payload: UserCreate,
+    service: AuthService = Depends(get_auth_service),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(require_permission(Permission.USERS_MANAGE)),
+):
+    user = service.create_admin_user(payload)
+    audit.log("CREATE", "user", user.id, f"Created user {user.username}", {"roles": user.roles})
+    return user
+
+
+@router.patch("/admin/users/{user_id}", response_model=UserOut)
+def update_user_admin(
+    user_id: int,
+    payload: UserUpdate,
+    service: AuthService = Depends(get_auth_service),
+    audit: AuditContext = Depends(get_audit),
+    acting_user: User = Depends(require_permission(Permission.USERS_MANAGE)),
+):
+    user = service.update_user(user_id, payload, acting_user)
+    audit.log("UPDATE", "user", user.id, f"Updated user {user.username}", payload.model_dump(exclude_unset=True))
+    return user

@@ -1,7 +1,8 @@
-from sqlalchemy.orm import Session
+from typing import List, Optional
+
 from app.models.contact import ContactMessage, ContactStatus
 from app.repositories.base import BaseRepository
-from typing import List, Optional
+
 
 class ContactRepository(BaseRepository):
     def create(self, message: ContactMessage) -> ContactMessage:
@@ -10,11 +11,14 @@ class ContactRepository(BaseRepository):
         self.db.refresh(message)
         return message
 
-    def get_all(self, status: Optional[ContactStatus] = None) -> List[ContactMessage]:
+    def query(self, status: Optional[ContactStatus] = None):
         query = self.db.query(ContactMessage)
         if status:
             query = query.filter(ContactMessage.status == status)
-        return query.order_by(ContactMessage.created_at.desc()).all()
+        return query.order_by(ContactMessage.created_at.desc(), ContactMessage.id.desc())
+
+    def get_all(self, status: Optional[ContactStatus] = None) -> List[ContactMessage]:
+        return self.query(status).all()
 
     def get_by_id(self, message_id: int) -> Optional[ContactMessage]:
         return self.db.query(ContactMessage).filter(ContactMessage.id == message_id).first()

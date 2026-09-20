@@ -1,43 +1,91 @@
-import { getPoojas } from '@/lib/api'
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { Clock, Sparkles } from 'lucide-react';
+import BookSeva from '@/components/public/BookSeva';
+import { PageShell } from '@/components/public/SectionHeading';
+import { formatMoney, formatTimeRange } from '@/lib/format';
+import { fetchPoojas } from '@/lib/server-api';
+import type { Pooja } from '@/lib/types';
 
-export const dynamic = 'force-dynamic'
+export const metadata: Metadata = {
+  title: 'Poojas & Sevas',
+  description: 'Daily poojas, festival sevas and special sevas offered at the temple, with timings and fees.',
+};
 
-type Pooja = {
-  id: number
-  name: string
-  start_time?: string
-  end_time?: string
-  is_paid?: boolean
-  suggested_amount?: number | null
+const GROUPS: Array<{ id: string; title: string; types: string[] }> = [
+  { id: 'daily', title: 'Daily Poojas', types: ['daily'] },
+  { id: 'special', title: 'Special Sevas', types: ['special', 'weekly', 'monthly'] },
+  { id: 'festival', title: 'Festival Sevas', types: ['festival'] },
+];
+
+function PoojaCard({ p }: { p: Pooja }) {
+  const time = formatTimeRange(p.start_time, p.end_time);
+  return (
+    <li className="flex flex-col rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="font-serif text-xl font-bold text-maroon">{p.name}</h3>
+        <span className={`flex-none rounded-full px-3 py-1 text-xs font-semibold ${p.is_paid ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}`}>
+          {p.is_paid ? formatMoney(p.suggested_amount) : 'Free'}
+        </span>
+      </div>
+      {time && <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{time}</p>}
+      {p.description && <p className="mt-3 text-sm leading-relaxed text-gray-700">{p.description}</p>}
+      <div className="mt-auto pt-4">
+        {p.is_paid ? (
+          <p className="text-xs text-gray-500">Please book this seva at the temple counter.</p>
+        ) : (
+          <BookSeva sevaId={p.id} sevaName={p.name} />
+        )}
+      </div>
+    </li>
+  );
 }
 
-export default async function PoojasPage() {
-  let poojas: Pooja[] = []
-  try {
-    poojas = await getPoojas()
-  } catch (e) {
-    console.error('Failed to fetch poojas', e)
-  }
+export default async function PoojasPage({ searchParams }: { searchParams: { type?: string } }) {
+  const poojas = await fetchPoojas();
+  const only = GROUPS.find((g) => g.id === searchParams.type);
+  const groups = (only ? [only] : GROUPS)
+    .map((g) => ({ ...g, items: poojas.filter((p) => g.types.includes(p.pooja_type)) }))
+    .filter((g) => g.items.length);
+  const known = new Set(GROUPS.flatMap((g) => g.types));
+  const other = only ? [] : poojas.filter((p) => !known.has(p.pooja_type));
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      <h1 className="text-3xl font-serif font-semibold text-templeDark">Poojas</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {poojas.map((p) => (
-          <div key={p.id} className="border rounded-lg p-4 bg-white shadow-sm">
-            <h3 className="font-semibold">{p.name}</h3>
-            <p className="text-sm text-gray-600">{p.start_time || '—'} → {p.end_time || '—'}</p>
-            <div className="mt-2">
-              {p.is_paid ? (
-                <span className="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Paid</span>
-              ) : (
-                <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded">Free</span>
-              )}
-            </div>
-            {p.suggested_amount ? <p className="text-sm text-gray-700 mt-2">Suggested: ₹{p.suggested_amount}</p> : null}
-          </div>
+    <PageShell title="Poojas & Sevas" subtitle="Offer your prayers through the temple's rituals">
+      <nav aria-label="Filter by type" className="mb-8 flex flex-wrap justify-center gap-2">
+        {[{ id: '', title: 'All' }, ...GROUPS].map((g) => (
+          <Link
+            key={g.id || 'all'}
+            href={g.id ? `/poojas?type=${g.id}` : '/poojas'}
+            aria-current={(searchParams.type ?? '') === g.id ? 'page' : undefined}
+            className={`rounded-full border px-5 py-2 text-sm font-medium ${(searchParams.type ?? '') === g.id ? 'border-maroon bg-maroon text-white' : 'border-amber-300 bg-white text-maroon-dark hover:bg-amber-50'}`}
+          >
+            {g.title}
+          </Link>
         ))}
-      </div>
-    </div>
-  )
+      </nav>
+
+      {groups.length === 0 && other.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-amber-300 bg-white p-12 text-center">
+          <Sparkles className="mx-auto mb-3 h-10 w-10 text-amber-200" aria-hidden="true" />
+          <p className="text-gray-500">Poojas and sevas will be listed soon.</p>
+        </div>
+      ) : (
+        <div className="space-y-12">
+          {groups.map((g) => (
+            <section key={g.id} aria-labelledby={`g-${g.id}`}>
+              <h2 id={`g-${g.id}`} className="mb-4 font-serif text-2xl font-bold text-maroon-dark">{g.title}</h2>
+              <ul className="grid gap-5 md:grid-cols-2">{g.items.map((p) => <PoojaCard key={p.id} p={p} />)}</ul>
+            </section>
+          ))}
+          {other.length > 0 && (
+            <section>
+              <h2 className="mb-4 font-serif text-2xl font-bold text-maroon-dark">Other</h2>
+              <ul className="grid gap-5 md:grid-cols-2">{other.map((p) => <PoojaCard key={p.id} p={p} />)}</ul>
+            </section>
+          )}
+        </div>
+      )}
+    </PageShell>
+  );
 }

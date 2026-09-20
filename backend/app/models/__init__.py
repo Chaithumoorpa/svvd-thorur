@@ -11,3 +11,5 @@ from app.models.seva_ticket import SevaTicket
 from app.models.contact import ContactMessage
 from app.models.finance import IncomeTransaction, ExpenseTransaction
 from app.models.visitor import VisitorLog
+from app.models.audit_log import AuditLog
+from app.models.temple_timing import TempleTiming

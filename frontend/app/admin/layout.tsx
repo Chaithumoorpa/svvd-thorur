@@ -1,167 +1,203 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard,
-  Megaphone,
-  Users,
-  Heart,
-  LogOut,
-  Menu,
-  X,
-  Calendar,
-  Image,
-  Ticket,
-  Mail,
-  Banknote,
+  Banknote, Calendar, Church, Clock, HandHeart, Heart, History, Image as ImageIcon, LayoutDashboard,
+  LogOut, Mail, Megaphone, Menu, ShieldCheck, Sparkles, Ticket, Users, X,
 } from 'lucide-react';
 
-import { getToken, verifyTokenStatus } from '@/app/utils/auth';
+import { AuthContext } from '@/components/admin/AuthContext';
+import { LoadingBlock } from '@/components/ui/States';
+import { getMe, setStoredToken, getStoredToken } from '@/lib/api';
+import type { Me, Permission } from '@/lib/types';
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  permission?: Permission;
+  group: string;
+}
+
+const NAV: NavItem[] = [
+  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, permission: 'dashboard:view', group: 'Overview' },
+  { name: 'Temple Info', href: '/admin/temple', icon: Church, permission: 'temple:write', group: 'Website' },
+  { name: 'Timings', href: '/admin/timings', icon: Clock, permission: 'temple:write', group: 'Website' },
+  { name: 'Announcements', href: '/admin/announcements', icon: Megaphone, permission: 'content:write', group: 'Website' },
+  { name: 'Festivals', href: '/admin/festivals', icon: Calendar, permission: 'content:write', group: 'Website' },
+  { name: 'Poojas & Sevas', href: '/admin/poojas', icon: Sparkles, permission: 'content:write', group: 'Website' },
+  { name: 'Gallery', href: '/admin/gallery', icon: ImageIcon, permission: 'content:write', group: 'Website' },
+  { name: 'Seva Tickets', href: '/admin/seva-tickets', icon: Ticket, permission: 'tickets:manage', group: 'Temple' },
+  { name: 'Messages', href: '/admin/messages', icon: Mail, permission: 'messages:manage', group: 'Temple' },
+  { name: 'Members', href: '/admin/members', icon: Users, permission: 'members:read', group: 'Temple' },
+  { name: 'Donors', href: '/admin/donors', icon: Heart, permission: 'donors:read', group: 'Finance' },
+  { name: 'Donations', href: '/admin/donations', icon: HandHeart, permission: 'donations:read', group: 'Finance' },
+  { name: 'Finance', href: '/admin/finance', icon: Banknote, permission: 'finance:read', group: 'Finance' },
+  { name: 'Users', href: '/admin/users', icon: ShieldCheck, permission: 'users:manage', group: 'Administration' },
+  { name: 'Audit Log', href: '/admin/audit', icon: History, permission: 'audit:read', group: 'Administration' },
+];
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-
+  const [me, setMe] = useState<Me | null>(null);
+  const [checking, setChecking] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isAuthorized, setIsAuthorized] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const token = getToken();
-
-      if (!token) {
-        router.push('/login');
+    let cancelled = false;
+    async function check() {
+      if (!getStoredToken()) {
+        router.replace('/login');
         return;
       }
-
       try {
-        const status = await verifyTokenStatus();
-
-        if (status.mustChangePassword && !pathname.includes('/admin/change-password')) {
-          router.push('/admin/change-password');
+        const current = await getMe();
+        if (cancelled) return;
+        if (current.must_change_password && !pathname.startsWith('/admin/change-password')) {
+          router.replace('/admin/change-password');
           return;
         }
-
-        setIsAuthorized(true);
-      } catch (err) {
-        console.error('Auth check failed', err);
-        router.push('/login');
+        setMe(current);
+      } catch {
+        if (!cancelled) {
+          setStoredToken(null);
+          router.replace('/login');
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setChecking(false);
       }
+    }
+    check();
+    return () => {
+      cancelled = true;
     };
+    // verified once per admin session; an expired/disabled session is caught by the 401 handler
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    checkAuth();
-  }, [router]);
+  const can = useCallback((p: Permission) => !!me?.permissions.includes(p), [me]);
+  const ctx = useMemo(() => (me ? { me, can } : null), [me, can]);
 
-  const navItems = [
-    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { name: 'Poojas', href: '/admin/poojas', icon: Calendar },
-    { name: 'Gallery', href: '/admin/gallery', icon: Image },
-    { name: 'Announcements', href: '/admin/announcements', icon: Megaphone },
-    { name: 'Festivals', href: '/admin/festivals', icon: Calendar },
-    { name: 'Members', href: '/admin/members', icon: Users },
-    { name: 'Donors', href: '/admin/donors', icon: Heart },
-    { name: 'Seva Tickets', href: '/admin/seva-tickets', icon: Ticket },
-    { name: 'Messages', href: '/admin/messages', icon: Mail },
-    { name: 'Finance', href: '/admin/finance', icon: Banknote },
-    { name: 'Users', href: '/admin/users', icon: Users, superAdminOnly: true },
-  ];
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
+  const logout = () => {
+    setStoredToken(null);
     router.push('/');
   };
 
-  const isActive = (href: string) =>
-    href === '/admin' ? pathname === '/admin' : pathname.startsWith(href);
-
-  /* ---------------- RENDER ---------------- */
-
-  if (isLoading) {
+  if (checking && !me) {
     return (
-      <div className="flex items-center justify-center h-screen bg-white">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-gray-200 border-t-slate-900 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Verifying access…</p>
-        </div>
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <LoadingBlock label="Verifying access…" />
       </div>
     );
   }
+  if (!ctx || !me) return null;
 
-  if (!isAuthorized) return null;
+  const visible = NAV.filter((item) => !item.permission || can(item.permission));
+  const current = NAV.find((item) => (item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)));
+  const allowed = pathname.startsWith('/admin/change-password') || !current?.permission || can(current.permission);
+  const hasAnyAccess = can('dashboard:view');
+  const groups = Array.from(new Set(visible.map((i) => i.group)));
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Mobile toggle */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-2 bg-white rounded-lg shadow"
-        >
-          {sidebarOpen ? <X /> : <Menu />}
-        </button>
-      </div>
-
-      {/* Sidebar */}
-      <aside
-        className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } lg:translate-x-0 fixed lg:relative z-40 w-64 bg-slate-900 text-white transition-transform`}
-      >
-        <div className="p-6 border-b border-slate-700 font-bold">
-          Temple Admin
-        </div>
-
-        <nav className="p-4 space-y-1">
-          {navItems.map(({ name, href, icon: Icon, superAdminOnly }: any) => {
-            // Check if user is super admin for restricted items
-            const isSuper = localStorage.getItem('token') ? (JSON.parse(atob(localStorage.getItem('token')!.split('.')[1])).roles || []).includes('SUPER_ADMIN') : false;
-            if (superAdminOnly && !isSuper) return null;
-
-            return (
-              <Link
-                key={name}
-                href={href}
-                onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-4 py-2 rounded-md ${isActive(href)
-                  ? 'bg-slate-700'
-                  : 'text-slate-300 hover:bg-slate-800'
-                  }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-sm font-medium">{name}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-slate-700">
+    <AuthContext.Provider value={ctx}>
+      <div className="flex h-screen bg-gray-50">
+        <div className="fixed left-3 top-3 z-50 lg:hidden">
           <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-2 rounded-md hover:bg-red-600"
+            type="button"
+            onClick={() => setSidebarOpen((open) => !open)}
+            aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={sidebarOpen}
+            className="rounded-lg bg-white p-2 shadow"
           >
-            <LogOut className="w-5 h-5" />
-            Logout
+            {sidebarOpen ? <X /> : <Menu />}
           </button>
         </div>
-      </aside>
 
-      {/* Content */}
-      <main className="flex-1 overflow-auto">{children}</main>
+        <aside
+          aria-label="Admin navigation"
+          className={`fixed z-40 flex h-full w-64 flex-col overflow-y-auto bg-slate-900 text-white transition-transform lg:static lg:translate-x-0 ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div className="border-b border-slate-700 p-5">
+            <p className="font-serif text-lg font-bold text-amber-400">Temple Admin</p>
+            <p className="mt-1 truncate text-xs text-slate-400">
+              {me.username} · {me.roles.join(', ').replace(/_/g, ' ').toLowerCase()}
+            </p>
+          </div>
 
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+          <nav className="flex-1 space-y-4 p-3">
+            {groups.map((group) => (
+              <div key={group}>
+                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{group}</p>
+                <ul className="space-y-0.5">
+                  {visible
+                    .filter((item) => item.group === group)
+                    .map(({ name, href, icon: Icon }) => {
+                      const active = href === '/admin' ? pathname === '/admin' : pathname.startsWith(href);
+                      return (
+                        <li key={href}>
+                          <Link
+                            href={href}
+                            onClick={() => setSidebarOpen(false)}
+                            aria-current={active ? 'page' : undefined}
+                            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm ${
+                              active ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {name}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            ))}
+          </nav>
+
+          <div className="space-y-1 border-t border-slate-700 p-3">
+            <Link href="/" className="block rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800">
+              ← View website
+            </Link>
+            <Link href="/admin/change-password" className="block rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-800">
+              Change password
+            </Link>
+            <button
+              type="button"
+              onClick={logout}
+              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-red-700 hover:text-white"
+            >
+              <LogOut className="h-4 w-4" /> Sign out
+            </button>
+          </div>
+        </aside>
+
+        <main className="min-w-0 flex-1 overflow-auto">
+          {!hasAnyAccess && !pathname.startsWith('/admin/change-password') ? (
+            <NoAccess message="Your account does not have access to the admin area. Please contact the temple administrator." />
+          ) : !allowed ? (
+            <NoAccess message="Your role does not include this section." />
+          ) : (
+            children
+          )}
+        </main>
+
+        {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />}
+      </div>
+    </AuthContext.Provider>
+  );
+}
+
+function NoAccess({ message }: { message: string }) {
+  return (
+    <div className="mx-auto max-w-md px-4 pt-24 text-center">
+      <ShieldCheck className="mx-auto mb-4 h-12 w-12 text-gray-300" aria-hidden="true" />
+      <h1 className="text-xl font-semibold text-gray-800">Access restricted</h1>
+      <p className="mt-2 text-sm text-gray-500">{message}</p>
     </div>
   );
 }

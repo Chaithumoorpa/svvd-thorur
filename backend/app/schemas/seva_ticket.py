@@ -1,57 +1,66 @@
 import re
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional
-from datetime import datetime, date, time
+from datetime import date, datetime, time
+from typing import Annotated, Optional
 from uuid import UUID
 
-from app.models.seva_ticket import PaymentStatus, TicketStatus, TicketSource
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+
+from app.models.seva_ticket import PaymentStatus, TicketSource, TicketStatus
+from app.schemas.common import MoneyInOrZero, MoneyOut
+
+_MOBILE_RE = re.compile(r"^\+?[0-9]{10,14}$")
+DevoteeName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=100)]
 
 
-class SevaTicketBase(BaseModel):
+def _mobile(v: str) -> str:
+    v = re.sub(r"[\s-]", "", v)
+    if not _MOBILE_RE.match(v):
+        raise ValueError("Enter a valid mobile number (10-14 digits)")
+    return v
+
+
+class SevaBookingPublic(BaseModel):
+    """
+    Public online booking. The client can NOT set price, payment status or seva name -
+    those are derived server-side from the pooja record.
+    """
+    seva_id: int
+    devotee_name: DevoteeName
+    mobile_number: str
+    seva_date: date
+    seva_time: Optional[time] = None
+
+    @field_validator("mobile_number")
+    @classmethod
+    def _m(cls, v):
+        return _mobile(v)
+
+
+class SevaTicketCreate(SevaBookingPublic):
+    """Counter (staff) ticket: staff may record a fee and payment status."""
+    seva_name: Optional[str] = Field(default=None, max_length=200)
+    payment_status: PaymentStatus = PaymentStatus.FREE
+    amount: MoneyInOrZero = 0
+
+
+class SevaTicketOut(BaseModel):
+    id: UUID
+    ticket_number: str
     seva_id: int
     seva_name: str
     devotee_name: str
-    mobile_number: str = Field(..., min_length=10, max_length=15)
+    mobile_number: str
     seva_date: date
     seva_time: Optional[time] = None
-    payment_status: PaymentStatus = PaymentStatus.FREE
-    amount: int = 0
-
-
-class SevaTicketCreate(SevaTicketBase):
-    """
-    Schema for creating a new seva ticket.
-
-    Used by the public booking endpoint, so every field is bounded. Note that the
-    public endpoint ignores `payment_status` and `amount` (a visitor must not be
-    able to mint a ticket that prints as PAID); only counter tickets created by
-    an admin keep them.
-    """
-    seva_name: Optional[str] = Field(default=None, max_length=150)  # server uses the pooja's own name
-    devotee_name: str = Field(..., min_length=1, max_length=150)
-    mobile_number: str = Field(..., pattern=r"^\+?[0-9]{10,15}$")
-    amount: int = Field(default=0, ge=0, le=1_000_000)
-
-    @field_validator("mobile_number", mode="before")
-    @classmethod
-    def strip_phone_separators(cls, v):
-        """Accept '98765 43210' or '98765-43210' as typed at the counter."""
-        return re.sub(r"[\s\-()]", "", v) if isinstance(v, str) else v
-
-
-class SevaTicketOut(SevaTicketBase):
-    """Schema for returning seva ticket details"""
-    id: UUID
-    ticket_number: str
+    payment_status: PaymentStatus
+    amount: MoneyOut
     status: TicketStatus
     source: TicketSource
     created_by_admin_id: Optional[int] = None
     qr_token: str
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SevaTicketPrintData(BaseModel):

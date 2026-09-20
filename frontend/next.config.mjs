@@ -1,27 +1,52 @@
 /** @type {import('next').NextConfig} */
+
+// Baseline security headers for every page. (The API sets its own in production.)
+const securityHeaders = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+];
+
+// Legacy / duplicate URLs -> one canonical page each (keeps SEO signals in one place).
+const redirects = [
+  ['/history', '/about/history'],
+  ['/overview', '/about/history'],
+  ['/about/overview', '/about/history'],
+  ['/about/general-info', '/information'],
+  ['/about/timings', '/timings'],
+  ['/daily-poojas', '/poojas?type=daily'],
+  ['/sevas/daily-poojas', '/poojas?type=daily'],
+  ['/festival-sevas', '/poojas?type=festival'],
+  ['/sevas/festival-sevas', '/poojas?type=festival'],
+  ['/sevas/special-sevas', '/poojas?type=special'],
+  ['/support/contact', '/contact'],
+  ['/privacy-policy', '/legal/privacy-policy'],
+  ['/terms', '/legal/terms'],
+  ['/signin', '/login'],
+  ['/signup', '/login'],
+];
+
 const nextConfig = {
-    // Proxy /api/v1 requests to the backend
-    async rewrites() {
-        const backendUrl = process.env.INTERNAL_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
-        return [
-            {
-                source: '/api/v1/:path*',
-                destination: `${backendUrl}/:path*`,
-            },
-        ];
-    },
+  // Proxy /api/v1 requests to the backend
+  async rewrites() {
+    const backendUrl = process.env.INTERNAL_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
+    return [{ source: '/api/v1/:path*', destination: `${backendUrl}/:path*` }];
+  },
 
-    // Disable strict mode for compatibility
-    reactStrictMode: false,
+  async redirects() {
+    return redirects.map(([source, destination]) => ({ source, destination, permanent: true }));
+  },
 
-    // Type errors fail the build (the codebase type-checks clean with `tsc --noEmit`).
-    // ESLint stays off during builds: there is no ESLint config in this project.
-    eslint: {
-        ignoreDuringBuilds: true,
-    },
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }];
+  },
 
-    // Output configuration for Docker
-    output: 'standalone',
+  reactStrictMode: true,
+  poweredByHeader: false,
+
+  // Output configuration for Docker
+  output: 'standalone',
 };
 
 export default nextConfig;

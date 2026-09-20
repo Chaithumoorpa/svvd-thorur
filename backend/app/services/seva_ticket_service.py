@@ -4,15 +4,16 @@ import qrcode
 import io
 import os
 import base64
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 from typing import List, Optional
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from xhtml2pdf import pisa
 
 from app.repositories.seva_ticket_repo import SevaTicketRepository
 from app.repositories.pooja_repo import PoojaRepository
-from app.schemas.seva_ticket import SevaTicketCreate, SevaTicketOut, SevaTicketFilter, TicketStatus, PaymentStatus, TicketSource
+from app.schemas.seva_ticket import SevaBookingPublic, SevaTicketCreate, SevaTicketOut, SevaTicketFilter, TicketStatus, PaymentStatus, TicketSource
 from app.models.seva_ticket import SevaTicket, TicketSource as ModelTicketSource
 
 
@@ -44,63 +45,73 @@ class SevaTicketService:
         """Generates a secure random QR token"""
         return secrets.token_urlsafe(32)
 
-    def book_ticket(self, data: SevaTicketCreate) -> SevaTicket:
-        # 1. Validate Seva exists
+    def _create_with_unique_number(self, ticket_data: dict) -> SevaTicket:
+        """Ticket numbers are sequential; retry if two bookings race for the same number."""
+        for _ in range(5):
+            ticket = SevaTicket(**ticket_data, ticket_number=self._generate_ticket_number(),
+                                qr_token=self._generate_qr_token())
+            try:
+                return self.ticket_repo.create(ticket)
+            except IntegrityError:
+                self.ticket_repo.db.rollback()
+        raise HTTPException(status_code=503, detail="Could not allocate a ticket number, please retry")
+
+    def book_ticket(self, data: SevaBookingPublic) -> SevaTicket:
         pooja = self.pooja_repo.get_by_id(data.seva_id)
         if not pooja or not pooja.is_active:
             raise HTTPException(status_code=400, detail="Invalid or inactive Seva selected")
-
-        # 2. Prevent duplicate booking for same mobile + date + seva
+        if pooja.is_paid:
+            # No online payment yet: never mint a paid ticket from an unauthenticated request.
+            raise HTTPException(
+                status_code=400,
+                detail="This seva has a fee. Please book it at the temple counter.",
+            )
+        if data.seva_date < date.today():
+            raise HTTPException(status_code=400, detail="Seva date cannot be in the past")
         if self.ticket_repo.check_duplicate(data.mobile_number, data.seva_date, data.seva_id):
             raise HTTPException(
-                status_code=400, 
-                detail=f"A ticket for this Seva is already booked for this mobile number on {data.seva_date}"
+                status_code=400,
+                detail=f"A ticket for this Seva is already booked for this mobile number on {data.seva_date}",
             )
 
-        # 3. Create ticket model.
-        # Never trust payment fields from an anonymous visitor: there is no online
-        # payment, so an online booking is a free reservation. (Previously the
-        # client could send payment_status=PAID and any amount and get a ticket
-        # that printed as paid.) Fees are collected and recorded at the counter.
-        ticket_data = data.dict()
-        ticket_data.update({
-            "ticket_number": self._generate_ticket_number(),
-            "qr_token": self._generate_qr_token(),
-            "status": TicketStatus.ACTIVE,
-            "source": ModelTicketSource.ONLINE,
+        return self._create_with_unique_number({
+            "seva_id": pooja.id,
+            "seva_name": pooja.name,          # from the database, not the client
+            "devotee_name": data.devotee_name,
+            "mobile_number": data.mobile_number,
+            "seva_date": data.seva_date,
+            "seva_time": data.seva_time,
             "payment_status": PaymentStatus.FREE,
             "amount": 0,
-            "seva_name": pooja.name
+            "status": TicketStatus.ACTIVE,
+            "source": ModelTicketSource.ONLINE,
         })
-        
-        ticket = SevaTicket(**ticket_data)
-
-        return self.ticket_repo.create(ticket)
 
     def create_counter_ticket(self, data: SevaTicketCreate, admin_user) -> SevaTicket:
-        """
-        Generates a ticket manually from the temple counter.
-        Skips duplicate checks and tracks the admin who created it.
-        """
-        # 1. Validate Seva exists
+        """Manual ticket from the temple counter; records the staff member who issued it."""
         pooja = self.pooja_repo.get_by_id(data.seva_id)
         if not pooja:
             raise HTTPException(status_code=400, detail="Invalid Seva selected")
 
-        # 2. Create ticket model (Source: COUNTER)
-        ticket_data = data.dict()
-        ticket_data.update({
-            "ticket_number": self._generate_ticket_number(),
-            "qr_token": self._generate_qr_token(),
+        return self._create_with_unique_number({
+            "seva_id": pooja.id,
+            "seva_name": data.seva_name or pooja.name,
+            "devotee_name": data.devotee_name,
+            "mobile_number": data.mobile_number,
+            "seva_date": data.seva_date,
+            "seva_time": data.seva_time,
+            "payment_status": data.payment_status,
+            "amount": data.amount,
             "status": TicketStatus.ACTIVE,
             "source": ModelTicketSource.COUNTER,
             "created_by_admin_id": admin_user.id,
-            "seva_name": data.seva_name or pooja.name
         })
-        
-        ticket = SevaTicket(**ticket_data)
 
-        return self.ticket_repo.create(ticket)
+    def query_tickets(self, filters: SevaTicketFilter):
+        return self.ticket_repo.query_tickets(
+            seva_id=filters.seva_id, seva_date=filters.seva_date,
+            status=filters.status, mobile_number=filters.mobile_number,
+        )
 
     def list_tickets(self, filters: SevaTicketFilter) -> List[SevaTicket]:
         return self.ticket_repo.list_tickets(
@@ -177,11 +188,6 @@ class SevaTicketService:
         """Generates redundant HTML template optimized for 80mm mini-printers"""
         qr_base64 = self.generate_qr_base64(ticket.qr_token)
         logo_base64 = self._get_logo_base64()
-        # Ticket fields such as devotee_name come from anonymous users. They are
-        # rendered into HTML that is also handed to xhtml2pdf, so escape them:
-        # otherwise markup in a name is executed by the browser (stored XSS) or
-        # makes the PDF renderer fetch attacker-chosen URLs/files.
-        esc = lambda value: html.escape(str(value), quote=True)
         display_date = ticket.seva_date.strftime("%d-%m-%Y")
         display_time = ticket.seva_time.strftime("%I:%M %p") if ticket.seva_time else "N/A"
         
@@ -244,20 +250,20 @@ class SevaTicketService:
                     <div class="ticket-title">SEVA TICKET</div>
                 </div>
 
-                <div class="status-badge">{esc(ticket.status.value)}</div>
+                <div class="status-badge">{ticket.status.value}</div>
                 
                 <div class="content">
-                    <div class="row"><span class="label">Ticket #:</span> <span class="value">{esc(ticket.ticket_number)}</span></div>
-                    <div class="row"><span class="label">Devotee:</span> <span class="value">{esc(ticket.devotee_name)}</span></div>
-                    <div class="row"><span class="label">Seva:</span> <span class="value">{esc(ticket.seva_name)}</span></div>
+                    <div class="row"><span class="label">Ticket #:</span> <span class="value">{ticket.ticket_number}</span></div>
+                    <div class="row"><span class="label">Devotee:</span> <span class="value">{html.escape(ticket.devotee_name)}</span></div>
+                    <div class="row"><span class="label">Seva:</span> <span class="value">{html.escape(ticket.seva_name)}</span></div>
                     <div class="row"><span class="label">Date:</span> <span class="value">{display_date}</span></div>
                     <div class="row"><span class="label">Time:</span> <span class="value">{display_time}</span></div>
-                    <div class="row"><span class="label">Fee:</span> <span class="value">Rs. {esc(ticket.amount)} ({esc(ticket.payment_status.value)})</span></div>
+                    <div class="row"><span class="label">Fee:</span> <span class="value">Rs. {ticket.amount} ({ticket.payment_status.value})</span></div>
                 </div>
                 
                 <div class="qr-container">
                     <img class="qr-code" src="data:image/png;base64,{qr_base64}" alt="QR" />
-                    <div class="ticket-num">{esc(ticket.ticket_number)}</div>
+                    <div class="ticket-num">{ticket.ticket_number}</div>
                 </div>
                 
                 <div class="footer">

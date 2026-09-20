@@ -1,38 +1,32 @@
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-from sqlalchemy import cast, func, select, DateTime
-from sqlalchemy.orm import Session
-from typing import List, Dict, Any
-from datetime import datetime
+from datetime import date, datetime
+from typing import List
 
-from app.models.donor import Donor
-from app.models.member import Member
-from app.models.pooja import Pooja
-from app.models.seva_ticket import SevaTicket
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
+
+from app.core.rbac import Permission, has_permission
+from app.models.contact import ContactMessage, ContactStatus
+from app.models.festival import Festival
 from app.models.user import User
-from app.utils.dependencies import (
-    get_db,
-    require_admin,
-    get_pooja_repository,
-    get_announcement_repository,
-    get_donor_repository,
-    get_gallery_repository,
-    get_member_repository,
-    get_seva_ticket_repository
-)
-from app.repositories.pooja_repo import PoojaRepository
 from app.repositories.announcement_repo import AnnouncementRepository
 from app.repositories.donor_repo import DonorRepository
 from app.repositories.gallery_repo import GalleryRepository
 from app.repositories.member_repo import MemberRepository
+from app.repositories.pooja_repo import PoojaRepository
 from app.repositories.seva_ticket_repo import SevaTicketRepository
+from app.services.audit_service import AuditService
+from app.utils.dependencies import get_audit_service, get_db, require_permission
+
 
 class MetaResponse(BaseModel):
     service: str
     version: str
     status: str
 
+
 class DashboardStats(BaseModel):
+    """Counts the caller is allowed to see; everything else is reported as 0."""
     poojas: int
     announcements: int
     donors: int
@@ -40,85 +34,64 @@ class DashboardStats(BaseModel):
     members: int
     seva_tickets: int
     seva_tickets_today: int
+    pending_messages: int = 0
+    upcoming_festivals: int = 0
+
 
 class ActivityItem(BaseModel):
+    id: int
     text: str
-    time: str
-    icon: str
-    color: str
+    actor: str | None = None
+    action: str
+    entity_type: str
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
 
 router = APIRouter(prefix="/meta", tags=["Meta"])
 
+
 @router.get("/", response_model=MetaResponse)
 def get_meta():
-    """Get service metadata and health status."""
-    return MetaResponse(
-        service="SVVD Temple Backend",
-        version="1.0.0",
-        status="active"
-    )
+    """Service metadata (public, non-sensitive)."""
+    return MetaResponse(service="SVVD Temple Backend", version="2.0.0", status="active")
+
 
 @router.get("/stats", response_model=DashboardStats)
 def get_dashboard_stats(
-    admin_user: User = Depends(require_admin),
-    pooja_repo: PoojaRepository = Depends(get_pooja_repository),
-    announcement_repo: AnnouncementRepository = Depends(get_announcement_repository),
-    donor_repo: DonorRepository = Depends(get_donor_repository),
-    gallery_repo: GalleryRepository = Depends(get_gallery_repository),
-    member_repo: MemberRepository = Depends(get_member_repository),
-    ticket_repo: SevaTicketRepository = Depends(get_seva_ticket_repository)
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.DASHBOARD_VIEW)),
 ):
-    """Fetch real-time counts for the admin dashboard."""
+    """Admin dashboard counts. Requires dashboard access; private counts obey per-module permissions."""
+    can = lambda p: has_permission(user.roles, p)  # noqa: E731
+    tickets = SevaTicketRepository(db)
+    today = date.today()
     return DashboardStats(
-        poojas=pooja_repo.count(),
-        announcements=announcement_repo.count(),
-        donors=donor_repo.count(),
-        gallery=gallery_repo.count(),
-        members=member_repo.count(),
-        seva_tickets=ticket_repo.count(),
-        seva_tickets_today=ticket_repo.count_today()
+        poojas=PoojaRepository(db).count(),
+        announcements=AnnouncementRepository(db).count(),
+        gallery=GalleryRepository(db).count(),
+        donors=DonorRepository(db).count() if can(Permission.DONORS_READ) else 0,
+        members=MemberRepository(db).count() if can(Permission.MEMBERS_READ) else 0,
+        seva_tickets=tickets.count() if can(Permission.TICKETS_MANAGE) else 0,
+        seva_tickets_today=tickets.count_today() if can(Permission.TICKETS_MANAGE) else 0,
+        pending_messages=(
+            db.query(ContactMessage).filter(ContactMessage.status == ContactStatus.PENDING).count()
+            if can(Permission.MESSAGES_MANAGE) else 0
+        ),
+        upcoming_festivals=db.query(Festival).filter(
+            Festival.is_active.is_(True), Festival.festival_date >= today
+        ).count(),
     )
-
-def _time_ago(then: datetime, now: datetime) -> str:
-    seconds = max(int((now - then).total_seconds()), 0)
-    if seconds < 60:
-        return "just now"
-    for size, unit in ((86400, "day"), (3600, "hour"), (60, "minute")):
-        if seconds >= size:
-            n = seconds // size
-            return f"{n} {unit}{'s' if n != 1 else ''} ago"
-    return "just now"
 
 
 @router.get("/activity", response_model=List[ActivityItem])
 def get_recent_activity(
-    db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin),
+    audit: AuditService = Depends(get_audit_service),
+    _: User = Depends(require_permission(Permission.AUDIT_READ)),
 ):
-    """
-    Recent activity for the admin dashboard, built from real records.
-    (This endpoint used to return four hard-coded fake events to every visitor.)
-    No donor or devotee names are included.
-    """
-    # Compare against the database clock cast to a naive timestamp, the same way
-    # created_at/updated_at (server-side now()) are stored.
-    now = db.scalar(select(cast(func.now(), DateTime)))
-
-    sources = [
-        (Member, "created_at", "Users", "text-blue-500", lambda r: "New temple member added"),
-        (SevaTicket, "created_at", "Ticket", "text-orange-500", lambda r: f"Seva ticket {r.ticket_number} issued"),
-        (Donor, "created_at", "Heart", "text-red-500", lambda r: f"Donation of Rs. {r.amount} recorded"),
-        (Pooja, "updated_at", "Calendar", "text-emerald-500", lambda r: f"Pooja '{r.name}' updated"),
-    ]
-
-    events = []
-    for model, ts_attr, icon, color, describe in sources:
-        ts_col = getattr(model, ts_attr)
-        for row in db.query(model).order_by(ts_col.desc()).limit(5).all():
-            events.append((getattr(row, ts_attr), describe(row), icon, color))
-
-    events.sort(key=lambda e: e[0], reverse=True)
+    """Recent changes from the audit log (SUPER_ADMIN)."""
     return [
-        {"text": text, "time": _time_ago(ts, now), "icon": icon, "color": color}
-        for ts, text, icon, color in events[:8]
+        ActivityItem(id=e.id, text=e.summary or f"{e.action} {e.entity_type}", actor=e.actor_username,
+                     action=e.action, entity_type=e.entity_type, created_at=e.created_at)
+        for e in audit.recent(8)
     ]

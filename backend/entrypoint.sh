@@ -28,6 +28,9 @@ else
     echo "Using default Alembic configuration"
 fi
 
+echo "Checking for legacy migration revisions..."
+python -m app.core.legacy_stamp
+
 echo "Checking migration status..."
 alembic -c "$ALEMBIC_CONFIG" heads
 

@@ -1,34 +1,76 @@
-import { getFestivals } from '@/lib/api'
+import type { Metadata } from 'next';
+import { CalendarDays, MapPin } from 'lucide-react';
+import JsonLd from '@/components/public/JsonLd';
+import { PageShell } from '@/components/public/SectionHeading';
+import { formatDate, parseDate, todayISO } from '@/lib/format';
+import { fetchFestivals } from '@/lib/server-api';
+import { SITE_URL } from '@/lib/site';
+import type { Festival } from '@/lib/types';
 
-export const dynamic = 'force-dynamic'
+export const metadata: Metadata = {
+  title: 'Festivals & Events',
+  description: 'Annual festivals, utsavams and special events at the temple.',
+};
 
-type Festival = {
-  id: number
-  name: string
-  date?: string
-  description?: string
+const ended = (f: Festival, today: string) => !!f.festival_date && (f.end_date ?? f.festival_date) < today;
+
+function FestivalCard({ f, muted }: { f: Festival; muted?: boolean }) {
+  const d = f.festival_date ? parseDate(f.festival_date) : null;
+  return (
+    <article className={`flex overflow-hidden rounded-2xl border bg-white shadow-sm ${muted ? 'border-gray-200 opacity-75' : 'border-amber-200'}`}>
+      <div className={`flex w-24 flex-none flex-col items-center justify-center px-2 py-4 text-center text-white ${muted ? 'bg-gray-500' : 'bg-maroon'}`}>
+        <span className="font-serif text-3xl font-bold leading-none">{d ? d.getDate() : '—'}</span>
+        <span className="mt-1 text-xs uppercase tracking-wider text-amber-100">{d ? d.toLocaleString('en-IN', { month: 'short', year: 'numeric' }) : 'Date TBA'}</span>
+      </div>
+      <div className="min-w-0 flex-1 p-5">
+        <h3 className="font-serif text-xl font-bold text-maroon">{f.name}</h3>
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-gray-500">
+          {f.end_date && f.festival_date && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3" aria-hidden="true" />{formatDate(f.festival_date)} – {formatDate(f.end_date)}</span>}
+          {f.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" aria-hidden="true" />{f.location}</span>}
+        </p>
+        {f.description && <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-700">{f.description}</p>}
+      </div>
+    </article>
+  );
 }
 
 export default async function FestivalsPage() {
-  let festivals: Festival[] = []
-  try {
-    festivals = await getFestivals()
-  } catch (e) {
-    console.error('Failed to fetch festivals', e)
-  }
+  const festivals = await fetchFestivals();
+  const today = todayISO();
+  const upcoming = festivals.filter((f) => !ended(f, today));
+  const past = festivals.filter((f) => ended(f, today)).reverse();
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': upcoming.filter((f) => f.festival_date).map((f) => ({
+      '@type': 'Event',
+      name: f.name,
+      startDate: f.festival_date,
+      ...(f.end_date ? { endDate: f.end_date } : {}),
+      ...(f.description ? { description: f.description } : {}),
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+      url: `${SITE_URL}/festivals`,
+    })),
+  };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      <h1 className="text-3xl font-serif font-semibold text-templeDark">Festivals</h1>
-      <div className="space-y-4">
-        {festivals.map((f) => (
-          <div key={f.id} className="border rounded-lg p-4 bg-white shadow-sm">
-            <h3 className="font-semibold">{f.name}</h3>
-            <p className="text-sm text-gray-600">{f.date}</p>
-            <p className="mt-2 text-gray-700">{f.description}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+    <PageShell title="Festivals & Events" subtitle="Join us in the divine celebrations throughout the year" narrow>
+      {upcoming.length > 0 && <JsonLd data={jsonLd} />}
+      <section aria-labelledby="up-heading">
+        <h2 id="up-heading" className="mb-4 font-serif text-2xl font-bold text-maroon">Upcoming</h2>
+        {upcoming.length ? (
+          <div className="space-y-4">{upcoming.map((f) => <FestivalCard key={f.id} f={f} />)}</div>
+        ) : (
+          <p className="rounded-xl border border-dashed border-amber-300 bg-white p-8 text-center text-gray-500">No upcoming festivals are scheduled right now.</p>
+        )}
+      </section>
+
+      {past.length > 0 && (
+        <section aria-labelledby="past-heading" className="mt-12">
+          <h2 id="past-heading" className="mb-4 font-serif text-2xl font-bold text-gray-600">Recently concluded</h2>
+          <div className="space-y-4">{past.slice(0, 6).map((f) => <FestivalCard key={f.id} f={f} muted />)}</div>
+        </section>
+      )}
+    </PageShell>
+  );
 }

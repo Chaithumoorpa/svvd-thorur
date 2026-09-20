@@ -1,49 +1,45 @@
+from fastapi import HTTPException
+
+from app.models.announcement import Announcement
 from app.repositories.announcement_repo import AnnouncementRepository
 from app.schemas.announcement import AnnouncementCreate
-from app.models.announcement import Announcement
-
-from fastapi import HTTPException
 
 
 class AnnouncementService:
     def __init__(self, announcement_repository: AnnouncementRepository):
-        self.announcement_repository = announcement_repository
+        self.repo = announcement_repository
 
-    def list_active_announcements(self):
-        """
-        Returns all active announcements.
-        Business rules can be added here later.
-        """
-        return self.announcement_repository.get_all_active()
+    # ---- public --------------------------------------------------------------------
+    def list_published(self, limit=None):
+        return self.repo.get_all_active(limit=limit)
 
-    def list_all_announcements(self):
-        """
-        Returns all announcements.
-        """
-        return self.announcement_repository.get_all()
-
-    def get_public_announcement(self, announcement_id: int):
-        """Single announcement, only if visible to the public today."""
-        return self.announcement_repository.get_visible_by_id(announcement_id)
-
-    def get_announcement_details(self, announcement_id: int):
-        """
-        Returns a single announcement by id.
-        """
-        return self.announcement_repository.get_by_id(announcement_id)
-
-    def create_announcement(self, data: AnnouncementCreate):
-        announcement = Announcement(**data.dict())
-        return self.announcement_repository.create(announcement)
-
-    def update_announcement(self, announcement_id: int, data: dict):
-        announcement = self.get_announcement_details(announcement_id)
+    def get_published(self, announcement_id: int) -> Announcement:
+        announcement = self.repo.get_published_by_id(announcement_id)
         if not announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
-        return self.announcement_repository.update(announcement, data)
+        return announcement
 
-    def delete_announcement(self, announcement_id: int):
-        announcement = self.get_announcement_details(announcement_id)
+    # ---- admin ---------------------------------------------------------------------
+    def query_all(self):
+        return self.repo.query_all()
+
+    def _get(self, announcement_id: int) -> Announcement:
+        announcement = self.repo.get_by_id(announcement_id)
         if not announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
-        return self.announcement_repository.delete(announcement)
+        return announcement
+
+    def create_announcement(self, data: AnnouncementCreate, user_id: int | None = None) -> Announcement:
+        return self.repo.create(Announcement(**data.model_dump(), created_by_id=user_id))
+
+    def update_announcement(self, announcement_id: int, data: dict) -> Announcement:
+        announcement = self._get(announcement_id)
+        # the merged window must stay valid even when only one bound is edited
+        start = data.get("start_date", announcement.start_date)
+        end = data.get("end_date", announcement.end_date)
+        if start and end and end < start:
+            raise HTTPException(status_code=422, detail="End date cannot be before start date")
+        return self.repo.update(announcement, data)
+
+    def delete_announcement(self, announcement_id: int) -> Announcement:
+        return self.repo.delete(self._get(announcement_id))

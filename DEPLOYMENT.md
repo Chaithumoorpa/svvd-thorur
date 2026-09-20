@@ -527,3 +527,17 @@ For issues or questions:
 2. Review troubleshooting section above
 3. Check `BRANCHING_STRATEGY.md` for workflow guidance
 4. Verify environment variables are set correctly
+
+
+---
+
+## Upgrading to SVVD 2.0
+
+1. **Back up the database** (`pg_dump`) before deploying.
+2. Set a real `SECRET_KEY` (at least 32 random characters, e.g. `openssl rand -hex 32`). In production the API refuses to start with a short or default key.
+3. Behind a reverse proxy set `TRUSTED_PROXY_HOPS` (1 for the Next.js container alone, 2 when nginx/traefik sits in front) so rate limiting sees real client IPs.
+4. `CORS_ORIGINS` accepts a comma-separated list or a JSON list. `*` is rejected in production.
+5. Public self-registration is disabled by default (`ALLOW_PUBLIC_REGISTRATION=false`).
+6. Start the stack. `entrypoint.sh` re-stamps databases created by the old (deleted) migration revisions and then runs `alembic upgrade head` (`003_reconcile`, `004_v2_core`). Existing data is preserved; legacy donor gifts are copied into the new `donations` table.
+7. Sign in as a SUPER_ADMIN and complete **Temple Info** and **Timings** (address, phone, map link, history). Content that used to be hard-coded in the website now comes from there.
+8. Set `NEXT_PUBLIC_SITE_URL` (frontend) to the public origin for correct canonical URLs and the sitemap.

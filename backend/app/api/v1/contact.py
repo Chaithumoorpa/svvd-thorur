@@ -1,62 +1,78 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import List, Optional
-from app.utils.dependencies import get_contact_service, require_admin
-from app.utils.rate_limiter import contact_limiter, get_client_ip, enforce
-from app.services.contact_service import ContactService
-from app.schemas.contact import ContactCreate, ContactOut, ContactUpdate
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+
+from app.core.pagination import PageParams, page_params, paginate, set_total
+from app.core.rbac import Permission
 from app.models.contact import ContactStatus
 from app.models.user import User
+from app.schemas.contact import ContactCreate, ContactOut, ContactPublicAck, ContactUpdate
+from app.services.contact_service import ContactService
+from app.utils.dependencies import AuditContext, get_audit, get_contact_service, require_permission
+from app.utils.rate_limiter import contact_limiter, get_client_ip
 
 router = APIRouter(prefix="/contacts", tags=["Contact Us"])
 
-@router.post("/", response_model=ContactOut)
+_can_manage = require_permission(Permission.MESSAGES_MANAGE)
+
+
+@router.post("/", response_model=ContactPublicAck, status_code=201)
 def submit_contact_message(
     payload: ContactCreate,
     request: Request,
     service: ContactService = Depends(get_contact_service),
 ):
-    """Public endpoint to submit a contact message. Limited to 5 per hour per IP."""
-    enforce(
-        contact_limiter,
-        get_client_ip(request),
-        "Too many messages sent from this address. Please try again later.",
-    )
+    """Public contact form. Rate limited per IP; honeypot field silently drops bot posts."""
+    if not contact_limiter.is_allowed(get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many messages. Please try again later.")
+    if payload.website:  # honeypot tripped: pretend success without storing anything
+        return ContactPublicAck(id=0, status=ContactStatus.PENDING)
     return service.submit_message(payload)
+
 
 @router.get("/", response_model=List[ContactOut])
 def list_contact_messages(
+    response: Response,
     status: Optional[ContactStatus] = None,
     service: ContactService = Depends(get_contact_service),
-    admin_user: User = Depends(require_admin),
+    params: PageParams = Depends(page_params),
+    _: User = Depends(_can_manage),
 ):
-    """Admin endpoint to list all contact messages."""
-    return service.list_messages(status)
+    items, total = paginate(service.query_messages(status), params)
+    set_total(response, total)
+    return items
+
 
 @router.get("/{message_id}", response_model=ContactOut)
 def get_contact_message(
     message_id: int,
     service: ContactService = Depends(get_contact_service),
-    admin_user: User = Depends(require_admin),
+    _: User = Depends(_can_manage),
 ):
-    """Admin endpoint to get details of a specific contact message."""
     return service.get_message_details(message_id)
+
 
 @router.patch("/{message_id}", response_model=ContactOut)
 def update_contact_message(
     message_id: int,
     payload: ContactUpdate,
     service: ContactService = Depends(get_contact_service),
-    admin_user: User = Depends(require_admin),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_can_manage),
 ):
-    """Admin endpoint to update status or add notes to a contact message."""
-    return service.update_message(message_id, payload)
+    message = service.update_message(message_id, payload)
+    audit.log("UPDATE", "contact_message", message_id, f"Updated message #{message_id}",
+              {"status": message.status})
+    return message
+
 
 @router.delete("/{message_id}")
 def delete_contact_message(
     message_id: int,
     service: ContactService = Depends(get_contact_service),
-    admin_user: User = Depends(require_admin),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_can_manage),
 ):
-    """Admin endpoint to delete a contact message."""
     service.delete_message(message_id)
+    audit.log("DELETE", "contact_message", message_id, f"Deleted message #{message_id}")
     return {"message": "Deleted successfully"}

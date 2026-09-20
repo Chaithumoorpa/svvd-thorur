@@ -4,10 +4,18 @@ from sqlalchemy.orm import Session
 from app.repositories.finance_repo import FinanceRepository
 from io import BytesIO, StringIO
 import csv
+from xml.sax.saxutils import escape
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+def _csv_safe(value):
+    """Neutralise spreadsheet formula injection (=, +, -, @ at the start of a text cell)."""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", chr(9), chr(13)):
+        return "'" + value
+    return value
+
 
 class LedgerService:
     @staticmethod
@@ -105,7 +113,7 @@ class LedgerService:
         for row in ledger_data:
             writer.writerow([
                 row["date"],
-                row["particulars"],
+                _csv_safe(row["particulars"]),
                 row["voucher_no"],
                 row["credit"],
                 row["debit"],
@@ -136,7 +144,7 @@ class LedgerService:
             
             table_row = [
                 str(row["date"]),
-                Paragraph(row["particulars"], styles['Normal']), # Wrap text
+                Paragraph(escape(row["particulars"]), styles['Normal']), # Wrap text
                 row["voucher_no"],
                 credit,
                 debit,

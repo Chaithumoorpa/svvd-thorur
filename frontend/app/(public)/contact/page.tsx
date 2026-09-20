@@ -1,169 +1,54 @@
-'use client';
+import type { Metadata } from 'next';
+import { Mail, MapPin, MessageCircle, Phone } from 'lucide-react';
+import ContactForm from '@/components/public/ContactForm';
+import { PageShell } from '@/components/public/SectionHeading';
+import { fetchTemple } from '@/lib/server-api';
+import { isEmbeddableMap, templeAddress } from '@/lib/site';
 
-import React, { useState } from 'react';
-import { Mail, Phone, MapPin, CheckCircle2 } from 'lucide-react';
-import { api } from '@/lib/api';
+export const metadata: Metadata = {
+  title: 'Contact Us',
+  description: 'Get in touch with the temple office: address, phone, email and a contact form.',
+};
 
-export default function ContactPage() {
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        subject: '',
-        message: ''
-    });
-    const [loading, setLoading] = useState(false);
-    const [success, setSuccess] = useState(false);
-    const [error, setError] = useState('');
+export default async function ContactPage() {
+  const temple = await fetchTemple();
+  const address = templeAddress(temple);
+  const items = [
+    address && { icon: MapPin, label: 'Address', node: <span>{address}</span> },
+    temple?.contact_phone && { icon: Phone, label: 'Phone', node: <a className="hover:underline" href={`tel:${temple.contact_phone.replace(/\s/g, '')}`}>{temple.contact_phone}</a> },
+    temple?.whatsapp_number && { icon: MessageCircle, label: 'WhatsApp', node: <a className="hover:underline" href={`https://wa.me/${temple.whatsapp_number.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">{temple.whatsapp_number}</a> },
+    temple?.contact_email && { icon: Mail, label: 'Email', node: <a className="break-all hover:underline" href={`mailto:${temple.contact_email}`}>{temple.contact_email}</a> },
+  ].filter(Boolean) as Array<{ icon: typeof Mail; label: string; node: React.ReactNode }>;
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
-
-        try {
-            // Same-origin call through the shared axios client (/api/v1). The old code
-            // posted to NEXT_PUBLIC_API_URL || http://localhost:8000; that variable is
-            // never defined in the deployment, so in production visitors' browsers
-            // tried to reach *their own* localhost and the form always failed.
-            await api.post('/contacts/', formData);
-
-            setSuccess(true);
-            setFormData({ name: '', email: '', subject: '', message: '' });
-        } catch (err: any) {
-            const status = err?.response?.status;
-            if (status === 429) {
-                setError('Too many messages from this device. Please try again in an hour.');
-            } else if (status === 422) {
-                setError('Please check your details: name, a valid email, subject and message are required.');
-            } else {
-                setError('Failed to send message. Please try again.');
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="max-w-6xl mx-auto px-4 py-12">
-            <h1 className="text-4xl font-bold text-templeDark mb-12 text-center">Contact Us</h1>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Contact Info Cards */}
-                <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4">
-                        <div className="bg-templeGold/10 p-3 rounded-xl text-templeGold">
-                            <Phone className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-templeDark">Phone</h3>
-                            <p className="text-gray-600 text-sm mt-1">+91 XXXXXXXXXX</p>
-                            <p className="text-gray-600 text-sm">Mon-Sun, 6AM-9PM</p>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4">
-                        <div className="bg-templeGold/10 p-3 rounded-xl text-templeGold">
-                            <Mail className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-templeDark">Email</h3>
-                            <p className="text-gray-600 text-sm mt-1">info@svvdthorur.org</p>
-                            <p className="text-gray-600 text-sm">support@svvdthorur.org</p>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4">
-                        <div className="bg-templeGold/10 p-3 rounded-xl text-templeGold">
-                            <MapPin className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-templeDark">Address</h3>
-                            <p className="text-gray-600 text-sm mt-1">
-                                Sri Varasiddhi Vinayaka Swamy Temple,<br />
-                                Thorur Village, Andhra Pradesh.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Contact Form */}
-                <div className="lg:col-span-2 bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-                    {success ? (
-                        <div className="text-center py-12">
-                            <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <CheckCircle2 className="w-8 h-8 text-green-600" />
-                            </div>
-                            <h2 className="text-2xl font-bold text-templeDark mb-2">Message Sent!</h2>
-                            <p className="text-gray-600 mb-8">Thank you for contacting us. We will get back to you soon.</p>
-                            <button
-                                onClick={() => setSuccess(false)}
-                                className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-800 transition"
-                            >
-                                Send another message
-                            </button>
-                        </div>
-                    ) : (
-                        <>
-                            <h2 className="text-2xl font-bold text-templeDark mb-6">Send us a Message</h2>
-                            <form onSubmit={handleSubmit} className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-templeGold/20 focus:border-templeGold outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                                        <input
-                                            type="email"
-                                            required
-                                            value={formData.email}
-                                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-templeGold/20 focus:border-templeGold outline-none"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={formData.subject}
-                                        onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-templeGold/20 focus:border-templeGold outline-none"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
-                                    <textarea
-                                        rows={4}
-                                        required
-                                        value={formData.message}
-                                        onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-templeGold/20 focus:border-templeGold outline-none"
-                                    />
-                                </div>
-
-                                {error && (
-                                    <p className="text-red-500 text-sm">{error}</p>
-                                )}
-
-                                <button
-                                    disabled={loading}
-                                    className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition disabled:opacity-50"
-                                >
-                                    {loading ? 'Sending...' : 'Send Message'}
-                                </button>
-                            </form>
-                        </>
-                    )}
-                </div>
-            </div>
+  return (
+    <PageShell title="Contact Us" subtitle="We are happy to help with visits, sevas and donations">
+      <div className="grid gap-10 lg:grid-cols-5">
+        <div className="space-y-6 lg:col-span-2">
+          {items.length ? (
+            <ul className="space-y-4">
+              {items.map(({ icon: Icon, label, node }) => (
+                <li key={label} className="flex gap-4 rounded-xl border border-amber-200 bg-white p-4">
+                  <Icon className="mt-0.5 h-5 w-5 flex-none text-saffron" aria-hidden="true" />
+                  <div><h2 className="text-sm font-semibold text-maroon">{label}</h2><p className="text-sm text-gray-700">{node}</p></div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-xl border border-dashed border-amber-300 bg-white p-6 text-sm text-gray-500">Contact details will be published soon. Please use the form to reach us.</p>
+          )}
+          {temple?.map_url && (
+            isEmbeddableMap(temple.map_url) ? (
+              <iframe title="Temple location map" src={temple.map_url} className="h-56 w-full rounded-xl border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" sandbox="allow-scripts allow-same-origin allow-popups" />
+            ) : (
+              <a href={temple.map_url} target="_blank" rel="noopener noreferrer" className="inline-block font-semibold text-saffron hover:underline">Get directions →</a>
+            )
+          )}
         </div>
-    );
+        <div className="lg:col-span-3">
+          <h2 className="mb-4 font-serif text-2xl font-bold text-maroon">Send us a message</h2>
+          <ContactForm />
+        </div>
+      </div>
+    </PageShell>
+  );
 }

@@ -1,166 +1,181 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.exc import IntegrityError
+from datetime import date
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
-from typing import List
-import logging
 
-from app.utils.dependencies import get_db, require_admin, require_trustee
-from app.repositories.donor_repo import DonorRepository
-from app.services.donor_service import DonorService
-from app.schemas.donor import DonorOut, DonorCreate, DonorUpdate
+from app.core.pagination import PageParams, page_params, paginate, set_total
+from app.core.rbac import Permission, has_permission
 from app.models.user import User
+from app.repositories.donor_repo import DonorRepository
+from app.repositories.temple_repo import TempleRepository
+from app.schemas.donor import (
+    DonationCreate, DonationOut, DonationUpdate, DonorCreate, DonorOut, DonorUpdate, DonationType,
+)
 from app.services.donation_receipt_service import DonationReceiptService
-from fastapi.responses import Response
-from datetime import datetime
+from app.services.donor_service import DonationService, DonorService, donor_to_out
+from app.utils.dependencies import AuditContext, get_audit, get_db, require_permission
 
-router = APIRouter(prefix="/donors", tags=["Donors"])
-logger = logging.getLogger(__name__)
+router = APIRouter(tags=["Donors & Donations"])
 
-
-def get_donor_service(
-    db: Session = Depends(get_db),
-) -> DonorService:
-    repo = DonorRepository(db)
-    return DonorService(repo)
+_read_donors = require_permission(Permission.DONORS_READ)
+_write_donors = require_permission(Permission.DONORS_WRITE)
+_read_donations = require_permission(Permission.DONATIONS_READ)
+_write_donations = require_permission(Permission.DONATIONS_WRITE)
 
 
-@router.get("/", response_model=List[DonorOut])
+def get_donor_service(db: Session = Depends(get_db)) -> DonorService:
+    return DonorService(DonorRepository(db))
+
+
+def get_donation_service(db: Session = Depends(get_db)) -> DonationService:
+    return DonationService(db)
+
+
+def _donation_out(donation) -> DonationOut:
+    out = DonationOut.model_validate(donation)
+    out.donor_name = donation.donor.name if donation.donor else None
+    return out
+
+
+# ------------------------------------------------------------------------- donors
+@router.get("/donors/", response_model=List[DonorOut])
 def list_donors(
+    response: Response,
+    search: Optional[str] = Query(None, max_length=100),
     service: DonorService = Depends(get_donor_service),
-    current_user: User = Depends(require_trustee),  # TRUSTEE can view donors
+    params: PageParams = Depends(page_params),
+    user: User = Depends(_read_donors),
 ):
-    """List all donors. Requires at least TRUSTEE role."""
-    logger.info(
-        f"Donors GET (list): user={current_user.username}, "
-        f"roles={current_user.roles}"
-    )
-    return service.list_donors()
+    """Private donor directory (TRUSTEE and above). PAN is masked for read-only roles."""
+    rows, total = paginate(service.query_donors(search), params)
+    set_total(response, total)
+    reveal = has_permission(user.roles, Permission.DONORS_WRITE)
+    return [donor_to_out(row, reveal) for row in rows]
 
 
-@router.get("/{donor_id}", response_model=DonorOut)
+@router.get("/donors/{donor_id}", response_model=DonorOut)
 def get_donor(
     donor_id: int,
     service: DonorService = Depends(get_donor_service),
-    current_user: User = Depends(require_trustee),  # TRUSTEE can view donors
+    user: User = Depends(_read_donors),
 ):
-    """Get donor by ID. Requires at least TRUSTEE role."""
-    logger.info(
-        f"Donors GET (single): user={current_user.username}, "
-        f"roles={current_user.roles}, donor_id={donor_id}"
-    )
-    donor = service.get_donor(donor_id)
-    if not donor:
-        raise HTTPException(status_code=404, detail="Donor not found")
-    return donor
+    return donor_to_out(service.get_donor_row(donor_id), has_permission(user.roles, Permission.DONORS_WRITE))
 
 
-@router.post("/", response_model=DonorOut)
+@router.post("/donors/", response_model=DonorOut, status_code=201)
 def create_donor(
     payload: DonorCreate,
     service: DonorService = Depends(get_donor_service),
-    current_user: User = Depends(require_admin),  # ADMIN or SUPER_ADMIN only
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_write_donors),
 ):
-    """Create a new donor. Requires ADMIN or SUPER_ADMIN role."""
-    logger.info(
-        f"Donors POST: user={current_user.username}, "
-        f"roles={current_user.roles}, donor_name={payload.name}"
-    )
-    result = service.create_donor(payload)
-    logger.info(f"Donor created: id={result.id}, name={result.name}")
-    return result
+    donor = service.create_donor(payload)
+    audit.log("CREATE", "donor", donor.id, f"Added donor {donor.name}")
+    return donor_to_out(service.get_donor_row(donor.id), True)
 
 
-@router.put("/{donor_id}", response_model=DonorOut)
+@router.put("/donors/{donor_id}", response_model=DonorOut)
 def update_donor(
     donor_id: int,
     payload: DonorUpdate,
     service: DonorService = Depends(get_donor_service),
-    current_user: User = Depends(require_admin),  # ADMIN or SUPER_ADMIN only
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_write_donors),
 ):
-    """Update a donor. Requires ADMIN or SUPER_ADMIN role."""
-    logger.info(
-        f"Donors PUT: user={current_user.username}, "
-        f"roles={current_user.roles}, donor_id={donor_id}"
-    )
-    result = service.update_donor(donor_id, payload.dict(exclude_unset=True))
-    logger.info(f"Donor updated: id={donor_id}")
-    return result
+    donor = service.update_donor(donor_id, payload.model_dump(exclude_unset=True))
+    audit.log("UPDATE", "donor", donor_id, f"Updated donor {donor.name}",
+              {"fields": sorted(payload.model_dump(exclude_unset=True).keys())})
+    return donor_to_out(service.get_donor_row(donor_id), True)
 
 
-@router.delete("/{donor_id}", response_model=DonorOut)
+@router.delete("/donors/{donor_id}", response_model=DonorOut)
 def delete_donor(
     donor_id: int,
     service: DonorService = Depends(get_donor_service),
-    current_user: User = Depends(require_admin),  # ADMIN or SUPER_ADMIN only
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_write_donors),
 ):
-    """Delete a donor. Requires ADMIN or SUPER_ADMIN role."""
-    logger.info(
-        f"Donors DELETE: user={current_user.username}, "
-        f"roles={current_user.roles}, donor_id={donor_id}"
-    )
-    result = service.delete_donor(donor_id)
-    logger.info(f"Donor deleted: id={donor_id}")
-    return result
+    """Soft delete: donation history is kept."""
+    donor = service.delete_donor(donor_id)
+    audit.log("DELETE", "donor", donor_id, f"Deactivated donor {donor.name}")
+    return donor_to_out(service.get_donor_row(donor_id), True)
 
 
-@router.post("/{donor_id}/generate-receipt", dependencies=[Depends(require_admin)])
+# ---------------------------------------------------------------------- donations
+@router.get("/donations/", response_model=List[DonationOut])
+def list_donations(
+    response: Response,
+    donor_id: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    donation_type: Optional[DonationType] = None,
+    service: DonationService = Depends(get_donation_service),
+    params: PageParams = Depends(page_params),
+    _: User = Depends(_read_donations),
+):
+    query = service.query(donor_id, start_date, end_date, donation_type.value if donation_type else None)
+    items, total = paginate(query, params)
+    set_total(response, total)
+    return [_donation_out(d) for d in items]
+
+
+@router.post("/donations/", response_model=DonationOut, status_code=201)
+def create_donation(
+    payload: DonationCreate,
+    service: DonationService = Depends(get_donation_service),
+    audit: AuditContext = Depends(get_audit),
+    user: User = Depends(_write_donations),
+):
+    donation = service.create(payload, user.id)
+    audit.log("CREATE", "donation", donation.id, f"Recorded donation of Rs. {donation.amount} from donor #{donation.donor_id}",
+              {"amount": donation.amount, "type": donation.donation_type, "mode": donation.payment_mode})
+    return _donation_out(donation)
+
+
+@router.put("/donations/{donation_id}", response_model=DonationOut)
+def update_donation(
+    donation_id: int,
+    payload: DonationUpdate,
+    service: DonationService = Depends(get_donation_service),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_write_donations),
+):
+    donation = service.update(donation_id, payload)
+    audit.log("UPDATE", "donation", donation_id, f"Updated donation #{donation_id}",
+              payload.model_dump(exclude_unset=True))
+    return _donation_out(donation)
+
+
+@router.post("/donations/{donation_id}/receipt", response_model=DonationOut)
 def generate_receipt(
-    donor_id: int,
+    donation_id: int,
+    service: DonationService = Depends(get_donation_service),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_write_donations),
+):
+    """Issue (or return the already issued) receipt number for a donation."""
+    donation = service.issue_receipt(donation_id)
+    audit.log("RECEIPT", "donation", donation_id, f"Issued receipt {donation.receipt_number}")
+    return _donation_out(donation)
+
+
+@router.get("/donations/{donation_id}/receipt")
+def download_receipt(
+    donation_id: int,
+    service: DonationService = Depends(get_donation_service),
     db: Session = Depends(get_db),
-    service: DonorService = Depends(get_donor_service),
+    _: User = Depends(_read_donations),
 ):
-    """
-    Generate a receipt for a donation (ADMIN only).
-    Assigns a receipt number if not present.
-    """
-    donor = service.get_donor(donor_id)
-    if not donor:
-        raise HTTPException(status_code=404, detail="Donation not found")
+    """Receipt PDF. Authenticated (TRUSTEE+): receipts contain donor personal data."""
+    from fastapi import HTTPException
 
-    if not donor.receipt_number:
-        # receipt_number is UNIQUE; on the (very unlikely) collision of the random
-        # suffix, roll back and draw again instead of returning HTTP 500.
-        for _ in range(5):
-            donor.receipt_number = DonationReceiptService.generate_receipt_number(db)
-            donor.receipt_generated_at = datetime.now()
-            try:
-                db.commit()
-                break
-            except IntegrityError:
-                db.rollback()
-                donor = service.get_donor(donor_id)
-        else:
-            raise HTTPException(status_code=500, detail="Could not allocate a receipt number, please retry")
-        db.refresh(donor)
-
-    return {"message": "Receipt generated successfully", "receipt_number": donor.receipt_number}
-
-
-@router.get("/{donor_id}/receipt")
-def get_receipt(
-    donor_id: int,
-    service: DonorService = Depends(get_donor_service),
-    current_user: User = Depends(require_trustee),
-):
-    """
-    Download donation receipt PDF. Requires at least TRUSTEE role.
-
-    This used to be public and keyed by the sequential donor id, so anyone could
-    loop over ids 1..N and download every donor's name, phone number and amount.
-    """
-    donor = service.get_donor(donor_id)
-    if not donor:
-        raise HTTPException(status_code=404, detail="Donation not found")
-        
-    if not donor.receipt_number:
-         raise HTTPException(status_code=400, detail="Receipt has not been generated yet. Please contact admin.")
-
-    pdf_content = DonationReceiptService.generate_receipt_pdf(donor)
-    
-    filename = f"Receipt_{donor.receipt_number}.pdf"
-    
+    donation = service.get(donation_id)
+    if not donation.receipt_number:
+        raise HTTPException(status_code=400, detail="Receipt has not been generated yet")
+    pdf = DonationReceiptService.generate_receipt_pdf(donation, TempleRepository(db).get_active())
     return Response(
-        content=pdf_content,
+        content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f'attachment; filename="Receipt_{donation.receipt_number}.pdf"'},
     )

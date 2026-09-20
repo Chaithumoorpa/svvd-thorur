@@ -1,10 +1,9 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional, List
+import re
 from enum import Enum
+from typing import List, Optional
 
-# Matches the users table column sizes so oversize input gets a 422, not a DB error (500).
-MIN_PASSWORD_LENGTH = 8
-MAX_PASSWORD_LENGTH = 128
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
 
 class UserRole(str, Enum):
     SUPER_ADMIN = "SUPER_ADMIN"
@@ -13,56 +12,124 @@ class UserRole(str, Enum):
     STAFF = "STAFF"
     GENERAL_USER = "GENERAL_USER"
 
+
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9_.@-]{3,100}$")
+
+
+def _validate_password(value: str) -> str:
+    if len(value) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    if len(value) > 128:
+        raise ValueError("Password is too long")
+    if not re.search(r"[A-Za-z]", value) or not re.search(r"\d", value):
+        raise ValueError("Password must contain at least one letter and one digit")
+    return value
+
+
 class UserBase(BaseModel):
     username: str
     email: Optional[EmailStr] = None
-    phone: Optional[str] = None
+    phone: Optional[str] = Field(default=None, max_length=20)
     is_active: Optional[bool] = True
     roles: List[UserRole] = [UserRole.GENERAL_USER]
-    
-    @field_validator('roles')
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        v = v.strip()
+        if not _USERNAME_RE.match(v):
+            raise ValueError("Username must be 3-100 characters: letters, digits, . _ @ -")
+        return v
+
+    @field_validator("roles")
     @classmethod
     def validate_roles(cls, v):
-        if not v or len(v) == 0:
-            raise ValueError('User must have at least one role')
-        
-        # Validate each role is a valid UserRole enum
-        valid_roles = {role.value for role in UserRole}
-        for role in v:
-            role_value = role.value if hasattr(role, 'value') else str(role)
-            if role_value not in valid_roles:
-                raise ValueError(
-                    f'Invalid role: {role_value}. Valid roles are: {", ".join(valid_roles)}'
-                )
-        
-        # Remove duplicates
-        return list(set(v))
+        if not v:
+            raise ValueError("User must have at least one role")
+        # de-duplicate while keeping a stable order
+        return sorted(set(v), key=lambda r: r.value)
+
 
 class UserCreate(UserBase):
-    # Constraints live on the *input* schema only. UserOut inherits UserBase, so
-    # tightening the base would make responses fail for pre-existing accounts.
-    username: str = Field(..., min_length=3, max_length=100)
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return _validate_password(v)
+
+
+class PublicRegister(BaseModel):
+    """Self-registration: can never choose roles."""
+    username: str
+    email: Optional[EmailStr] = None
     phone: Optional[str] = Field(default=None, max_length=20)
-    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
+    password: str
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        v = v.strip()
+        if not _USERNAME_RE.match(v):
+            raise ValueError("Username must be 3-100 characters: letters, digits, . _ @ -")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return _validate_password(v)
+
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(default=None, max_length=20)
+    is_active: Optional[bool] = None
+    roles: Optional[List[UserRole]] = None
+    password: Optional[str] = None  # admin-initiated reset; forces a change at next login
+
+    @field_validator("roles")
+    @classmethod
+    def validate_roles(cls, v):
+        if v is not None and not v:
+            raise ValueError("User must have at least one role")
+        return sorted(set(v), key=lambda r: r.value) if v else v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v):
+        return _validate_password(v) if v is not None else v
+
 
 class UserLogin(BaseModel):
     username: str
     password: str
 
-class UserOut(UserBase):
+
+class UserOut(BaseModel):
     id: int
+    username: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    is_active: bool
+    roles: List[str]
     must_change_password: bool
-    
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
 
 class Token(BaseModel):
     access_token: str
     token_type: str
 
+
 class TokenOut(Token):
     must_change_password: bool
 
+
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        return _validate_password(v)
