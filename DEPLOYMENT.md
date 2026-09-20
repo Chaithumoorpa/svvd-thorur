@@ -159,6 +159,25 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 python3 -c "import secrets; print(secrets.token_urlsafe(16))"
 ```
 
+**The backend refuses to start in production** if `SECRET_KEY` is empty, shorter
+than 32 characters, or one of the placeholder values that appear in this repo's
+examples. That is intentional: a published key lets anyone forge admin tokens.
+
+**Client IP / rate limiting.** Login, contact, booking and visitor-tracking limits
+are keyed on the client IP, so the backend must know how many reverse proxies sit in
+front of it:
+
+```bash
+# Nginx -> backend (the setup in section 6): 1   (default in docker-compose.prod.yml)
+# Nginx -> Next.js -> backend (all traffic through Next's /api rewrite): 2
+TRUSTED_PROXY_HOPS=1
+```
+
+Too high and the header can be spoofed to dodge limits; too low and every visitor
+shares one bucket (the proxy's IP) and can lock each other out. Limits are held in
+memory per worker process, so keep `--workers` small (the prod compose uses 2) and
+expect them to reset on restart.
+
 ### 3. Check Migrations
 
 ```bash
@@ -234,6 +253,25 @@ server {
 }
 ```
 
+`docker-compose.yml` publishes the backend and frontend on `127.0.0.1` only, so the
+proxy is the only way in from the internet. Do not change these to `0.0.0.0`.
+
+---
+
+## Running the Backend Tests
+
+Tests need a real PostgreSQL (the schema uses ARRAY and native enum types, so SQLite
+will not work). They build the schema with `alembic upgrade head`, so a missing
+migration fails the suite.
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+# Optional; default is postgresql://templeuser:templepass@localhost:5432/templedb_test
+export TEST_DATABASE_URL=postgresql://templeuser:templepass@localhost:5432/templedb_test
+pytest
+```
+
 ---
 
 ## Database Migrations
@@ -257,6 +295,12 @@ alembic current
 # Check migration heads
 alembic heads
 ```
+
+> **Existing databases:** revision `002_remaining_schema` creates the tables that were
+> previously missing from the migration history (contact messages, festivals, poojas,
+> temples, visitor logs, income/expense, gallery, seva tickets) and adds receipt
+> columns to `donors`. It skips anything that already exists, but take a backup
+> (`pg_dump`) before the first upgrade on a live database.
 
 ### Production
 
@@ -449,7 +493,9 @@ git merge development
 
 ### Before Production Deployment
 
-- [ ] Changed `SECRET_KEY` to secure random value
+- [ ] Changed `SECRET_KEY` to secure random value (32+ characters; the app won't start otherwise)
+- [ ] `TRUSTED_PROXY_HOPS` matches your proxy chain (default `1`)
+- [ ] Backend/frontend ports not reachable from outside the server (only Nginx on 80/443)
 - [ ] Changed `POSTGRES_PASSWORD` to strong password
 - [ ] Set `DEBUG=false`
 - [ ] Set `ENABLE_DOCS=false`
@@ -489,9 +535,9 @@ For issues or questions:
 
 1. **Back up the database** (`pg_dump`) before deploying.
 2. Set a real `SECRET_KEY` (at least 32 random characters, e.g. `openssl rand -hex 32`). In production the API refuses to start with a short or default key.
-3. Behind a reverse proxy set `TRUST_PROXY_HEADERS=true` and `TRUSTED_PROXY_HOPS` (1 for the Next.js container alone, 2 when nginx/traefik sits in front) so rate limiting sees real client IPs.
+3. Behind a reverse proxy set `TRUSTED_PROXY_HOPS` (1 for the Next.js container alone, 2 when nginx/traefik sits in front) so rate limiting sees real client IPs.
 4. `CORS_ORIGINS` accepts a comma-separated list or a JSON list. `*` is rejected in production.
 5. Public self-registration is disabled by default (`ALLOW_PUBLIC_REGISTRATION=false`).
-6. Start the stack. `entrypoint.sh` re-stamps databases created by the old (deleted) migration revisions and then runs `alembic upgrade head` (`002_reconcile`, `003_v2_core`). Existing data is preserved; legacy donor gifts are copied into the new `donations` table.
+6. Start the stack. `entrypoint.sh` re-stamps databases created by the old (deleted) migration revisions and then runs `alembic upgrade head` (`003_reconcile`, `004_v2_core`). Existing data is preserved; legacy donor gifts are copied into the new `donations` table.
 7. Sign in as a SUPER_ADMIN and complete **Temple Info** and **Timings** (address, phone, map link, history). Content that used to be hard-coded in the website now comes from there.
 8. Set `NEXT_PUBLIC_SITE_URL` (frontend) to the public origin for correct canonical URLs and the sitemap.

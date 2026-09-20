@@ -1,82 +1,101 @@
 import time
-from functools import wraps
-from fastapi import HTTPException
-from typing import Dict, Tuple
+import threading
+from typing import Dict, List, Optional
+
+from fastapi import HTTPException, Request
 
 from app.core.config import settings
 
 
 class SimpleRateLimiter:
     """
-    Simple in-memory rate limiter.
-    Tracks requests per IP address.
+    Sliding-window, in-memory rate limiter keyed by an arbitrary string
+    (client IP, username, ...).
+
+    - Thread-safe: FastAPI runs sync endpoints in a thread pool.
+    - Bounded memory: keys whose window has expired are dropped, so a flood of
+      distinct keys cannot grow the dict forever.
+    - State is per process. Run a single uvicorn worker (or move to Redis) if
+      you need one global limit.
     """
-    
+
+    _SWEEP_EVERY = 500  # full sweep of stale keys every N calls
+
     def __init__(self, max_requests: int, window_seconds: int):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.requests: Dict[str, list] = {}
-    
-    def is_allowed(self, client_ip: str) -> bool:
-        """Check if client is within rate limit."""
+        self.requests: Dict[str, List[float]] = {}
+        self._lock = threading.Lock()
+        self._calls = 0
+
+    def _sweep(self, now: float) -> None:
+        cutoff = now - self.window_seconds
+        stale = [k for k, ts in self.requests.items() if not ts or ts[-1] <= cutoff]
+        for k in stale:
+            del self.requests[k]
+
+    def is_allowed(self, key: str) -> bool:
+        """Return True and record the hit if `key` is within its limit."""
         now = time.time()
-        
-        # Initialize if first request from this IP
-        if client_ip not in self.requests:
-            self.requests[client_ip] = []
-        
-        # Remove old requests outside the window
-        self.requests[client_ip] = [
-            req_time for req_time in self.requests[client_ip]
-            if now - req_time < self.window_seconds
-        ]
-        
-        # Check limit
-        if len(self.requests[client_ip]) >= self.max_requests:
-            return False
-        
-        # Record this request
-        self.requests[client_ip].append(now)
-        return True
+        cutoff = now - self.window_seconds
+        with self._lock:
+            self._calls += 1
+            if self._calls % self._SWEEP_EVERY == 0:
+                self._sweep(now)
+
+            recent = [t for t in self.requests.get(key, []) if t > cutoff]
+            if len(recent) >= self.max_requests:
+                self.requests[key] = recent
+                return False
+
+            recent.append(now)
+            self.requests[key] = recent
+            return True
 
 
-# Rate limiters for auth endpoints
-# 5 requests per minute per IP
+# --- Limiters -------------------------------------------------------------
+# Auth endpoints: 5 attempts per minute per client IP.
 login_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60)
 register_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60)
-# Public write endpoints: 5 contact messages / 10 seva bookings per IP per hour
-contact_limiter = SimpleRateLimiter(max_requests=5, window_seconds=3600)
-booking_limiter = SimpleRateLimiter(max_requests=10, window_seconds=3600)
+# Per-account brake so distributed guessing against one username still slows down.
+login_user_limiter = SimpleRateLimiter(max_requests=10, window_seconds=15 * 60)
+# Public write endpoints that could otherwise be used to flood the database
+# (and, once admin email alerts exist, the admin's inbox).
+contact_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60 * 60)
+booking_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60 * 60)
+visit_limiter = SimpleRateLimiter(max_requests=30, window_seconds=60)
 
 
-def get_client_ip(request) -> str:
+def get_client_ip(request: Request, trusted_hops: Optional[int] = None) -> str:
     """
-    Client IP for rate limiting / visitor hashing.
+    Best-effort real client IP that a client cannot spoof.
 
-    X-Forwarded-For is client-controlled unless a trusted proxy overwrites it,
-    so it is only honoured when TRUST_PROXY_HEADERS is enabled.
+    X-Forwarded-For looks like "client-supplied, ..., address-seen-by-proxy-1".
+    Each trusted proxy appends the address it received the request from, so with
+    N trusted proxies the real client is the N-th entry counted from the RIGHT.
+    Entries further left are whatever the client chose to send.
+
+    With TRUSTED_PROXY_HOPS=0 (default) the header is ignored entirely.
     """
-    if settings.TRUST_PROXY_HEADERS:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            hops = [h.strip() for h in forwarded.split(",") if h.strip()]
-            if hops:
-                # each trusted proxy appends the address it saw; count from the right
-                return hops[-min(settings.TRUSTED_PROXY_HOPS, len(hops))]
-    return request.client.host if request.client else "unknown"
+    hops = settings.TRUSTED_PROXY_HOPS if trusted_hops is None else trusted_hops
+    peer = request.client.host if request.client else "unknown"
+    if hops <= 0:
+        return peer
+
+    header = request.headers.get("x-forwarded-for", "")
+    parts = [p.strip() for p in header.split(",") if p.strip()]
+    if len(parts) < hops:
+        # Fewer entries than expected proxies: header is missing or the request
+        # bypassed the proxy. Do not guess - use the socket peer.
+        return peer
+    return parts[-hops]
 
 
-def rate_limit_login(limiter: SimpleRateLimiter):
-    """Decorator to rate limit login endpoint."""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(payload, service, request):
-            client_ip = get_client_ip(request)
-            if not limiter.is_allowed(client_ip):
-                raise HTTPException(
-                    status_code=429,
-                    detail="Too many login attempts. Please try again in a minute."
-                )
-            return func(payload, service, request)
-        return wrapper
-    return decorator
+def enforce(limiter: SimpleRateLimiter, key: str, message: str) -> None:
+    """Raise HTTP 429 when `key` has exceeded `limiter`."""
+    if not limiter.is_allowed(key):
+        raise HTTPException(
+            status_code=429,
+            detail=message,
+            headers={"Retry-After": str(limiter.window_seconds)},
+        )

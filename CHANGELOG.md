@@ -4,7 +4,7 @@
 
 ### SVVD 2.0 (see docs/SVVD_2.0_PLAN.md)
 - Security: RBAC permission matrix, audit log, closed public data leaks, production config guards, spoof-resistant rate limiting.
-- Data: migrations `002_reconcile`/`003_v2_core`, `donations` table, Numeric money, temple profile and timings, public committee.
+- Data: migrations `003_reconcile`/`004_v2_core`, `donations` table, Numeric money, temple profile and timings, public committee.
 - Frontend: server-rendered temple-style public site, rebuilt permission-aware admin, SEO (sitemap, robots, JSON-LD), lint/typecheck enforced in the build.
 - Tests: 78 backend + 14 frontend.
 

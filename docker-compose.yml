@@ -29,12 +29,15 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-templeuser}:${POSTGRES_PASSWORD:-templepass}@postgres:5432/${POSTGRES_DB:-templedb}
-      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY (>= 32 random chars) in .env}
-      TRUST_PROXY_HEADERS: "true"
+      # No default on purpose: production refuses to start with a missing/weak key.
+      SECRET_KEY: ${SECRET_KEY:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       ENV: production
+      TZ: Asia/Kolkata
     ports:
-      - "8000:8000"
+      # Loopback only: put Nginx/Caddy in front. Publishing this port publicly
+      # would let clients bypass the proxy and spoof X-Forwarded-For.
+      - "127.0.0.1:8000:8000"
 
   frontend:
     build:
@@ -49,7 +52,7 @@ services:
       - INTERNAL_API_BASE_URL=http://backend:8000/api/v1
       - NODE_ENV=production
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - backend
 

@@ -11,6 +11,7 @@ _WEAK_SECRETS = {
     "changeme",
     "your-secret-key-change-in-production",
     "change-this-in-prod-very-secret",
+    "dev-secret-key-change-this-in-production-12345678",
 }
 
 
@@ -37,12 +38,10 @@ class Settings(BaseSettings):
     # Roles and active-status are re-read from the database on every request, so a long-ish
     # session (one working day) does not delay revocation.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
-    # Trust X-Forwarded-For only when running behind reverse proxies we control.
-    # TRUSTED_PROXY_HOPS = number of proxies between the internet and this API
-    # (e.g. Next.js rewrite = 1, nginx + Next.js = 2). The client IP is taken from the
-    # right, so a client-supplied X-Forwarded-For prefix cannot spoof it.
-    TRUST_PROXY_HEADERS: bool = False
-    TRUSTED_PROXY_HOPS: int = 1
+    # Reverse proxies in front of the API that append to X-Forwarded-For (Next.js rewrite = 1,
+    # nginx + Next.js = 2). 0 = trust nobody. The client IP is read from the right, so a
+    # client-supplied prefix cannot spoof it.
+    TRUSTED_PROXY_HOPS: int = Field(default=0, ge=0, le=5)
     # Public self-registration creates GENERAL_USER accounts (no admin access). The public
     # site has no devotee-account features yet, so it is off unless explicitly enabled.
     ALLOW_PUBLIC_REGISTRATION: bool = False

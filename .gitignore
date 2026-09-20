@@ -79,4 +79,7 @@ Thumbs.db
 alembic.local.ini
 .venv-local/
 svvd-thorur-fix-finish-site.bundle
+
+# Coverage / build artefacts
 coverage.xml
+*.tsbuildinfo

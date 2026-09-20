@@ -1,7 +1,7 @@
 """SVVD 2.0 core: donations, audit log, timings, temple profile, Numeric money
 
-Revision ID: 003_v2_core
-Revises: 002_reconcile
+Revision ID: 004_v2_core
+Revises: 003_reconcile
 Create Date: 2026-09-20
 
 * `donations` table (one donor -> many donations); legacy per-donor gifts are copied in
@@ -20,8 +20,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "003_v2_core"
-down_revision: Union[str, None] = "002_reconcile"
+revision: str = "004_v2_core"
+down_revision: Union[str, None] = "003_reconcile"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

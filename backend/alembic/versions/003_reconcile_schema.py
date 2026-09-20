@@ -1,7 +1,7 @@
 """reconcile schema
 
-Revision ID: 002_reconcile
-Revises: 001_initial
+Revision ID: 003_reconcile
+Revises: 002_remaining_schema
 Create Date: 2026-09-20
 
 Brings ANY existing database (fresh 001_initial, or a legacy database created by
@@ -20,8 +20,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "002_reconcile"
-down_revision: Union[str, None] = "001_initial"
+revision: str = "003_reconcile"
+down_revision: Union[str, None] = "002_remaining_schema"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

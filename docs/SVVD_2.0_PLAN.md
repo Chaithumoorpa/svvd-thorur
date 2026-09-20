@@ -51,9 +51,9 @@ Branch: `development`. Stack: Next.js 14 / React 18 / TS / Tailwind · FastAPI /
 
 | Revision | Change |
 |---|---|
-| `001_initial` | unchanged |
-| `002_reconcile` | idempotent: create any table missing from legacy/fresh DBs, add missing columns (never drops/alters data). Legacy revision ids are re-stamped to `001_initial` by the entrypoint so legacy DBs upgrade cleanly. |
-| `003_v2_core` | `donations` (Numeric money, receipt no.), copy legacy donor amounts into it; money columns → `Numeric(12,2)`; `audit_logs`; `temple_timings`; extra `temples` fields (address, map, hero, social); `temple_members.show_on_website/sort_order/photo_url`; festival `end_date/location/image_url`; pooja and gallery `sort_order`; index additions. |
+| `001_initial`, `002_remaining_schema` | unchanged (002 was added upstream in PR #1 while this work was in progress; 003/004 are idempotent on top of it) |
+| `003_reconcile` | idempotent: create any table missing from legacy/fresh DBs, add missing columns (never drops/alters data). Legacy revision ids are re-stamped to `001_initial` by the entrypoint so legacy DBs upgrade cleanly. |
+| `004_v2_core` | `donations` (Numeric money, receipt no.), copy legacy donor amounts into it; money columns → `Numeric(12,2)`; `audit_logs`; `temple_timings`; extra `temples` fields (address, map, hero, social); `temple_members.show_on_website/sort_order/photo_url`; festival `end_date/location/image_url`; pooja and gallery `sort_order`; index additions. |
 
 ## 5. API changes
 
@@ -88,7 +88,7 @@ Enforced only on the backend via `require_permission`; the frontend hides UI fro
 ### Completed
 
 **Foundation & security (P0)**
-- Migrations: `002_reconcile` (idempotent, brings fresh *and* legacy databases to the pre-v2 schema without touching data) and `003_v2_core`. Legacy revision ids are re-stamped by `app/core/legacy_stamp.py` (run by `entrypoint.sh`). Verified on PostgreSQL 17 from three starting points: fresh, `001_initial`, and a database built by the deleted legacy chain with seeded data (legacy donor gifts copied into `donations`, legacy pooja amounts preserved). Upgrade -> downgrade -> upgrade round-trip checked.
+- Migrations: `003_reconcile` (idempotent, brings fresh *and* legacy databases to the pre-v2 schema without touching data) and `004_v2_core`. Legacy revision ids are re-stamped by `app/core/legacy_stamp.py` (run by `entrypoint.sh`). Verified on PostgreSQL 17 from three starting points: fresh, `001_initial`, and a database built by the deleted legacy chain with seeded data (legacy donor gifts copied into `donations`, legacy pooja amounts preserved). Upgrade -> downgrade -> upgrade round-trip checked.
 - Config: one `Settings` object; production refuses a weak/default `SECRET_KEY` and wildcard CORS; docs, rate limiting and security headers default correctly per environment; the client IP used for rate limiting only trusts `X-Forwarded-For` behind configured proxy hops (right-most entry, spoof-resistant).
 - RBAC (`core/rbac.py`): role -> permission matrix and `require_permission(...)` on every protected route; roles are read from the database on each request (a demoted or disabled user loses access immediately). `/auth/verify` returns effective permissions for the UI.
 - Public leaks closed: unpublished announcements (`show_all`), donor receipt IDOR, `/meta/stats`, `/health` details, member phone/email (new `/public/committee` exposes name/position/photo only), public seva booking could set its own price/payment status (now derived server-side; paid sevas are counter-only).

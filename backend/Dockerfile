@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     liblcms2-dev \
     libopenjp2-7-dev \
     libtiff-dev \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # 3. Copy dependency file first (for caching)

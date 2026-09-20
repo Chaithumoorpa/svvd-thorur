@@ -49,10 +49,9 @@ def _request(xff=None, client=("10.0.0.9", 1234)):
 def test_client_ip_ignores_forwarded_header_unless_trusted(monkeypatch):
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "TRUST_PROXY_HEADERS", False)
+    monkeypatch.setattr(settings, "TRUSTED_PROXY_HOPS", 0)
     assert get_client_ip(_request("6.6.6.6")) == "10.0.0.9"
 
-    monkeypatch.setattr(settings, "TRUST_PROXY_HEADERS", True)
     monkeypatch.setattr(settings, "TRUSTED_PROXY_HOPS", 1)
     # attacker prepends a fake address; the proxy appended the real one on the right
     assert get_client_ip(_request("6.6.6.6, 203.0.113.7")) == "203.0.113.7"
