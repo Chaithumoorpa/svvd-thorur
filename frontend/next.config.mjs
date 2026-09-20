@@ -14,10 +14,8 @@ const nextConfig = {
     // Disable strict mode for compatibility
     reactStrictMode: false,
 
-    // UNLOCK BUILD: Disable type checking and lint during build for now
-    typescript: {
-        ignoreBuildErrors: true,
-    },
+    // Type errors fail the build (the codebase type-checks clean with `tsc --noEmit`).
+    // ESLint stays off during builds: there is no ESLint config in this project.
     eslint: {
         ignoreDuringBuilds: true,
     },

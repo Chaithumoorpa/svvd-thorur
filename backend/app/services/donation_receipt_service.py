@@ -57,7 +57,7 @@ class DonationReceiptService:
             spaceAfter=20
         )
         elements.append(Paragraph("Thorur Village, Telangana - 506163", sub_header_style))
-        elements.append(Paragraph("Offical Donation Receipt", styles['Heading3']))
+        elements.append(Paragraph("Official Donation Receipt", styles['Heading3']))
         
         elements.append(Spacer(1, 15))
         

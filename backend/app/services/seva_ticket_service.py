@@ -1,3 +1,4 @@
+import html
 import secrets
 import qrcode
 import io
@@ -56,12 +57,19 @@ class SevaTicketService:
                 detail=f"A ticket for this Seva is already booked for this mobile number on {data.seva_date}"
             )
 
-        # 3. Create ticket model
+        # 3. Create ticket model.
+        # Never trust payment fields from an anonymous visitor: there is no online
+        # payment, so an online booking is a free reservation. (Previously the
+        # client could send payment_status=PAID and any amount and get a ticket
+        # that printed as paid.) Fees are collected and recorded at the counter.
         ticket_data = data.dict()
         ticket_data.update({
             "ticket_number": self._generate_ticket_number(),
             "qr_token": self._generate_qr_token(),
             "status": TicketStatus.ACTIVE,
+            "source": ModelTicketSource.ONLINE,
+            "payment_status": PaymentStatus.FREE,
+            "amount": 0,
             "seva_name": pooja.name
         })
         
@@ -169,6 +177,11 @@ class SevaTicketService:
         """Generates redundant HTML template optimized for 80mm mini-printers"""
         qr_base64 = self.generate_qr_base64(ticket.qr_token)
         logo_base64 = self._get_logo_base64()
+        # Ticket fields such as devotee_name come from anonymous users. They are
+        # rendered into HTML that is also handed to xhtml2pdf, so escape them:
+        # otherwise markup in a name is executed by the browser (stored XSS) or
+        # makes the PDF renderer fetch attacker-chosen URLs/files.
+        esc = lambda value: html.escape(str(value), quote=True)
         display_date = ticket.seva_date.strftime("%d-%m-%Y")
         display_time = ticket.seva_time.strftime("%I:%M %p") if ticket.seva_time else "N/A"
         
@@ -231,20 +244,20 @@ class SevaTicketService:
                     <div class="ticket-title">SEVA TICKET</div>
                 </div>
 
-                <div class="status-badge">{ticket.status.value}</div>
+                <div class="status-badge">{esc(ticket.status.value)}</div>
                 
                 <div class="content">
-                    <div class="row"><span class="label">Ticket #:</span> <span class="value">{ticket.ticket_number}</span></div>
-                    <div class="row"><span class="label">Devotee:</span> <span class="value">{ticket.devotee_name}</span></div>
-                    <div class="row"><span class="label">Seva:</span> <span class="value">{ticket.seva_name}</span></div>
+                    <div class="row"><span class="label">Ticket #:</span> <span class="value">{esc(ticket.ticket_number)}</span></div>
+                    <div class="row"><span class="label">Devotee:</span> <span class="value">{esc(ticket.devotee_name)}</span></div>
+                    <div class="row"><span class="label">Seva:</span> <span class="value">{esc(ticket.seva_name)}</span></div>
                     <div class="row"><span class="label">Date:</span> <span class="value">{display_date}</span></div>
                     <div class="row"><span class="label">Time:</span> <span class="value">{display_time}</span></div>
-                    <div class="row"><span class="label">Fee:</span> <span class="value">Rs. {ticket.amount} ({ticket.payment_status.value})</span></div>
+                    <div class="row"><span class="label">Fee:</span> <span class="value">Rs. {esc(ticket.amount)} ({esc(ticket.payment_status.value)})</span></div>
                 </div>
                 
                 <div class="qr-container">
                     <img class="qr-code" src="data:image/png;base64,{qr_base64}" alt="QR" />
-                    <div class="ticket-num">{ticket.ticket_number}</div>
+                    <div class="ticket-num">{esc(ticket.ticket_number)}</div>
                 </div>
                 
                 <div class="footer">

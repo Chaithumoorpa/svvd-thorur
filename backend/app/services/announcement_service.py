@@ -22,6 +22,10 @@ class AnnouncementService:
         """
         return self.announcement_repository.get_all()
 
+    def get_public_announcement(self, announcement_id: int):
+        """Single announcement, only if visible to the public today."""
+        return self.announcement_repository.get_visible_by_id(announcement_id)
+
     def get_announcement_details(self, announcement_id: int):
         """
         Returns a single announcement by id.

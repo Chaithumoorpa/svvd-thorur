@@ -19,13 +19,19 @@ class AuthService:
         Returns user if valid, else raises 401.
         """
         user = self.user_repository.get_by_username(data.username)
-        if not user or not verify_password(data.password, user.hashed_password):
+        if (
+            not user
+            or not verify_password(data.password, user.hashed_password)
+            or not user.is_active
+        ):
+            # Same message for unknown user, wrong password and deactivated
+            # account so the response does not reveal which usernames exist.
             self.logger.warning(f"Authentication failed for username: {data.username}")
             raise HTTPException(
                 status_code=401,
                 detail="Invalid username or password"
             )
-        
+
         # Update last login
         user.last_login = datetime.now()
         self.user_repository.update(user)
@@ -47,6 +53,9 @@ class AuthService:
                 status_code=400,
                 detail="Username already exists"
             )
+
+        if data.email and self.user_repository.get_by_email(data.email):
+            raise HTTPException(status_code=400, detail="Email already registered")
 
         # Validate roles array is not empty (Pydantic validator should catch this, but double-check)
         if not data.roles or len(data.roles) == 0:
@@ -88,11 +97,13 @@ class AuthService:
         """
         existing = self.user_repository.get_by_username(data.username)
         if existing:
-            throw_error = True # placeholder
             raise HTTPException(
                 status_code=400,
                 detail="Username already exists"
             )
+
+        if data.email and self.user_repository.get_by_email(data.email):
+            raise HTTPException(status_code=400, detail="Email already registered")
 
         hashed_password = hash_password(data.password)
         

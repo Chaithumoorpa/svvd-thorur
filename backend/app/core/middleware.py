@@ -117,44 +117,35 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
-    Simple in-memory rate limiting (PRODUCTION ONLY).
-    
-    Note: For production, consider using Redis-based rate limiting
-    for distributed systems.
+    Site-wide per-client rate limit (PRODUCTION ONLY).
+
+    Clients are identified with get_client_ip(), which honours
+    TRUSTED_PROXY_HOPS. Previously this keyed on the TCP peer, which behind
+    Nginx/Docker is the proxy itself, so *all* visitors shared one bucket and a
+    few dozen users on a festival day would start receiving 429s.
+
+    State is per process; for a single global limit run one uvicorn worker.
     """
-    
+
+    EXEMPT_PATHS = {"/health"}
+
     def __init__(self, app: ASGIApp, calls: int = 60, period: int = 60):
         super().__init__(app)
+        # Imported here to avoid a circular import at module load time.
+        from app.utils.rate_limiter import SimpleRateLimiter, get_client_ip
+
         self.calls = calls
         self.period = period
-        self.clients = {}
-    
+        self._limiter = SimpleRateLimiter(max_requests=calls, window_seconds=period)
+        self._get_client_ip = get_client_ip
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Get client IP
-        client_ip = request.client.host if request.client else "unknown"
-        
-        # Get current time
-        current_time = time.time()
-        
-        # Clean old entries
-        self.clients = {
-            ip: timestamps
-            for ip, timestamps in self.clients.items()
-            if any(t > current_time - self.period for t in timestamps)
-        }
-        
-        # Get client's request history
-        if client_ip not in self.clients:
-            self.clients[client_ip] = []
-        
-        # Filter recent requests
-        recent_requests = [
-            t for t in self.clients[client_ip]
-            if t > current_time - self.period
-        ]
-        
-        # Check rate limit
-        if len(recent_requests) >= self.calls:
+        if request.url.path in self.EXEMPT_PATHS:
+            return await call_next(request)
+
+        client_ip = self._get_client_ip(request)
+
+        if not self._limiter.is_allowed(client_ip):
             logger.warning(f"Rate limit exceeded for {client_ip}")
             return Response(
                 content="Rate limit exceeded. Please try again later.",
@@ -163,20 +154,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "Retry-After": str(self.period),
                     "X-RateLimit-Limit": str(self.calls),
                     "X-RateLimit-Remaining": "0",
-                }
+                },
             )
-        
-        # Add current request
-        recent_requests.append(current_time)
-        self.clients[client_ip] = recent_requests
-        
-        # Process request
+
         response = await call_next(request)
-        
-        # Add rate limit headers
         response.headers["X-RateLimit-Limit"] = str(self.calls)
-        response.headers["X-RateLimit-Remaining"] = str(
-            self.calls - len(recent_requests)
-        )
-        
         return response

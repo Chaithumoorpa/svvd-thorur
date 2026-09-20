@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 from typing import List, Optional
 from uuid import UUID
@@ -15,6 +15,7 @@ from app.schemas.seva_ticket import (
     TicketStatus
 )
 from app.models.user import User
+from app.utils.rate_limiter import booking_limiter, get_client_ip, enforce
 
 router = APIRouter(prefix="/seva-tickets", tags=["Seva Tickets"])
 
@@ -22,12 +23,18 @@ router = APIRouter(prefix="/seva-tickets", tags=["Seva Tickets"])
 @router.post("/", response_model=SevaTicketOut)
 def book_seva_ticket(
     payload: SevaTicketCreate,
+    request: Request,
     service: SevaTicketService = Depends(get_seva_ticket_service),
 ):
     """
     Public endpoint to book a seva ticket.
-    No authentication required.
+    No authentication required. Limited to 10 bookings per hour per IP.
     """
+    enforce(
+        booking_limiter,
+        get_client_ip(request),
+        "Too many bookings from this address. Please try again later.",
+    )
     return service.book_ticket(payload)
 
 

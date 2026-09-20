@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List
 import logging
@@ -117,11 +118,21 @@ def generate_receipt(
         raise HTTPException(status_code=404, detail="Donation not found")
 
     if not donor.receipt_number:
-        donor.receipt_number = DonationReceiptService.generate_receipt_number(db)
-        donor.receipt_generated_at = datetime.now()
-        db.commit()
+        # receipt_number is UNIQUE; on the (very unlikely) collision of the random
+        # suffix, roll back and draw again instead of returning HTTP 500.
+        for _ in range(5):
+            donor.receipt_number = DonationReceiptService.generate_receipt_number(db)
+            donor.receipt_generated_at = datetime.now()
+            try:
+                db.commit()
+                break
+            except IntegrityError:
+                db.rollback()
+                donor = service.get_donor(donor_id)
+        else:
+            raise HTTPException(status_code=500, detail="Could not allocate a receipt number, please retry")
         db.refresh(donor)
-    
+
     return {"message": "Receipt generated successfully", "receipt_number": donor.receipt_number}
 
 
@@ -129,9 +140,13 @@ def generate_receipt(
 def get_receipt(
     donor_id: int,
     service: DonorService = Depends(get_donor_service),
+    current_user: User = Depends(require_trustee),
 ):
     """
-    Download donation receipt PDF (Public access permitted by ID).
+    Download donation receipt PDF. Requires at least TRUSTEE role.
+
+    This used to be public and keyed by the sequential donor id, so anyone could
+    loop over ids 1..N and download every donor's name, phone number and amount.
     """
     donor = service.get_donor(donor_id)
     if not donor:

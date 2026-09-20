@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field
+import re
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime, date, time
 from uuid import UUID
@@ -18,8 +19,24 @@ class SevaTicketBase(BaseModel):
 
 
 class SevaTicketCreate(SevaTicketBase):
-    """Schema for creating a new seva ticket (public endpoint)"""
-    pass
+    """
+    Schema for creating a new seva ticket.
+
+    Used by the public booking endpoint, so every field is bounded. Note that the
+    public endpoint ignores `payment_status` and `amount` (a visitor must not be
+    able to mint a ticket that prints as PAID); only counter tickets created by
+    an admin keep them.
+    """
+    seva_name: Optional[str] = Field(default=None, max_length=150)  # server uses the pooja's own name
+    devotee_name: str = Field(..., min_length=1, max_length=150)
+    mobile_number: str = Field(..., pattern=r"^\+?[0-9]{10,15}$")
+    amount: int = Field(default=0, ge=0, le=1_000_000)
+
+    @field_validator("mobile_number", mode="before")
+    @classmethod
+    def strip_phone_separators(cls, v):
+        """Accept '98765 43210' or '98765-43210' as typed at the counter."""
+        return re.sub(r"[\s\-()]", "", v) if isinstance(v, str) else v
 
 
 class SevaTicketOut(SevaTicketBase):

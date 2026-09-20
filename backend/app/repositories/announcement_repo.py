@@ -1,3 +1,6 @@
+from datetime import date
+
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from app.models.announcement import Announcement
 from app.repositories.base import BaseRepository
@@ -5,16 +8,37 @@ from app.repositories.base import BaseRepository
 
 class AnnouncementRepository(BaseRepository):
 
+    @staticmethod
+    def _visible_now(today: date):
+        """
+        Public visibility rule: active AND inside the optional start/end window.
+        The start_date/end_date columns existed but were never applied, so expired
+        notices stayed on the site forever and future-dated ones showed early.
+        """
+        return and_(
+            Announcement.is_active == True,
+            or_(Announcement.start_date.is_(None), Announcement.start_date <= today),
+            or_(Announcement.end_date.is_(None), Announcement.end_date >= today),
+        )
+
     def get_all_active(self):
         """
-        Get all active announcements ordered by creation date (newest first).
+        Get announcements that are publicly visible today, newest first.
         This ensures stable ordering for frontend display and prevents UI misalignment.
         """
         return (
             self.db.query(Announcement)
-            .filter(Announcement.is_active == True)
+            .filter(self._visible_now(date.today()))
             .order_by(Announcement.created_at.desc())  # Newest announcements first
             .all()
+        )
+
+    def get_visible_by_id(self, announcement_id: int):
+        """Single announcement, only if publicly visible today."""
+        return (
+            self.db.query(Announcement)
+            .filter(Announcement.id == announcement_id, self._visible_now(date.today()))
+            .first()
         )
 
     def get_all(self):

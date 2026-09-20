@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Mail, Phone, MapPin, CheckCircle2 } from 'lucide-react';
+import { api } from '@/lib/api';
 
 export default function ContactPage() {
     const [formData, setFormData] = useState({
@@ -20,22 +21,23 @@ export default function ContactPage() {
         setError('');
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/contacts/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to send message. Please try again.');
-            }
+            // Same-origin call through the shared axios client (/api/v1). The old code
+            // posted to NEXT_PUBLIC_API_URL || http://localhost:8000; that variable is
+            // never defined in the deployment, so in production visitors' browsers
+            // tried to reach *their own* localhost and the form always failed.
+            await api.post('/contacts/', formData);
 
             setSuccess(true);
             setFormData({ name: '', email: '', subject: '', message: '' });
         } catch (err: any) {
-            setError(err.message || 'Something went wrong');
+            const status = err?.response?.status;
+            if (status === 429) {
+                setError('Too many messages from this device. Please try again in an hour.');
+            } else if (status === 422) {
+                setError('Please check your details: name, a valid email, subject and message are required.');
+            } else {
+                setError('Failed to send message. Please try again.');
+            }
         } finally {
             setLoading(false);
         }

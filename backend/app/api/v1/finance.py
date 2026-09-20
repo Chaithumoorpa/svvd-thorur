@@ -18,7 +18,7 @@ import io
 router = APIRouter()
 
 @router.post("/income", response_model=IncomeTransactionOut, dependencies=[Depends(require_admin)])
-async def add_income(
+def add_income(
     income_in: IncomeTransactionCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
@@ -26,7 +26,7 @@ async def add_income(
     return FinanceService.add_income(db, income_in, current_user.id)
 
 @router.post("/expense", response_model=ExpenseTransactionOut, dependencies=[Depends(require_admin)])
-async def add_expense(
+def add_expense(
     expense_in: ExpenseTransactionCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
@@ -34,11 +34,11 @@ async def add_expense(
     return FinanceService.add_expense(db, expense_in, current_user.id)
 
 @router.get("/summary", response_model=FinanceSummary, dependencies=[Depends(require_trustee)])
-async def get_summary(db: Session = Depends(get_db)):
+def get_summary(db: Session = Depends(get_db)):
     return FinanceService.get_summary(db)
 
 @router.get("/ledger", response_model=List[LedgerEntry], dependencies=[Depends(require_trustee)])
-async def get_ledger(
+def get_ledger(
     start_date: Optional[date] = Query(None, description="Start Date"),
     end_date: Optional[date] = Query(None, description="End Date"),
     db: Session = Depends(get_db)
@@ -49,7 +49,7 @@ async def get_ledger(
     return FinanceService.get_ledger(db, start_date, end_date)
 
 @router.get("/ledger/csv", dependencies=[Depends(require_trustee)])
-async def get_ledger_csv(
+def get_ledger_csv(
     start_date: date = Query(..., description="Start Date"),
     end_date: date = Query(..., description="End Date"),
     db: Session = Depends(get_db)
@@ -66,7 +66,7 @@ async def get_ledger_csv(
     return response
 
 @router.get("/ledger/pdf", dependencies=[Depends(require_trustee)])
-async def get_ledger_pdf(
+def get_ledger_pdf(
     start_date: date = Query(..., description="Start Date"),
     end_date: date = Query(..., description="End Date"),
     db: Session = Depends(get_db)
@@ -86,7 +86,7 @@ async def get_ledger_pdf(
     )
 
 @router.get("/reports/monthly", dependencies=[Depends(require_trustee)])
-async def get_monthly_report(
+def get_monthly_report(
     year: int = Query(..., description="Year (e.g., 2025)"),
     month: int = Query(..., ge=1, le=12, description="Month (1-12)"),
     db: Session = Depends(get_db)
@@ -98,7 +98,7 @@ async def get_monthly_report(
     return FinanceReportService.generate_monthly_json(db, year, month)
 
 @router.get("/reports/monthly/pdf", dependencies=[Depends(require_trustee)])
-async def get_monthly_report_pdf(
+def get_monthly_report_pdf(
     year: int = Query(..., description="Year (e.g., 2025)"),
     month: int = Query(..., ge=1, le=12, description="Month (1-12)"),
     db: Session = Depends(get_db)
