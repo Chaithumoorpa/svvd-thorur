@@ -12,7 +12,7 @@ logger = setup_logging()
 from app.core.config import settings
 
 # Import models so Alembic sees them
-from app.models import user, temple, pooja, festival, announcement, contact, visitor
+import app.models  # noqa: F401  (registers every model with SQLAlchemy metadata)
 from app.api.v1.api import api_router
 
 # Import middleware
@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app with environment-aware settings
 app = FastAPI(
     title="Temple Management Backend",
-    version="1.0.0",
+    version="2.0.0",
     docs_url=settings.docs_url,
     redoc_url=settings.redoc_url,
     openapi_url=settings.openapi_url,
@@ -76,8 +76,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 # Add environment-specific middleware
@@ -89,9 +89,9 @@ if settings.is_development:
 else:
     # Production middleware
     logger.info("Adding production middleware...")
-    if settings.ENABLE_SECURITY_HEADERS:
+    if settings.security_headers_enabled:
         app.add_middleware(SecurityHeadersMiddleware)
-    if settings.ENABLE_RATE_LIMITING:
+    if settings.rate_limiting_enabled:
         app.add_middleware(
             RateLimitMiddleware,
             calls=settings.RATE_LIMIT_PER_MINUTE,
@@ -105,11 +105,7 @@ app.include_router(api_router)
 @app.get("/health")
 def health():
     """Health check endpoint."""
-    return {
-        "status": "ok",
-        "environment": settings.ENV,
-        "debug": settings.DEBUG,
-    }
+    return {"status": "ok"}
 
 
 @app.get("/")
@@ -117,7 +113,6 @@ def root():
     """Root endpoint."""
     return {
         "message": "Temple Management API",
-        "version": "1.0.0",
-        "environment": settings.ENV,
+        "version": "2.0.0",
         "docs": settings.docs_url or "disabled",
     }

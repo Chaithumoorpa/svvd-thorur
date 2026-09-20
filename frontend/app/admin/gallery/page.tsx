@@ -1,284 +1,186 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import {
-    getGallery,
-    createGallery,
-    updateGallery,
-    deleteGallery,
-    Gallery,
-    GalleryCreate,
-    GalleryUpdate,
-} from '@/lib/api';
-import { Plus, Edit2, Trash2, X, Image as ImageIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { ImageIcon, Pencil, Plus, Trash2 } from 'lucide-react';
+import AdminPage, { StatusPill } from '@/components/admin/AdminPage';
+import ConfirmDialog from '@/components/admin/ConfirmDialog';
+import Field from '@/components/ui/Field';
+import Modal from '@/components/ui/Modal';
+import Pager from '@/components/ui/Pager';
+import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
+import { btnDanger, btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
+import { useAction } from '@/hooks/useAction';
+import { useLoad } from '@/hooks/useLoad';
+import { createGallery, deleteGallery, listAllGallery, updateGallery } from '@/lib/api';
+import { emptyToNull } from '@/lib/format';
+import type { GalleryItem } from '@/lib/types';
 
-export default function GalleryPage() {
-    const [items, setItems] = useState<Gallery[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingItem, setEditingItem] = useState<Gallery | null>(null);
+const PAGE_SIZE = 24;
+const GALLERY_CATEGORIES = [
+  { value: 'TEMPLE', label: 'Temple' },
+  { value: 'FESTIVAL', label: 'Festivals' },
+  { value: 'EVENT', label: 'Events' },
+];
 
-    // Form state
-    const [formData, setFormData] = useState<GalleryCreate>({
-        title: '',
-        description: '',
-        image_url: '',
-        category: 'TEMPLE',
-        is_active: true,
+interface FormState {
+  title: string;
+  description: string;
+  image_url: string;
+  category: string;
+  sort_order: string;
+  is_active: boolean;
+}
+const blank: FormState = { title: '', description: '', image_url: '', category: 'TEMPLE', sort_order: '0', is_active: true };
+
+export default function GalleryAdmin() {
+  const [page, setPage] = useState(1);
+  const list = useLoad(() => listAllGallery(page, PAGE_SIZE), [page]);
+  const action = useAction();
+  const [editing, setEditing] = useState<{ id: number | null; form: FormState } | null>(null);
+  const [toDelete, setToDelete] = useState<GalleryItem | null>(null);
+
+  const openEdit = (g: GalleryItem) =>
+    setEditing({
+      id: g.id,
+      form: { title: g.title, description: g.description ?? '', image_url: g.image_url, category: g.category, sort_order: String(g.sort_order), is_active: g.is_active },
     });
 
-    useEffect(() => {
-        fetchGallery();
-    }, []);
-
-    const fetchGallery = async () => {
-        try {
-            const data = await getGallery();
-            setItems(data);
-        } catch (error) {
-            console.error('Failed to fetch gallery items:', error);
-        } finally {
-            setLoading(false);
-        }
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    const { id, form } = editing;
+    const payload = {
+      title: form.title.trim(),
+      description: emptyToNull(form.description),
+      image_url: form.image_url.trim(),
+      category: form.category,
+      sort_order: Number(form.sort_order) || 0,
+      is_active: form.is_active,
     };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            if (editingItem) {
-                await updateGallery(editingItem.id, formData);
-            } else {
-                await createGallery(formData);
-            }
-            setIsModalOpen(false);
-            resetForm();
-            fetchGallery();
-        } catch (error) {
-            console.error('Failed to save gallery item:', error);
-            alert('Failed to save item. Please try again.');
-        }
-    };
-
-    const handleDelete = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this item?')) return;
-        try {
-            await deleteGallery(id);
-            fetchGallery();
-        } catch (error) {
-            console.error('Failed to delete item:', error);
-            alert('Failed to delete item.');
-        }
-    };
-
-    const openModal = (item?: Gallery) => {
-        if (item) {
-            setEditingItem(item);
-            setFormData({
-                title: item.title,
-                description: item.description || '',
-                image_url: item.image_url,
-                category: item.category,
-                is_active: item.is_active,
-            });
-        } else {
-            setEditingItem(null);
-            resetForm();
-        }
-        setIsModalOpen(true);
-    };
-
-    const resetForm = () => {
-        setFormData({
-            title: '',
-            description: '',
-            image_url: '',
-            category: 'TEMPLE',
-            is_active: true,
-        });
-    };
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-slate-900">Gallery Management</h1>
-                <button
-                    onClick={() => openModal()}
-                    className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-md hover:bg-slate-800 transition-colors"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add Image
-                </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {items.map((item) => (
-                    <div
-                        key={item.id}
-                        className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden group"
-                    >
-                        <div className="relative aspect-video bg-gray-100">
-                            <img
-                                src={item.image_url}
-                                alt={item.title}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                    // Fallback for broken images
-                                    (e.target as HTMLImageElement).src = 'https://placehold.co/600x400?text=No+Image';
-                                }}
-                            />
-                            <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                    onClick={() => openModal(item)}
-                                    className="p-1.5 bg-white rounded-md shadow-sm hover:bg-gray-100 text-slate-700"
-                                >
-                                    <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => handleDelete(item.id)}
-                                    className="p-1.5 bg-white rounded-md shadow-sm hover:bg-red-50 text-red-600"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
-                            <div className="absolute top-2 left-2">
-                                <span className="px-2 py-1 bg-black/50 text-white text-xs rounded-md backdrop-blur-sm">
-                                    {item.category}
-                                </span>
-                            </div>
-                        </div>
-                        <div className="p-4">
-                            <h3 className="font-semibold text-slate-900 mb-1">{item.title}</h3>
-                            {item.description && (
-                                <p className="text-sm text-gray-500 line-clamp-2">
-                                    {item.description}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            {/* Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-                    <div className="bg-white rounded-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-slate-900">
-                                {editingItem ? 'Edit Image' : 'Add New Image'}
-                            </h2>
-                            <button
-                                onClick={() => setIsModalOpen(false)}
-                                className="text-gray-400 hover:text-gray-600"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Title
-                                </label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.title}
-                                    onChange={(e) =>
-                                        setFormData({ ...formData, title: e.target.value })
-                                    }
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Image URL
-                                </label>
-                                <input
-                                    type="url"
-                                    required
-                                    value={formData.image_url}
-                                    onChange={(e) =>
-                                        setFormData({ ...formData, image_url: e.target.value })
-                                    }
-                                    placeholder="https://example.com/image.jpg"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Category
-                                </label>
-                                <select
-                                    value={formData.category}
-                                    onChange={(e) =>
-                                        setFormData({ ...formData, category: e.target.value })
-                                    }
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                                >
-                                    <option value="TEMPLE">Temple</option>
-                                    <option value="FESTIVAL">Festival</option>
-                                    <option value="EVENT">Event</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Description
-                                </label>
-                                <textarea
-                                    rows={3}
-                                    value={formData.description}
-                                    onChange={(e) =>
-                                        setFormData({ ...formData, description: e.target.value })
-                                    }
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-500"
-                                />
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    id="is_active"
-                                    checked={formData.is_active}
-                                    onChange={(e) =>
-                                        setFormData({ ...formData, is_active: e.target.checked })
-                                    }
-                                    className="rounded border-gray-300 text-slate-900 focus:ring-slate-500"
-                                />
-                                <label htmlFor="is_active" className="text-sm font-medium text-slate-700">
-                                    Active
-                                </label>
-                            </div>
-
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="flex-1 px-4 py-2 border border-gray-300 text-slate-700 rounded-md hover:bg-gray-50 font-medium"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-md hover:bg-slate-800 font-medium"
-                                >
-                                    {editingItem ? 'Update' : 'Create'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
+    const ok = await action.run(
+      () => (id === null ? createGallery(payload) : updateGallery(id, payload)),
+      id === null ? 'Photo added.' : 'Photo updated.',
     );
+    if (ok) {
+      setEditing(null);
+      list.reload();
+    }
+  }
+
+  async function remove() {
+    if (!toDelete) return;
+    const ok = await action.run(() => deleteGallery(toDelete.id), 'Photo deleted.');
+    if (ok) {
+      setToDelete(null);
+      list.reload();
+    }
+  }
+
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setEditing((cur) => (cur ? { ...cur, form: { ...cur.form, [key]: value } } : cur));
+
+  return (
+    <AdminPage
+      title="Gallery"
+      description="Photos shown on the public Gallery page."
+      actions={
+        <button type="button" className={btnPrimary} onClick={() => setEditing({ id: null, form: { ...blank } })}>
+          <Plus className="h-4 w-4" aria-hidden="true" /> Add photo
+        </button>
+      }
+    >
+      {action.success && <div className="mb-4"><Notice kind="success">{action.success}</Notice></div>}
+      {action.error && !editing && !toDelete && <div className="mb-4"><Notice kind="error">{action.error}</Notice></div>}
+
+      {list.loading ? (
+        <LoadingBlock />
+      ) : list.error ? (
+        <ErrorBlock message={list.error} onRetry={list.reload} />
+      ) : !list.data?.items.length ? (
+        <EmptyBlock icon={<ImageIcon className="h-10 w-10" />} title="No photos yet" hint="Add a photo using its web address (link)." />
+      ) : (
+        <>
+          <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+            {list.data.items.map((g) => (
+              <li key={g.id} className={`${cardCls} overflow-hidden`}>
+                <div className="aspect-[4/3] bg-gray-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={g.image_url} alt={g.title} loading="lazy" className="h-full w-full object-cover" />
+                </div>
+                <div className="p-3">
+                  <div className="flex items-start justify-between gap-1">
+                    <p className="truncate text-sm font-medium text-gray-900">{g.title}</p>
+                    <StatusPill on={g.is_active} />
+                  </div>
+                  <p className="text-xs text-gray-500">{g.category}</p>
+                  <div className="mt-2 flex gap-2">
+                    <button type="button" className={btnGhost} onClick={() => openEdit(g)} aria-label={`Edit ${g.title}`}>
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button type="button" className={btnDanger} onClick={() => setToDelete(g)} aria-label={`Delete ${g.title}`}>
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <Pager page={page} pageSize={PAGE_SIZE} total={list.data.total} onPage={setPage} />
+        </>
+      )}
+
+      {editing && (
+        <Modal title={editing.id === null ? 'Add photo' : 'Edit photo'} onClose={() => { setEditing(null); action.clear(); }}>
+          <form onSubmit={save} className="space-y-4">
+            {action.error && <Notice kind="error">{action.error}</Notice>}
+            <Field label="Title" required>
+              <input className={inputCls} maxLength={200} value={editing.form.title} onChange={(e) => set('title', e.target.value)} />
+            </Field>
+            <Field label="Image link" required hint="A web address starting with https:// or a path like /images/photo.jpg">
+              <input className={inputCls} inputMode="url" value={editing.form.image_url} onChange={(e) => set('image_url', e.target.value)} />
+            </Field>
+            {editing.form.image_url && /^(https?:\/\/|\/)/.test(editing.form.image_url) && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={editing.form.image_url} alt="Preview" className="max-h-40 rounded-lg border border-gray-200 object-contain" />
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Category">
+                <select className={inputCls} value={editing.form.category} onChange={(e) => set('category', e.target.value)}>
+                  {GALLERY_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Display order" hint="Smaller numbers first.">
+                <input type="number" min={0} className={inputCls} value={editing.form.sort_order} onChange={(e) => set('sort_order', e.target.value)} />
+              </Field>
+            </div>
+            <Field label="Caption">
+              <textarea className={inputCls} rows={2} maxLength={2000} value={editing.form.description} onChange={(e) => set('description', e.target.value)} />
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={editing.form.is_active} onChange={(e) => set('is_active', e.target.checked)} />
+              Visible on the website
+            </label>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" className={btnGhost} onClick={() => { setEditing(null); action.clear(); }}>Cancel</button>
+              <button type="submit" className={btnPrimary} disabled={action.busy || !editing.form.title.trim() || !editing.form.image_url.trim()}>
+                {action.busy ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {toDelete && (
+        <ConfirmDialog
+          title="Delete this photo?"
+          message={`"${toDelete.title}" will be permanently removed from the gallery.`}
+          confirmLabel="Delete"
+          danger
+          busy={action.busy}
+          onConfirm={remove}
+          onCancel={() => { setToDelete(null); action.clear(); }}
+        />
+      )}
+    </AdminPage>
+  );
 }

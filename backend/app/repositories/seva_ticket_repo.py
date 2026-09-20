@@ -27,15 +27,14 @@ class SevaTicketRepository(BaseRepository):
             func.lower(SevaTicket.ticket_number) == ticket_number.lower()
         ).first()
 
-    def list_tickets(
-        self, 
-        seva_id: Optional[int] = None, 
+    def query_tickets(
+        self,
+        seva_id: Optional[int] = None,
         seva_date: Optional[date] = None,
         status: Optional[TicketStatus] = None,
-        mobile_number: Optional[str] = None
-    ) -> List[SevaTicket]:
+        mobile_number: Optional[str] = None,
+    ):
         query = self.db.query(SevaTicket)
-        
         if seva_id:
             query = query.filter(SevaTicket.seva_id == seva_id)
         if seva_date:
@@ -44,8 +43,10 @@ class SevaTicketRepository(BaseRepository):
             query = query.filter(SevaTicket.status == status)
         if mobile_number:
             query = query.filter(SevaTicket.mobile_number == mobile_number)
-            
-        return query.order_by(SevaTicket.created_at.desc()).all()
+        return query.order_by(SevaTicket.created_at.desc(), SevaTicket.ticket_number.desc())
+
+    def list_tickets(self, **filters) -> List[SevaTicket]:
+        return self.query_tickets(**filters).all()
 
     def check_duplicate(self, mobile_number: str, seva_date: date, seva_id: int) -> bool:
         return self.db.query(SevaTicket).filter(

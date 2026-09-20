@@ -18,6 +18,9 @@ class ContactService:
         )
         return self.repository.create(message)
 
+    def query_messages(self, status: Optional[ContactStatus] = None):
+        return self.repository.query(status)
+
     def list_messages(self, status: Optional[ContactStatus] = None) -> List[ContactMessage]:
         return self.repository.get_all(status)
 

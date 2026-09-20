@@ -1,89 +1,44 @@
-'use client';
+import type { Metadata } from 'next';
+import { Bell, Megaphone } from 'lucide-react';
+import { PageShell } from '@/components/public/SectionHeading';
+import { formatDate } from '@/lib/format';
+import { fetchAnnouncements } from '@/lib/server-api';
 
-import React, { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
-import { Megaphone, Bell, Calendar, ChevronRight } from 'lucide-react';
+export const metadata: Metadata = {
+  title: 'Announcements',
+  description: 'Latest news, notices and updates from the temple.',
+};
 
-interface Announcement {
-  id: number;
-  title: string;
-  message?: string;
-  description?: string;
-  date?: string;
-  created_at?: string;
-}
-
-export default function AnnouncementsPage() {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await api.get('/announcements');
-        setAnnouncements(res.data);
-      } catch (error) {
-        console.error('Failed to fetch announcements:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+export default async function AnnouncementsPage() {
+  const items = await fetchAnnouncements();
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-12">
-      <div className="flex items-center gap-4 mb-12">
-        <div className="bg-templeGold/20 p-4 rounded-2xl text-templeGold">
-          <Megaphone className="w-8 h-8" />
-        </div>
-        <div>
-          <h1 className="text-4xl font-bold text-templeDark">Announcements</h1>
-          <p className="text-gray-500">Stay updated with the latest news and happenings at the temple.</p>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="space-y-6">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-40 bg-gray-50 rounded-3xl animate-pulse"></div>
+    <PageShell title="Announcements" subtitle="Stay updated with the latest news and happenings at the temple" narrow>
+      {items.length ? (
+        <ul className="space-y-5">
+          {items.map((a) => (
+            <li key={a.id}>
+              <article className="rounded-2xl border border-amber-100 bg-white p-6 shadow-sm sm:p-8">
+                <header className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                  <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-saffron">
+                    <Bell className="h-3.5 w-3.5" aria-hidden="true" /> Notice
+                  </span>
+                  <time dateTime={(a.start_date ?? a.created_at).slice(0, 10)}>{formatDate(a.start_date ?? a.created_at, { day: 'numeric', month: 'long', year: 'numeric' })}</time>
+                </header>
+                <h2 className="font-serif text-2xl font-bold text-maroon">{a.title}</h2>
+                {a.message && <p className="mt-3 whitespace-pre-line leading-relaxed text-gray-700">{a.message}</p>}
+                {a.end_date && <p className="mt-4 text-xs text-gray-400">Valid until {formatDate(a.end_date)}</p>}
+              </article>
+            </li>
           ))}
-        </div>
-      ) : announcements.length > 0 ? (
-        <div className="space-y-6">
-          {announcements.map((ann) => (
-            <div key={ann.id} className="group bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
-              <div className="flex justify-between items-start gap-4 mb-4">
-                <div className="flex items-center gap-2 text-templeGold">
-                  <Bell className="w-4 h-4" />
-                  <span className="text-xs font-bold uppercase tracking-widest">Notice</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-400 text-xs">
-                  <Calendar className="w-4 h-4" />
-                  {new Date(ann.created_at || ann.date || Date.now()).toLocaleDateString()}
-                </div>
-              </div>
-              <h3 className="text-2xl font-bold text-templeDark mb-3 group-hover:text-templeGold transition-colors">
-                {ann.title}
-              </h3>
-              <p className="text-gray-600 leading-relaxed">
-                {ann.message || ann.description}
-              </p>
-              <div className="mt-6 flex justify-end">
-                <button className="text-sm font-bold text-templeDark hover:text-templeGold flex items-center gap-1 transition-colors">
-                  Read More <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        </ul>
       ) : (
-        <div className="text-center py-20 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
-          <Megaphone className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-400">No active announcements</h2>
-          <p className="text-gray-400">Check back later for updates.</p>
+        <div className="rounded-2xl border border-dashed border-amber-300 bg-white p-12 text-center">
+          <Megaphone className="mx-auto mb-3 h-12 w-12 text-amber-200" aria-hidden="true" />
+          <h2 className="font-serif text-xl font-bold text-gray-600">No announcements right now</h2>
+          <p className="text-gray-500">Please check back later for updates.</p>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

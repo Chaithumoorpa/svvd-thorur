@@ -1,338 +1,209 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { Edit2, Trash2, X, Plus, Search } from 'lucide-react';
-import { getMembers, createMember, updateMember, deleteMember, TempleMember, TempleMemberCreate, TempleMemberUpdate } from '@/lib/api';
+import React, { useState } from 'react';
+import { Eye, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import AdminPage, { StatusPill } from '@/components/admin/AdminPage';
+import { useAuth } from '@/components/admin/AuthContext';
+import ConfirmDialog from '@/components/admin/ConfirmDialog';
+import Field from '@/components/ui/Field';
+import Modal from '@/components/ui/Modal';
+import Pager from '@/components/ui/Pager';
+import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
+import { btnDanger, btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
+import { useAction } from '@/hooks/useAction';
+import { useLoad } from '@/hooks/useLoad';
+import { createMember, deleteMember, listMembers, updateMember } from '@/lib/api';
+import { emptyToNull } from '@/lib/format';
+import type { Member } from '@/lib/types';
 
-export default function MembersPage() {
-  const [members, setMembers] = useState<TempleMember[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [formData, setFormData] = useState<TempleMemberCreate>({
-    name: '',
-    phone: '',
-    role: 'Volunteer',
-    email: '',
-  });
+const PAGE_SIZE = 25;
+const POSITIONS = ['Chairman', 'Trustee', 'Secretary', 'Treasurer', 'Priest', 'Staff', 'Volunteer'];
 
-  useEffect(() => {
-    fetchMembers();
-  }, []);
+interface FormState {
+  name: string;
+  phone: string;
+  email: string;
+  position: string;
+  photo_url: string;
+  sort_order: string;
+  show_on_website: boolean;
+}
+const blank: FormState = { name: '', phone: '', email: '', position: '', photo_url: '', sort_order: '0', show_on_website: false };
 
-  const fetchMembers = async () => {
-    try {
-      setIsLoading(true);
-      const data = await getMembers();
-      setMembers(data);
-    } catch (error) {
-      console.error('Failed to fetch members:', error);
-      alert('Failed to load members. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+export default function MembersAdmin() {
+  const { can } = useAuth();
+  const canWrite = can('members:write');
+  const [page, setPage] = useState(1);
+  const list = useLoad(() => listMembers(page, PAGE_SIZE), [page]);
+  const action = useAction();
+  const [editing, setEditing] = useState<{ id: number | null; form: FormState } | null>(null);
+  const [toDelete, setToDelete] = useState<Member | null>(null);
 
-  // Filter members based on search query
-  const filteredMembers = useMemo(() => {
-    return members.filter((member) =>
-      member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.phone.includes(searchQuery)
-    );
-  }, [members, searchQuery]);
-
-  const handleOpenModal = () => {
-    setFormData({ name: '', phone: '', role: 'Volunteer', email: '' });
-    setEditingId(null);
-    setIsModalOpen(true);
-  };
-
-  const handleEdit = (member: TempleMember) => {
-    setFormData({
-      name: member.name,
-      phone: member.phone,
-      role: member.role || 'Volunteer',
-      email: member.email || '',
+  const openEdit = (m: Member) =>
+    setEditing({
+      id: m.id,
+      form: { name: m.name, phone: m.phone, email: m.email ?? '', position: m.position ?? '', photo_url: m.photo_url ?? '', sort_order: String(m.sort_order), show_on_website: m.show_on_website },
     });
-    setEditingId(member.id);
-    setIsModalOpen(true);
-  };
 
-  const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this member?')) {
-      try {
-        await deleteMember(id);
-        setMembers(members.filter((m) => m.id !== id));
-      } catch (error) {
-        console.error('Failed to delete member:', error);
-        alert('Failed to delete member. Please try again.');
-      }
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
-
-    if (!formData.name.trim() || !formData.phone.trim()) {
-      alert('Please fill in all required fields');
-      return;
+    if (!editing) return;
+    const { id, form } = editing;
+    const payload = {
+      name: form.name.trim(),
+      phone: form.phone.trim(),
+      email: emptyToNull(form.email),
+      position: emptyToNull(form.position),
+      photo_url: emptyToNull(form.photo_url),
+      sort_order: Number(form.sort_order) || 0,
+      show_on_website: form.show_on_website,
+    };
+    const ok = await action.run(
+      () => (id === null ? createMember(payload) : updateMember(id, payload)),
+      id === null ? 'Member added.' : 'Member updated.',
+    );
+    if (ok) {
+      setEditing(null);
+      list.reload();
     }
+  }
 
-    try {
-      if (editingId !== null) {
-        // Edit existing member
-        const updateData: TempleMemberUpdate = {
-          name: formData.name,
-          phone: formData.phone,
-          role: formData.role,
-          email: formData.email,
-        };
-        const updatedMember = await updateMember(editingId, updateData);
-        setMembers(members.map((m) => (m.id === editingId ? updatedMember : m)));
-      } else {
-        // Add new member
-        const newMember = await createMember(formData);
-        setMembers([...members, newMember]);
-      }
-      setIsModalOpen(false);
-      setFormData({ name: '', phone: '', role: 'Volunteer', email: '' });
-    } catch (error) {
-      console.error('Failed to save member:', error);
-      alert('Failed to save member. Please try again.');
+  async function remove() {
+    if (!toDelete) return;
+    const ok = await action.run(() => deleteMember(toDelete.id), 'Member removed.');
+    if (ok) {
+      setToDelete(null);
+      list.reload();
     }
-  };
+  }
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingId(null);
-    setFormData({ name: '', phone: '', role: 'Volunteer', email: '' });
-  };
-
-  const getRoleBadgeColor = (role?: string) => {
-    switch (role) {
-      case 'Trustee':
-        return 'bg-purple-100 text-purple-800';
-      case 'Staff':
-        return 'bg-blue-100 text-blue-800';
-      case 'Volunteer':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setEditing((cur) => (cur ? { ...cur, form: { ...cur.form, [key]: value } } : cur));
 
   return (
-    <div className="p-6">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Temple Members</h1>
-            <p className="text-gray-600 mt-1">Manage temple members and contacts</p>
-          </div>
-          <button
-            onClick={handleOpenModal}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-          >
-            <Plus className="w-5 h-5" />
-            Add Member
+    <AdminPage
+      title="Temple Members"
+      description="Trustees, priests and staff. Phone and email stay private; only name, position and photo can be shown on the website."
+      actions={
+        canWrite && (
+          <button type="button" className={btnPrimary} onClick={() => setEditing({ id: null, form: { ...blank } })}>
+            <Plus className="h-4 w-4" aria-hidden="true" /> Add member
           </button>
-        </div>
+        )
+      }
+    >
+      {action.success && <div className="mb-4"><Notice kind="success">{action.success}</Notice></div>}
+      {action.error && !editing && !toDelete && <div className="mb-4"><Notice kind="error">{action.error}</Notice></div>}
 
-        {/* Search Bar */}
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by name or phone..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-          />
-        </div>
-
-        {/* Members Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {isLoading ? (
-            <div className="p-12 text-center text-gray-500">Loading members...</div>
-          ) : filteredMembers.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-gray-500">
-                {members.length === 0 ? 'No members yet' : 'No members match your search'}
-              </p>
-              {members.length === 0 && (
-                <button
-                  onClick={handleOpenModal}
-                  className="mt-4 text-green-600 hover:text-green-700 font-medium"
-                >
-                  Add the first member
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Name</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Phone</th>
-                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">Role</th>
-                    <th className="px-6 py-3 text-right text-sm font-semibold text-gray-900">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredMembers.map((member) => (
-                    <tr key={member.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <p className="font-medium text-gray-900">{member.name}</p>
-                        {member.email && <p className="text-sm text-gray-500">{member.email}</p>}
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-gray-600">{member.phone}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(member.role)}`}>
-                          {member.role || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
+      {list.loading ? (
+        <LoadingBlock />
+      ) : list.error ? (
+        <ErrorBlock message={list.error} onRetry={list.reload} />
+      ) : !list.data?.items.length ? (
+        <EmptyBlock icon={<Users className="h-10 w-10" />} title="No members yet" hint="Add trustees, priests and staff." />
+      ) : (
+        <>
+          <div className={`${cardCls} overflow-x-auto`}>
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
+                <tr>
+                  <th scope="col" className="px-4 py-3">Name</th>
+                  <th scope="col" className="px-4 py-3">Position</th>
+                  <th scope="col" className="px-4 py-3">Contact</th>
+                  <th scope="col" className="px-4 py-3">Website</th>
+                  {canWrite && <th scope="col" className="px-4 py-3"><span className="sr-only">Actions</span></th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {list.data.items.map((m) => (
+                  <tr key={m.id}>
+                    <td className="px-4 py-3 font-medium text-gray-900">{m.name}</td>
+                    <td className="px-4 py-3 text-gray-600">{m.position ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {m.phone}
+                      {m.email && <div className="text-xs text-gray-400">{m.email}</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {m.show_on_website ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-green-700"><Eye className="h-3 w-3" /> Shown</span>
+                      ) : (
+                        <StatusPill on={false} offLabel="Private" />
+                      )}
+                    </td>
+                    {canWrite && (
+                      <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => handleEdit(member)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-4 h-4" />
+                          <button type="button" className={btnGhost} onClick={() => openEdit(m)} aria-label={`Edit ${m.name}`}>
+                            <Pencil className="h-4 w-4" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(member.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
+                          <button type="button" className={btnDanger} onClick={() => setToDelete(m)} aria-label={`Remove ${m.name}`}>
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Table Footer */}
-          {!isLoading && filteredMembers.length > 0 && (
-            <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
-              <p className="text-sm text-gray-600">
-                Showing {filteredMembers.length} of {members.length} members
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Modal */}
-        {isModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-              {/* Modal Header */}
-              <div className="flex justify-between items-center p-6 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {editingId !== null ? 'Edit Member' : 'Add Member'}
-                </h2>
-                <button
-                  onClick={handleCloseModal}
-                  className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-6 h-6 text-gray-600" />
-                </button>
-              </div>
-
-              {/* Modal Form */}
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                {/* Name */}
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name *
-                  </label>
-                  <input
-                    id="name"
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                    placeholder="e.g., Rajesh Kumar"
-                  />
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    value={formData.email || ''}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                    placeholder="e.g., rajesh@example.com"
-                  />
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone Number *
-                  </label>
-                  <input
-                    id="phone"
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                    placeholder="e.g., +91 9876543210"
-                  />
-                </div>
-
-                {/* Role */}
-                <div>
-                  <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
-                    Role *
-                  </label>
-                  <select
-                    id="role"
-                    value={formData.role || 'Volunteer'}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                  >
-                    <option value="Trustee">Trustee</option>
-                    <option value="Volunteer">Volunteer</option>
-                    <option value="Staff">Staff</option>
-                  </select>
-                </div>
-
-                {/* Modal Actions */}
-                <div className="flex gap-3 pt-4 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                  >
-                    {editingId !== null ? 'Update' : 'Add'}
-                  </button>
-                </div>
-              </form>
-            </div>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
-    </div>
+          <Pager page={page} pageSize={PAGE_SIZE} total={list.data.total} onPage={setPage} />
+        </>
+      )}
+
+      {editing && (
+        <Modal title={editing.id === null ? 'Add member' : 'Edit member'} onClose={() => { setEditing(null); action.clear(); }}>
+          <form onSubmit={save} className="space-y-4">
+            {action.error && <Notice kind="error">{action.error}</Notice>}
+            <Field label="Full name" required>
+              <input className={inputCls} maxLength={200} value={editing.form.name} onChange={(e) => set('name', e.target.value)} />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Phone" required>
+                <input type="tel" className={inputCls} value={editing.form.phone} onChange={(e) => set('phone', e.target.value)} />
+              </Field>
+              <Field label="Email">
+                <input type="email" className={inputCls} value={editing.form.email} onChange={(e) => set('email', e.target.value)} />
+              </Field>
+              <Field label="Position">
+                <input list="positions" className={inputCls} maxLength={100} value={editing.form.position} onChange={(e) => set('position', e.target.value)} />
+              </Field>
+              <datalist id="positions">{POSITIONS.map((p) => <option key={p} value={p} />)}</datalist>
+              <Field label="Display order" hint="Smaller numbers first.">
+                <input type="number" min={0} className={inputCls} value={editing.form.sort_order} onChange={(e) => set('sort_order', e.target.value)} />
+              </Field>
+            </div>
+            <Field label="Photo link" hint="Optional. Only used if shown on the website.">
+              <input className={inputCls} inputMode="url" value={editing.form.photo_url} onChange={(e) => set('photo_url', e.target.value)} />
+            </Field>
+            <label className="flex items-start gap-2 text-sm text-gray-700">
+              <input type="checkbox" className="mt-1" checked={editing.form.show_on_website} onChange={(e) => set('show_on_website', e.target.checked)} />
+              <span>
+                Show on the website Committee page
+                <span className="block text-xs text-gray-500">Only the name, position and photo are published — never the phone or email.</span>
+              </span>
+            </label>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" className={btnGhost} onClick={() => { setEditing(null); action.clear(); }}>Cancel</button>
+              <button type="submit" className={btnPrimary} disabled={action.busy || editing.form.name.trim().length < 2 || !editing.form.phone.trim()}>
+                {action.busy ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {toDelete && (
+        <ConfirmDialog
+          title="Remove member?"
+          message={`${toDelete.name} will be removed from the member list and the website.`}
+          confirmLabel="Remove"
+          danger
+          busy={action.busy}
+          onConfirm={remove}
+          onCancel={() => { setToDelete(null); action.clear(); }}
+        />
+      )}
+    </AdminPage>
   );
 }

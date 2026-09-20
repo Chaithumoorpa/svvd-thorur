@@ -1,12 +1,13 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
-from sqlalchemy.sql import func
+from sqlalchemy import Column, Integer, String, Boolean, Text
+from sqlalchemy.orm import relationship
 from app.models.base import Base
 
 
 class Donor(Base):
     """
-    Donor = Entity (someone who donated).
-    Standalone - donors typically don't have accounts.
+    Donor = Entity (someone who donated). PRIVATE data - never exposed publicly.
+    Individual gifts live in `Donation`; the legacy per-donor amount columns
+    still exist in old databases but are no longer mapped (see migration 003).
     """
     __tablename__ = "donors"
 
@@ -16,10 +17,8 @@ class Donor(Base):
     email = Column(String(200), nullable=True)
     address = Column(Text, nullable=True)
     pan_number = Column(String(20), nullable=True)  # For 80G tax receipts
-    
-    # Donation details (kept in donor for simplicity)
-    donated_for = Column(String(100), nullable=True)  # annadanam, festival, pooja, general
-    amount = Column(Integer, nullable=False, default=0)
-    donated_on = Column(DateTime, default=func.now(), nullable=False)
-    
     is_active = Column(Boolean, default=True, nullable=False)
+
+    donations = relationship(
+        "Donation", back_populates="donor", order_by="Donation.donated_on.desc()"
+    )

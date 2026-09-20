@@ -1,46 +1,63 @@
-import React from 'react';
-import { Clock, Sun, Moon } from 'lucide-react';
+import type { Metadata } from 'next';
+import { Clock, Moon, Sun } from 'lucide-react';
+import { PageShell } from '@/components/public/SectionHeading';
+import { formatTimeRange } from '@/lib/format';
+import { fetchPoojas, fetchTimings } from '@/lib/server-api';
+import { formatTime } from '@/lib/format';
 
-export default function TimingsPage() {
-    return (
-        <div className="max-w-4xl mx-auto px-4 py-12">
-            <h1 className="text-4xl font-bold text-templeDark mb-8">Temple Timings</h1>
+export const metadata: Metadata = {
+  title: 'Darshan Timings',
+  description: 'Daily darshan and pooja timings at the temple.',
+};
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-templeGold/10 p-8 rounded-2xl border border-templeGold/20">
-                    <div className="flex items-center gap-3 mb-4">
-                        <Sun className="text-templeGold w-8 h-8" />
-                        <h2 className="text-2xl font-bold text-templeDark">Morning Session</h2>
-                    </div>
-                    <p className="text-3xl font-bold text-templeDark mb-2">6:00 AM - 12:30 PM</p>
-                    <ul className="text-gray-600 space-y-2">
-                        <li>• Suprabhatam: 6:00 AM</li>
-                        <li>• Abhishekam: 7:00 AM</li>
-                        <li>• Morning Archana: 9:00 AM onwards</li>
-                    </ul>
+export default async function TimingsPage() {
+  const [timings, poojas] = await Promise.all([fetchTimings(), fetchPoojas()]);
+  const daily = poojas.filter((p) => p.pooja_type === 'daily' && p.start_time);
+
+  return (
+    <PageShell title="Temple Timings" subtitle="Darshan hours and the daily schedule of poojas" narrow>
+      {timings.length ? (
+        <div className="grid gap-6 md:grid-cols-2">
+          {timings.map((t, i) => {
+            const Icon = i % 2 === 0 ? Sun : Moon;
+            const dark = i % 2 === 1;
+            return (
+              <section key={t.id} className={`rounded-2xl p-7 shadow-sm ${dark ? 'bg-maroon-dark text-white' : 'border border-amber-200 bg-white'}`}>
+                <div className="mb-3 flex items-center gap-3">
+                  <Icon className={`h-7 w-7 ${dark ? 'text-saffron-light' : 'text-saffron'}`} aria-hidden="true" />
+                  <h2 className={`font-serif text-2xl font-bold ${dark ? '' : 'text-maroon'}`}>{t.label}</h2>
                 </div>
-
-                <div className="bg-slate-900 p-8 rounded-2xl text-white">
-                    <div className="flex items-center gap-3 mb-4">
-                        <Moon className="text-templeGold w-8 h-8" />
-                        <h2 className="text-2xl font-bold">Evening Session</h2>
-                    </div>
-                    <p className="text-3xl font-bold text-templeGold mb-2">4:30 PM - 8:30 PM</p>
-                    <ul className="text-slate-400 space-y-2">
-                        <li>• Evening Archana: 4:30 PM</li>
-                        <li>• Harathi: 7:30 PM</li>
-                        <li>• Ekantha Seva: 8:15 PM</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div className="mt-12 p-6 bg-white border border-gray-100 rounded-2xl shadow-sm">
-                <h3 className="text-xl font-bold text-templeDark mb-4">Note for Devotees</h3>
-                <p className="text-gray-600">
-                    Timings may vary during special festivals, eclipses, and special occasions.
-                    Please check the announcements section for any changes in the schedule.
-                </p>
-            </div>
+                <p className={`text-3xl font-bold ${dark ? 'text-saffron-light' : 'text-gray-900'}`}>{formatTimeRange(t.start_time, t.end_time)}</p>
+                <p className={`mt-1 text-sm ${dark ? 'text-amber-100/80' : 'text-gray-500'}`}>{t.days}</p>
+                {t.note && <p className={`mt-3 text-sm ${dark ? 'text-amber-50' : 'text-gray-700'}`}>{t.note}</p>}
+              </section>
+            );
+          })}
         </div>
-    );
+      ) : (
+        <p className="rounded-xl border border-dashed border-amber-300 bg-white p-8 text-center text-gray-500">
+          <Clock className="mx-auto mb-2 h-8 w-8 text-amber-300" aria-hidden="true" />
+          Timings will be published soon.
+        </p>
+      )}
+
+      {daily.length > 0 && (
+        <section className="mt-10 rounded-2xl border border-amber-200 bg-white p-7" aria-labelledby="schedule-heading">
+          <h2 id="schedule-heading" className="mb-4 font-serif text-2xl font-bold text-maroon">Daily Pooja Schedule</h2>
+          <ul className="divide-y divide-amber-100">
+            {daily.map((p) => (
+              <li key={p.id} className="flex items-baseline justify-between gap-4 py-3">
+                <span className="font-medium text-gray-800">{p.name}</span>
+                <span className="text-sm text-gray-600">{formatTime(p.start_time)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <p className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-gray-700">
+        Timings may change on festival days, eclipses and special occasions. Please check the announcements page for updates.
+      </p>
+    </PageShell>
+  );
 }

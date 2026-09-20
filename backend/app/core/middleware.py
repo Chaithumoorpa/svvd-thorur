@@ -8,6 +8,8 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from app.utils.rate_limiter import get_client_ip
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,7 +30,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Log request
         logger.debug(f"→ {request.method} {request.url.path}")
         logger.debug(f"  Query params: {dict(request.query_params)}")
-        logger.debug(f"  Headers: {dict(request.headers)}")
+        safe_headers = {
+            k: ("<redacted>" if k.lower() in {"authorization", "cookie"} else v)
+            for k, v in request.headers.items()
+        }
+        logger.debug(f"  Headers: {safe_headers}")
         
         # Process request
         response = await call_next(request)
@@ -131,7 +137,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Get client IP
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = get_client_ip(request)
         
         # Get current time
         current_time = time.time()

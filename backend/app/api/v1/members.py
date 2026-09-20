@@ -1,46 +1,52 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from typing import List
 
-from app.utils.dependencies import get_db, require_admin, require_trustee, get_member_service
-from app.services.member_service import MemberService
-from app.schemas.member import (
-    MemberOut,
-    MemberCreate,
-    MemberUpdate,
-)
+from fastapi import APIRouter, Depends, Response
+
+from app.core.pagination import PageParams, page_params, paginate, set_total
+from app.core.rbac import Permission
 from app.models.user import User
+from app.schemas.member import MemberCreate, MemberOut, MemberUpdate
+from app.services.member_service import MemberService
+from app.utils.dependencies import AuditContext, get_audit, get_member_service, require_permission
 
 router = APIRouter(prefix="/temple-members", tags=["Temple Members"])
+
+_can_read = require_permission(Permission.MEMBERS_READ)
+_can_write = require_permission(Permission.MEMBERS_WRITE)
 
 
 @router.get("/", response_model=List[MemberOut])
 def list_members(
+    response: Response,
     service: MemberService = Depends(get_member_service),
-    current_user: User = Depends(require_admin),
+    params: PageParams = Depends(page_params),
+    _: User = Depends(_can_read),
 ):
-    """List all members. Requires ADMIN or SUPER_ADMIN role."""
-    return service.list_members()
+    """Private member directory (contains phone/email). TRUSTEE and above."""
+    items, total = paginate(service.query_members(), params)
+    set_total(response, total)
+    return items
 
 
 @router.get("/{member_id}", response_model=MemberOut)
 def get_member(
     member_id: int,
     service: MemberService = Depends(get_member_service),
-    current_user: User = Depends(require_admin),
+    _: User = Depends(_can_read),
 ):
-    """Get member by ID. Requires ADMIN or SUPER_ADMIN role."""
     return service.get_member(member_id)
 
 
-@router.post("/", response_model=MemberOut)
+@router.post("/", response_model=MemberOut, status_code=201)
 def create_member(
     payload: MemberCreate,
     service: MemberService = Depends(get_member_service),
-    current_user: User = Depends(require_admin),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_can_write),
 ):
-    """Create a new member profile. Requires ADMIN or SUPER_ADMIN role."""
-    return service.create_member(payload)
+    member = service.create_member(payload)
+    audit.log("CREATE", "member", member.id, f"Added member {member.name}")
+    return member
 
 
 @router.put("/{member_id}", response_model=MemberOut)
@@ -48,17 +54,23 @@ def update_member(
     member_id: int,
     payload: MemberUpdate,
     service: MemberService = Depends(get_member_service),
-    current_user: User = Depends(require_admin),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_can_write),
 ):
-    """Update a member profile. Requires ADMIN or SUPER_ADMIN role."""
-    return service.update_member(member_id, payload)
+    member = service.update_member(member_id, payload)
+    # contact details are personal data: log which fields changed, not their values
+    audit.log("UPDATE", "member", member_id, f"Updated member {member.name}",
+              {"fields": sorted(payload.model_dump(exclude_unset=True).keys())})
+    return member
 
 
 @router.delete("/{member_id}", response_model=MemberOut)
 def delete_member(
     member_id: int,
     service: MemberService = Depends(get_member_service),
-    current_user: User = Depends(require_admin),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_can_write),
 ):
-    """Delete a member profile. Requires ADMIN or SUPER_ADMIN role."""
-    return service.delete_member(member_id)
+    member = service.delete_member(member_id)
+    audit.log("DELETE", "member", member_id, f"Removed member {member.name}")
+    return member

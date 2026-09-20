@@ -1,13 +1,22 @@
-from sqlalchemy.orm import Session
+from typing import Optional
+
 from app.models.gallery import Gallery
 from app.repositories.base import BaseRepository
 
+
 class GalleryRepository(BaseRepository):
-    def get_all(self, active_only: bool = True):
+    _ORDER = (Gallery.sort_order.asc(), Gallery.created_at.desc(), Gallery.id.desc())
+
+    def query(self, active_only: bool = True, category: Optional[str] = None):
         query = self.db.query(Gallery)
         if active_only:
-            query = query.filter(Gallery.is_active == True)
-        return query.all()
+            query = query.filter(Gallery.is_active.is_(True))
+        if category:
+            query = query.filter(Gallery.category == category.upper())
+        return query.order_by(*self._ORDER)
+
+    def get_all(self, active_only: bool = True):
+        return self.query(active_only).all()
 
     def get_by_id(self, gallery_id: int):
         return self.db.query(Gallery).filter(Gallery.id == gallery_id).first()
@@ -30,4 +39,4 @@ class GalleryRepository(BaseRepository):
         return gallery
 
     def count(self) -> int:
-        return self.db.query(Gallery).filter(Gallery.is_active == True).count()
+        return self.db.query(Gallery).filter(Gallery.is_active.is_(True)).count()

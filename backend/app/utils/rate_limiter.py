@@ -3,6 +3,8 @@ from functools import wraps
 from fastapi import HTTPException
 from typing import Dict, Tuple
 
+from app.core.config import settings
+
 
 class SimpleRateLimiter:
     """
@@ -42,15 +44,26 @@ class SimpleRateLimiter:
 # 5 requests per minute per IP
 login_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60)
 register_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60)
+# Public write endpoints: 5 contact messages / 10 seva bookings per IP per hour
+contact_limiter = SimpleRateLimiter(max_requests=5, window_seconds=3600)
+booking_limiter = SimpleRateLimiter(max_requests=10, window_seconds=3600)
 
 
 def get_client_ip(request) -> str:
-    """Extract client IP from request."""
-    # Check X-Forwarded-For header (proxy)
-    if request.headers.get('x-forwarded-for'):
-        return request.headers.get('x-forwarded-for').split(',')[0].strip()
-    # Fall back to direct connection IP
-    return request.client.host
+    """
+    Client IP for rate limiting / visitor hashing.
+
+    X-Forwarded-For is client-controlled unless a trusted proxy overwrites it,
+    so it is only honoured when TRUST_PROXY_HEADERS is enabled.
+    """
+    if settings.TRUST_PROXY_HEADERS:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            hops = [h.strip() for h in forwarded.split(",") if h.strip()]
+            if hops:
+                # each trusted proxy appends the address it saw; count from the right
+                return hops[-min(settings.TRUSTED_PROXY_HOPS, len(hops))]
+    return request.client.host if request.client else "unknown"
 
 
 def rate_limit_login(limiter: SimpleRateLimiter):

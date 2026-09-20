@@ -1,421 +1,219 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+import type {
+  ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog, CommitteeMember,
+  ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats, Donation,
+  DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
+  GalleryInput, GalleryItem, HomePayload, IncomeInput, LedgerEntry, Me, Member, MemberInput,
+  Paged, Pooja, PoojaInput, SevaBookingInput, SevaTicket, Temple, TempleTiming,
+  TempleTimingInput, TempleUpdate, TicketStatus, UserCreateInput, UserUpdateInput, VisitorStats,
+} from './types';
 
-const baseURL = typeof window === 'undefined'
-  ? (process.env.INTERNAL_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://backend:8000/api/v1')
-  : '/api/v1';
+export * from './types';
 
-if (!baseURL && typeof window === 'undefined') {
-  // eslint-disable-next-line no-console
-  console.error('Missing API base URL environment variable');
-}
-
+/**
+ * Browser calls go through the Next.js rewrite (/api/v1 -> backend). Server-side calls
+ * (see lib/server-api.ts) talk to the backend directly.
+ */
 export const api = axios.create({
-  baseURL: baseURL || undefined,
-  headers: {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  },
+  baseURL: '/api/v1',
+  headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
 });
 
-// Add request interceptor to add token to headers
-api.interceptors.request.use(
-  (config) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+const TOKEN_KEY = 'token';
 
-// Add response interceptor to handle 401 errors
+export function getStoredToken(): string | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredToken(token: string | null): void {
+  try {
+    if (token) window.localStorage.setItem(TOKEN_KEY, token);
+    else window.localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* storage unavailable (private mode) - session simply will not persist */
+  }
+}
+
+api.interceptors.request.use((config) => {
+  const token = getStoredToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      // Clear token and redirect to login if unauthorized
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        // Only redirect if not already on the login page
-        if (!window.location.pathname.includes('/login')) {
-          window.location.href = '/login';
-        }
-      }
+  (error: AxiosError) => {
+    const url = error.config?.url ?? '';
+    // An expired/invalid session anywhere in the admin area sends the user back to sign in.
+    if (error.response?.status === 401 && typeof window !== 'undefined' && !url.includes('/auth/login')) {
+      setStoredToken(null);
+      if (window.location.pathname.startsWith('/admin')) window.location.href = '/login';
     }
     return Promise.reject(error);
-  }
+  },
 );
 
-// If running in the browser and the baseURL uses the Docker service name
-// (e.g. contains "backend:"), warn the developer because the browser cannot
-// resolve Docker service hostnames — the browser must use a host-accessible
-// address like http://localhost:8000.
-if (typeof window !== 'undefined' && baseURL && baseURL.includes('backend')) {
-  // eslint-disable-next-line no-console
-  console.warn(
-    `NEXT_PUBLIC_API_BASE_URL (${baseURL}) appears to use a Docker service name. ` +
-    'Browser requests cannot resolve Docker service hostnames — use localhost or a public hostname instead.'
-  );
+/** Human-readable message from any API failure (FastAPI `detail` string or validation list). */
+export function apiError(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
+  if (axios.isAxiosError(error)) {
+    if (!error.response) return 'Cannot reach the server. Check your connection and try again.';
+    const detail = (error.response.data as { detail?: unknown } | undefined)?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail) && detail.length) {
+      return detail
+        .map((d: { loc?: unknown[]; msg?: string }) => {
+          const field = Array.isArray(d.loc) ? String(d.loc[d.loc.length - 1]) : '';
+          const msg = (d.msg ?? '').replace(/^Value error, /, '');
+          return field && field !== 'body' ? `${field.replace(/_/g, ' ')}: ${msg}` : msg;
+        })
+        .join('; ');
+    }
+    if (error.response.status === 403) return 'You do not have permission to do this.';
+    if (error.response.status === 429) return 'Too many requests. Please wait a moment.';
+  }
+  return fallback;
 }
 
+const total = (headers: Record<string, unknown>): number => Number(headers['x-total-count'] ?? 0);
 
-
-export interface Festival {
-  id: number;
-  name: string;
-  description?: string;
-  date?: string;
-  is_active: boolean;
+async function page<T>(url: string, params?: Record<string, unknown>): Promise<Paged<T>> {
+  const res = await api.get<T[]>(url, { params });
+  return { items: res.data, total: total(res.headers as Record<string, unknown>) || res.data.length };
 }
 
-export interface FestivalCreate {
-  name: string;
-  description?: string;
-  date?: string;
-}
+// ------------------------------------------------------------------------------ auth
+export const login = async (username: string, password: string) =>
+  (await api.post<{ access_token: string; must_change_password: boolean }>('/auth/login', { username, password })).data;
+export const register = async (data: { username: string; password: string; email?: string }) =>
+  (await api.post<AppUser>('/auth/register', data)).data;
+export const getMe = async () => (await api.get<Me>('/auth/verify')).data;
+export const changePassword = async (current_password: string, new_password: string) =>
+  (await api.post('/auth/change-password', { current_password, new_password })).data;
+export const listUsers = (p = 1, pageSize = 50) => page<AppUser>('/auth/admin/users', { page: p, page_size: pageSize });
+export const createUser = async (data: UserCreateInput) => (await api.post<AppUser>('/auth/admin/users', data)).data;
+export const updateUser = async (id: number, data: UserUpdateInput) =>
+  (await api.patch<AppUser>(`/auth/admin/users/${id}`, data)).data;
 
-export async function getFestivals() {
-  const res = await api.get<Festival[]>('/festivals/');
-  return res.data;
-}
+// ---------------------------------------------------------------------------- temple
+export const getTemple = async () => (await api.get<Temple>('/temple/')).data;
+export const updateTemple = async (data: TempleUpdate) => (await api.put<Temple>('/temple/', data)).data;
+export const listAllTimings = async () => (await api.get<TempleTiming[]>('/temple/timings/all')).data;
+export const createTiming = async (data: TempleTimingInput) => (await api.post<TempleTiming>('/temple/timings', data)).data;
+export const updateTiming = async (id: number, data: Partial<TempleTimingInput>) =>
+  (await api.put<TempleTiming>(`/temple/timings/${id}`, data)).data;
+export const deleteTiming = async (id: number) => (await api.delete<TempleTiming>(`/temple/timings/${id}`)).data;
 
-export async function createFestival(data: FestivalCreate) {
-  const res = await api.post<Festival>('/festivals/', data);
-  return res.data;
-}
+// ------------------------------------------------------------------------ public data
+export const getHome = async () => (await api.get<HomePayload>('/public/home')).data;
+export const getCommittee = async () => (await api.get<CommitteeMember[]>('/public/committee')).data;
+export const trackVisit = async () => (await api.post('/stats/track')).data;
+export const getVisitorStats = async () => (await api.get<VisitorStats>('/stats/stats')).data;
+export const submitContact = async (data: ContactInput) =>
+  (await api.post<{ id: number; status: ContactStatus }>('/contacts/', data)).data;
+export const bookSeva = async (data: SevaBookingInput) => (await api.post<SevaTicket>('/seva-tickets/', data)).data;
 
-export async function updateFestival(id: number, data: Partial<FestivalCreate> & { is_active?: boolean }) {
-  const res = await api.put<Festival>(`/festivals/${id}`, data);
-  return res.data;
-}
+// -------------------------------------------------------------------- announcements
+export const getAnnouncements = async () => (await api.get<Announcement[]>('/announcements/')).data;
+export const listAllAnnouncements = (p = 1, pageSize = 50) =>
+  page<Announcement>('/announcements/admin/all', { page: p, page_size: pageSize });
+export const createAnnouncement = async (data: AnnouncementInput) =>
+  (await api.post<Announcement>('/announcements/', data)).data;
+export const updateAnnouncement = async (id: number, data: AnnouncementInput) =>
+  (await api.put<Announcement>(`/announcements/${id}`, data)).data;
+export const deleteAnnouncement = async (id: number) => (await api.delete<Announcement>(`/announcements/${id}`)).data;
 
-export async function deleteFestival(id: number) {
-  const res = await api.delete<Festival>(`/festivals/${id}`);
-  return res.data;
-}
+// ---------------------------------------------------------------------------- festivals
+export const getFestivals = async (upcoming = false) =>
+  (await api.get<Festival[]>('/festivals/', { params: { upcoming } })).data;
+export const listAllFestivals = (p = 1, pageSize = 50) => page<Festival>('/festivals/admin/all', { page: p, page_size: pageSize });
+export const createFestival = async (data: FestivalInput) => (await api.post<Festival>('/festivals/', data)).data;
+export const updateFestival = async (id: number, data: Partial<FestivalInput>) =>
+  (await api.put<Festival>(`/festivals/${id}`, data)).data;
+export const deleteFestival = async (id: number) => (await api.delete<Festival>(`/festivals/${id}`)).data;
 
-// Announcements API
-export interface Announcement {
-  id: number;
-  title: string;
-  message: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+// -------------------------------------------------------------------------------- poojas
+export const getPoojas = async () => (await api.get<Pooja[]>('/poojas/')).data;
+export const listAllPoojas = (p = 1, pageSize = 100) => page<Pooja>('/poojas/admin/all', { page: p, page_size: pageSize });
+export const createPooja = async (data: PoojaInput) => (await api.post<Pooja>('/poojas/', data)).data;
+export const updatePooja = async (id: number, data: Partial<PoojaInput>) => (await api.put<Pooja>(`/poojas/${id}`, data)).data;
+export const deletePooja = async (id: number) => (await api.delete<Pooja>(`/poojas/${id}`)).data;
 
-export interface AnnouncementCreate {
-  title: string;
-  message?: string | null;
-  start_date?: string | null;
-  end_date?: string | null;
-}
+// ------------------------------------------------------------------------------- gallery
+export const getGallery = async (category?: string) =>
+  (await api.get<GalleryItem[]>('/gallery/', { params: { category, page_size: 200 } })).data;
+export const listAllGallery = (p = 1, pageSize = 100) => page<GalleryItem>('/gallery/admin/all', { page: p, page_size: pageSize });
+export const createGallery = async (data: GalleryInput) => (await api.post<GalleryItem>('/gallery/', data)).data;
+export const updateGallery = async (id: number, data: Partial<GalleryInput>) =>
+  (await api.put<GalleryItem>(`/gallery/${id}`, data)).data;
+export const deleteGallery = async (id: number) => (await api.delete<GalleryItem>(`/gallery/${id}`)).data;
 
-export interface AnnouncementUpdate {
-  title?: string;
-  message?: string | null;
-  start_date?: string | null;
-  end_date?: string | null;
-  is_active?: boolean;
-}
+// ------------------------------------------------------------------------------- members
+export const listMembers = (p = 1, pageSize = 100) => page<Member>('/temple-members/', { page: p, page_size: pageSize });
+export const createMember = async (data: MemberInput) => (await api.post<Member>('/temple-members/', data)).data;
+export const updateMember = async (id: number, data: Partial<MemberInput>) =>
+  (await api.put<Member>(`/temple-members/${id}`, data)).data;
+export const deleteMember = async (id: number) => (await api.delete<Member>(`/temple-members/${id}`)).data;
 
-export async function getAnnouncements(showAll: boolean = false) {
-  const res = await api.get<Announcement[]>('/announcements/', {
-    params: { show_all: showAll }
-  });
-  return res.data;
-}
+// ------------------------------------------------------------------- donors & donations
+export const listDonors = (p = 1, search?: string, pageSize = 25) =>
+  page<Donor>('/donors/', { page: p, page_size: pageSize, search: search || undefined });
+export const createDonor = async (data: DonorInput) => (await api.post<Donor>('/donors/', data)).data;
+export const updateDonor = async (id: number, data: Partial<DonorInput> & { is_active?: boolean }) =>
+  (await api.put<Donor>(`/donors/${id}`, data)).data;
+export const deleteDonor = async (id: number) => (await api.delete<Donor>(`/donors/${id}`)).data;
+export const listDonations = (p = 1, filters: { donor_id?: number; start_date?: string; end_date?: string } = {}, pageSize = 25) =>
+  page<Donation>('/donations/', { page: p, page_size: pageSize, ...filters });
+export const createDonation = async (data: DonationInput) => (await api.post<Donation>('/donations/', data)).data;
+export const issueReceipt = async (id: number) => (await api.post<Donation>(`/donations/${id}/receipt`)).data;
+export const downloadReceipt = async (id: number) =>
+  (await api.get<Blob>(`/donations/${id}/receipt`, { responseType: 'blob' })).data;
 
-export async function getAnnouncement(id: number) {
-  const res = await api.get<Announcement>(`/announcements/${id}`);
-  return res.data;
-}
+// ------------------------------------------------------------------------------ messages
+export const listMessages = (p = 1, status?: ContactStatus, pageSize = 25) =>
+  page<ContactMessage>('/contacts/', { page: p, page_size: pageSize, status });
+export const updateMessage = async (id: number, data: { status?: ContactStatus; admin_notes?: string }) =>
+  (await api.patch<ContactMessage>(`/contacts/${id}`, data)).data;
+export const deleteMessage = async (id: number) => (await api.delete(`/contacts/${id}`)).data;
 
-export async function createAnnouncement(data: AnnouncementCreate) {
-  const res = await api.post<Announcement>('/announcements/', data);
-  return res.data;
-}
+// -------------------------------------------------------------------------- seva tickets
+export const listTickets = (p = 1, filters: { seva_date?: string; status?: TicketStatus; mobile?: string } = {}, pageSize = 25) =>
+  page<SevaTicket>('/seva-tickets/', { page: p, page_size: pageSize, ...filters });
+export const createCounterTicket = async (data: CounterTicketInput) =>
+  (await api.post<SevaTicket>('/seva-tickets/admin', data)).data;
+export const scanTicket = async (qr_token: string) =>
+  (await api.post<{ success: boolean; message: string; ticket: SevaTicket | null }>('/seva-tickets/scan', { qr_token })).data;
+export const downloadTicketPdf = async (id: string) =>
+  (await api.get<Blob>(`/seva-tickets/${id}/pdf`, { params: { action: 'download' }, responseType: 'blob' })).data;
 
-export async function updateAnnouncement(id: number, data: AnnouncementUpdate) {
-  const res = await api.put<Announcement>(`/announcements/${id}`, data);
-  return res.data;
-}
+// ------------------------------------------------------------------------------ finance
+export const getFinanceSummary = async () => (await api.get<FinanceSummary>('/finance/summary')).data;
+export const getLedger = (p = 1, startDate?: string, endDate?: string, pageSize = 25) =>
+  page<LedgerEntry>('/finance/ledger', { page: p, page_size: pageSize, start_date: startDate || undefined, end_date: endDate || undefined });
+export const addIncome = async (data: IncomeInput) => (await api.post('/finance/income', data)).data;
+export const addExpense = async (data: ExpenseInput) => (await api.post('/finance/expense', data)).data;
+export const exportLedger = async (kind: 'csv' | 'pdf', startDate: string, endDate: string) =>
+  (await api.get<Blob>(`/finance/ledger/${kind}`, { params: { start_date: startDate, end_date: endDate }, responseType: 'blob' })).data;
+export const getMonthlyReportPdf = async (year: number, month: number) =>
+  (await api.get<Blob>('/finance/reports/monthly/pdf', { params: { year, month }, responseType: 'blob' })).data;
 
-export async function deleteAnnouncement(id: number) {
-  const res = await api.delete<Announcement>(`/announcements/${id}`);
-  return res.data;
-}
+// ---------------------------------------------------------------------------- dashboard
+export const getDashboardStats = async () => (await api.get<DashboardStats>('/meta/stats')).data;
+export const getRecentActivity = async () => (await api.get<ActivityItem[]>('/meta/activity')).data;
+export const listAuditLogs = (p = 1, filters: { entity_type?: string; action?: string } = {}, pageSize = 50) =>
+  page<AuditLog>('/audit-logs/', { page: p, page_size: pageSize, ...filters });
 
-// Poojas API
-export interface Pooja {
-  id: number;
-  name: string;
-  description?: string;
-  start_time?: string;
-  end_time?: string;
-  pooja_type: string;
-  is_paid: boolean;
-  suggested_amount?: number;
-  is_active: boolean;
-}
-
-export interface PoojaCreate {
-  name: string;
-  description?: string;
-  start_time?: string;
-  end_time?: string;
-  pooja_type?: string;
-  is_paid?: boolean;
-  suggested_amount?: number;
-}
-
-export interface PoojaUpdate {
-  name?: string;
-  description?: string;
-  start_time?: string;
-  end_time?: string;
-  pooja_type?: string;
-  is_paid?: boolean;
-  suggested_amount?: number;
-  is_active?: boolean;
-}
-
-export async function getPoojas() {
-  // Assuming list_active_poojas returns list, admin might need all. 
-  // If backend filters by active=True, admin might treat hidden ones as deleted for now.
-  // Or we update backend to show all for admin. 
-  // For now, let's use the standard list endpoint.
-  const res = await api.get<Pooja[]>('/poojas/');
-  return res.data;
-}
-
-export async function createPooja(data: PoojaCreate) {
-  const res = await api.post<Pooja>('/poojas/', data);
-  return res.data;
-}
-
-export async function updatePooja(id: number, data: PoojaUpdate) {
-  const res = await api.put<Pooja>(`/poojas/${id}`, data);
-  return res.data;
-}
-
-export async function deletePooja(id: number) {
-  const res = await api.delete<Pooja>(`/poojas/${id}`);
-  return res.data;
-}
-
-// Gallery API
-export interface Gallery {
-  id: number;
-  title: string;
-  description?: string;
-  image_url: string;
-  category: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface GalleryCreate {
-  title: string;
-  description?: string;
-  image_url: string;
-  category: string;
-  is_active?: boolean;
-}
-
-export interface GalleryUpdate {
-  title?: string;
-  description?: string;
-  image_url?: string;
-  category?: string;
-  is_active?: boolean;
-}
-
-export async function getGallery() {
-  const res = await api.get<Gallery[]>('/gallery/');
-  return res.data;
-}
-
-export async function createGallery(data: GalleryCreate) {
-  const res = await api.post<Gallery>('/gallery/', data);
-  return res.data;
-}
-
-export async function updateGallery(id: number, data: GalleryUpdate) {
-  const res = await api.put<Gallery>(`/gallery/${id}`, data);
-  return res.data;
-}
-
-export async function deleteGallery(id: number) {
-  const res = await api.delete<Gallery>(`/gallery/${id}`);
-  return res.data;
-}
-
-// Members API
-export interface TempleMember {
-  id: number;
-  name: string;
-  phone: string;
-  email?: string;
-  role?: string;
-  is_active?: boolean;
-}
-
-export interface TempleMemberCreate {
-  name: string;
-  phone: string;
-  email?: string;
-  role?: string;
-}
-
-export interface TempleMemberUpdate {
-  name?: string;
-  phone?: string;
-  email?: string;
-  role?: string;
-  is_active?: boolean;
-}
-
-export async function getMembers() {
-  const res = await api.get<TempleMember[]>('/temple-members/');
-  return res.data;
-}
-
-export async function createMember(data: TempleMemberCreate) {
-  const res = await api.post<TempleMember>('/temple-members/', data);
-  return res.data;
-}
-
-export async function updateMember(id: number, data: TempleMemberUpdate) {
-  const res = await api.put<TempleMember>(`/temple-members/${id}`, data);
-  return res.data;
-}
-
-export async function deleteMember(id: number) {
-  const res = await api.delete<TempleMember>(`/temple-members/${id}`);
-  return res.data;
-}
-
-// Donors API
-export async function generateDonorReceipt(id: number) {
-  const res = await api.post(`/donors/${id}/generate-receipt`);
-  return res.data;
-}
-
-export async function getDonorReceipt(id: number) {
-  const res = await api.get(`/donors/${id}/receipt`, { responseType: 'blob' });
-  return res.data;
-}
-
-// Stats API
-export interface VisitorStats {
-  total_visitors: number;
-  today_visitors: number;
-}
-
-export async function trackVisit() {
-  const res = await api.post('/stats/track');
-  return res.data;
-}
-
-export async function getVisitorStats() {
-  const res = await api.get<VisitorStats>('/stats/stats');
-  return res.data;
-}
-
-// Finance API
-export type IncomeSource = 'SEVA' | 'DONATION' | 'HUNDI' | 'MANUAL';
-export type PaymentMode = 'CASH' | 'UPI' | 'BANK' | 'CHEQUE';
-export type ExpenseCategory = 'SALARY' | 'MATERIAL' | 'MAINTENANCE' | 'FESTIVAL' | 'OTHER';
-
-export interface IncomeTransaction {
-  id: string;
-  source_type: IncomeSource;
-  amount: number;
-  payment_mode: PaymentMode;
-  reference_id?: string;
-  notes?: string;
-  received_by: number;
-  received_at: string;
-}
-
-export interface ExpenseTransaction {
-  id: string;
-  category: ExpenseCategory;
-  description: string;
-  amount: number;
-  payment_mode: PaymentMode;
-  paid_to: string;
-  approved_by: number;
-  expense_date: string;
-  notes?: string;
-}
-
-export interface FinanceSummary {
-  total_income: number;
-  total_expenses: number;
-  balance: number;
-  income_by_source: Record<string, number>;
-  expense_by_category: Record<string, number>;
-}
-
-export interface LedgerEntry {
-  id: string;
-  date: string;
-  type: 'INCOME' | 'EXPENSE';
-  category_or_source: string;
-  description: string;
-  amount: number;
-  payment_mode: string;
-}
-
-export async function addIncome(data: any) {
-  const res = await api.post<IncomeTransaction>('/finance/income', data);
-  return res.data;
-}
-
-export async function addExpense(data: any) {
-  const res = await api.post<ExpenseTransaction>('/finance/expense', data);
-  return res.data;
-}
-
-export async function getFinanceSummary() {
-  const res = await api.get<FinanceSummary>('/finance/summary');
-  return res.data;
-}
-
-export async function getLedger(startDate?: string, endDate?: string) {
-  const params = { start_date: startDate, end_date: endDate };
-  const res = await api.get<LedgerEntry[]>('/finance/ledger', { params });
-  return res.data;
-}
-
-export async function exportFinanceCSV(startDate?: string, endDate?: string) {
-  const params = { start_date: startDate, end_date: endDate };
-  const res = await api.get('/finance/ledger/csv', { params, responseType: 'blob' });
-  return res.data;
-}
-
-export async function exportFinancePDF(startDate?: string, endDate?: string) {
-  const params = { start_date: startDate, end_date: endDate };
-  const res = await api.get('/finance/ledger/pdf', { params, responseType: 'blob' });
-  return res.data;
-}
-
-export async function getMonthlyFinanceReport(year: number, month: number) {
-  const params = { year, month };
-  const res = await api.get('/finance/reports/monthly', { params });
-  return res.data;
-}
-
-export async function getMonthlyFinanceReportPDF(year: number, month: number) {
-  const params = { year, month };
-  const res = await api.get('/finance/reports/monthly/pdf', { params, responseType: 'blob' });
-  return res.data;
+/** Save a Blob response as a file download. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

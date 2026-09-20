@@ -14,7 +14,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     env_file:
-      - ./backend/.env.production
+      - path: ./backend/.env.production
+        required: false
     environment:
       ENV: production
       DEBUG: "false"
@@ -25,7 +26,9 @@ services:
       ENABLE_DOCS: "false"
       ENABLE_SECURITY_HEADERS: "true"
       ENABLE_RATE_LIMITING: "true"
-      RATE_LIMIT_PER_MINUTE: "60"
+      RATE_LIMIT_PER_MINUTE: "120"
+      TRUST_PROXY_HEADERS: "true"
+      TRUSTED_PROXY_HOPS: "1"  # set to 2 when nginx/traefik sits in front of the Next.js container
       ALEMBIC_CONFIG: alembic.prod.ini
       CORS_ORIGINS: https://svvdthorur.org
     # No volume mounts in production - use built image

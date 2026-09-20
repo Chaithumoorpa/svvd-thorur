@@ -7,6 +7,7 @@ services:
     restart: always
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-templedb}
+      TZ: ${TZ:-Asia/Kolkata}
       POSTGRES_USER: ${POSTGRES_USER:-templeuser}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-templepass}
     volumes:
@@ -28,7 +29,9 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-templeuser}:${POSTGRES_PASSWORD:-templepass}@postgres:5432/${POSTGRES_DB:-templedb}
-      SECRET_KEY: ${SECRET_KEY:-change-this-in-prod-very-secret}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY (>= 32 random chars) in .env}
+      TRUST_PROXY_HEADERS: "true"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       ENV: production
     ports:
       - "8000:8000"
