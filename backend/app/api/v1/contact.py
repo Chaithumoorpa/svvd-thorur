@@ -8,6 +8,7 @@ from app.models.contact import ContactStatus
 from app.models.user import User
 from app.schemas.contact import ContactCreate, ContactOut, ContactPublicAck, ContactUpdate
 from app.services.contact_service import ContactService
+from app.services.email_service import EmailService
 from app.utils.dependencies import AuditContext, get_audit, get_contact_service, require_permission
 from app.utils.rate_limiter import contact_limiter, get_client_ip
 
@@ -27,7 +28,12 @@ def submit_contact_message(
         raise HTTPException(status_code=429, detail="Too many messages. Please try again later.")
     if payload.website:  # honeypot tripped: pretend success without storing anything
         return ContactPublicAck(id=0, status=ContactStatus.PENDING)
-    return service.submit_message(payload)
+    ack = service.submit_message(payload)
+    EmailService().notify_admin(
+        f"New contact message: {payload.subject}",
+        f"From: {payload.name} <{payload.email}>\n\n{payload.message}",
+    )
+    return ack
 
 
 @router.get("", response_model=List[ContactOut])

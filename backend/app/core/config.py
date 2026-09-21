@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-east-1"
     S3_MAX_UPLOAD_MB: int = 8
 
+    # Admin email notifications (contact messages, bookings, donations) via AWS SES.
+    # Unset = notifications silently disabled. Same credential chain as S3 above.
+    SES_FROM_EMAIL: str | None = None
+    ADMIN_NOTIFICATION_EMAIL: str | None = None
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
