@@ -42,6 +42,14 @@ const nextConfig = {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
 
+  // Without this, Next's own trailing-slash normalization redirects BEFORE
+  // rewrites are applied, fighting FastAPI's own redirect_slashes (every
+  // /api/v1/* route here is registered with a trailing slash) - the two
+  // bounce a request between "add slash" and "strip slash" forever. This
+  // lets rewritten /api/v1/* requests reach the backend as-is, where at
+  // most one real redirect (FastAPI adding the slash) resolves it.
+  skipTrailingSlashRedirect: true,
+
   reactStrictMode: true,
   poweredByHeader: false,
 
