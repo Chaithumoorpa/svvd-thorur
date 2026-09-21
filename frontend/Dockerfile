@@ -9,6 +9,13 @@ ENV NEXT_PRIVATE_STANDALONE=true
 ARG NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 
+# Read at build time by next.config.mjs's rewrites(), which Next.js resolves
+# once into .next/standalone's routing manifest - NOT re-read from the
+# runtime environment. Must be passed as a build arg, not just a container
+# env var, or the rewrite silently falls back to its 127.0.0.1 default.
+ARG INTERNAL_API_BASE_URL
+ENV INTERNAL_API_BASE_URL=$INTERNAL_API_BASE_URL
+
 COPY package*.json ./
 RUN npm ci
 
