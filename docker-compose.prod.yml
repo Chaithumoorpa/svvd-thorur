@@ -33,7 +33,8 @@ services:
       # Use 2 if all traffic goes Nginx -> Next.js -> backend. Wrong value =
       # everyone shares one rate-limit bucket (too high) or XFF can be spoofed (too low).
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
-      CORS_ORIGINS: https://svvdthorur.org
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://svvdthorur.org}
+      ALLOW_PUBLIC_REGISTRATION: ${ALLOW_PUBLIC_REGISTRATION:-false}
     # No volume mounts in production - use built image
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --log-level warning  # rate limits are per worker; keep this small
     restart: always
