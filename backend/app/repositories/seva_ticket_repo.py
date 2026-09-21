@@ -72,6 +72,12 @@ class SevaTicketRepository(BaseRepository):
         self.db.refresh(ticket)
         return ticket
 
+    def save_pdf_key(self, ticket: SevaTicket, key: str) -> SevaTicket:
+        ticket.pdf_s3_key = key
+        self.db.commit()
+        self.db.refresh(ticket)
+        return ticket
+
     def count(self) -> int:
         return self.db.query(SevaTicket).count()
 

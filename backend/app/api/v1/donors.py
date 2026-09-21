@@ -174,6 +174,7 @@ def download_receipt(
     if not donation.receipt_number:
         raise HTTPException(status_code=400, detail="Receipt has not been generated yet")
     pdf = DonationReceiptService.generate_receipt_pdf(donation, TempleRepository(db).get_active())
+    service.archive_receipt(donation, pdf)
     return Response(
         content=pdf,
         media_type="application/pdf",

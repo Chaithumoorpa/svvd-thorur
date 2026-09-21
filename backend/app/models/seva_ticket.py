@@ -50,3 +50,7 @@ class SevaTicket(Base):
     source = Column(SQLEnum(TicketSource), nullable=False, default=TicketSource.ONLINE, index=True)
     created_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     qr_token = Column(String, unique=True, nullable=False, index=True)  # Secure random token
+
+    # S3 object key of the most recently archived PDF (private bucket prefix,
+    # contains devotee name/phone - never public like gallery photos).
+    pdf_s3_key = Column(String, nullable=True)

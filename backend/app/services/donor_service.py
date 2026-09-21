@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -149,3 +150,22 @@ class DonationService:
                 self.db.rollback()
                 donation = self.get(donation_id)
         raise HTTPException(status_code=503, detail="Could not allocate a receipt number, please retry")
+
+    def archive_receipt(self, donation: Donation, pdf_bytes: bytes) -> None:
+        """Best-effort S3 archive of a generated receipt PDF. Never raises - a
+        storage hiccup must not block staff from getting the receipt."""
+        from app.services.storage_service import StorageService
+
+        storage = StorageService()
+        if not storage.enabled:
+            return
+        try:
+            key = storage.upload_private(
+                pdf_bytes, f"receipts/{donation.receipt_number}.pdf", "application/pdf"
+            )
+            donation.receipt_s3_key = key
+            self.db.commit()
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Failed to archive receipt PDF to S3 for donation #%s", donation.id, exc_info=True
+            )

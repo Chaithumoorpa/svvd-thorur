@@ -141,7 +141,8 @@ def get_ticket_pdf(
     """
     ticket = service.get_ticket(ticket_id)
     pdf_content = service.generate_ticket_pdf(ticket)
-    
+    service.archive_ticket_pdf(ticket, pdf_content.getvalue())
+
     filename = f"ticket_{ticket.ticket_number}.pdf"
     content_disposition = "attachment" if action == "download" else "inline"
     

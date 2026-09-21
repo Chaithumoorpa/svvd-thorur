@@ -22,6 +22,9 @@ class Donation(Base):
 
     receipt_number = Column(String(50), unique=True, nullable=True)
     receipt_generated_at = Column(DateTime, nullable=True)
+    # S3 object key of the most recently archived receipt PDF (private bucket
+    # prefix - contains donor name/address, never public like gallery photos).
+    receipt_s3_key = Column(String, nullable=True)
     payment_mode = Column(SAEnum(PaymentMode), nullable=False, default=PaymentMode.CASH)
 
     recorded_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)

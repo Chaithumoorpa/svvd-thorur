@@ -61,3 +61,15 @@ class StorageService:
             "key": key,
             "max_bytes": max_bytes,
         }
+
+    def upload_private(self, data: bytes, key: str, content_type: str) -> str:
+        """Server-side upload of generated documents (ticket/receipt PDFs) that
+        must stay private - PII, unlike public gallery photos. No bucket policy
+        grants public read outside the gallery/ prefix, so this key is only
+        reachable with the instance's own credentials (e.g. a presigned GET
+        generated on demand) or direct console/API access."""
+        if not self.enabled:
+            raise RuntimeError("S3 is not configured (S3_BUCKET_NAME unset)")
+        client = boto3.client("s3", region_name=self.region)
+        client.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
+        return key

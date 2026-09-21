@@ -1,4 +1,5 @@
 import html
+import logging
 import secrets
 import qrcode
 import io
@@ -280,9 +281,27 @@ class SevaTicketService:
         html = self.generate_ticket_html(ticket)
         result = io.BytesIO()
         pdf = pisa.pisaDocument(io.BytesIO(html.encode("utf-8")), result)
-        
+
         if pdf.err:
             raise HTTPException(status_code=500, detail="Error generating PDF ticket")
-            
+
         result.seek(0)
         return result
+
+    def archive_ticket_pdf(self, ticket: SevaTicket, pdf_bytes: bytes) -> None:
+        """Best-effort S3 archive of a generated ticket PDF. Never raises - a
+        storage hiccup must not block the admin from getting their PDF."""
+        from app.services.storage_service import StorageService
+
+        storage = StorageService()
+        if not storage.enabled:
+            return
+        try:
+            key = storage.upload_private(
+                pdf_bytes, f"tickets/{ticket.ticket_number}.pdf", "application/pdf"
+            )
+            self.ticket_repo.save_pdf_key(ticket, key)
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Failed to archive ticket PDF to S3 for %s", ticket.ticket_number, exc_info=True
+            )
