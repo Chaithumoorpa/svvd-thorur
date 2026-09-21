@@ -43,5 +43,6 @@ EXPOSE 8000
 # 8. Use entrypoint script
 ENTRYPOINT ["./entrypoint.sh"]
 
-# 9. Run the app in production mode (no reload)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 9. Run the app in production mode (no reload).
+# Shell form so $PORT (set by platforms like Railway) expands; falls back to 8000 locally.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
