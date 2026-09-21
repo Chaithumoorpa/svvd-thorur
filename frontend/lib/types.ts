@@ -146,6 +146,14 @@ export interface GalleryInput {
   sort_order?: number;
 }
 
+export interface UploadUrlResponse {
+  upload_url: string;
+  fields: Record<string, string>;
+  public_url: string;
+  key: string;
+  max_bytes: number;
+}
+
 export interface Member {
   id: number;
   name: string;

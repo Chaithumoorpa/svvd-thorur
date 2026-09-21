@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     # Alembic
     ALEMBIC_CONFIG: str = "alembic.ini"
 
+    # S3 (gallery photo uploads). Unset = uploads disabled, admins fall back to pasting
+    # an image URL. Credentials come from the environment's default AWS chain (an EC2
+    # instance role in production; ~/.aws or AWS_* env vars for local use) - never stored here.
+    S3_BUCKET_NAME: str | None = None
+    AWS_REGION: str = "us-east-1"
+    S3_MAX_UPLOAD_MB: int = 8
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):

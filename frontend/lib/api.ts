@@ -5,7 +5,8 @@ import type {
   DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
   GalleryInput, GalleryItem, HomePayload, IncomeInput, LedgerEntry, Me, Member, MemberInput,
   Paged, Pooja, PoojaInput, SevaBookingInput, SevaTicket, Temple, TempleTiming,
-  TempleTimingInput, TempleUpdate, TicketStatus, UserCreateInput, UserUpdateInput, VisitorStats,
+  TempleTimingInput, TempleUpdate, TicketStatus, UploadUrlResponse, UserCreateInput,
+  UserUpdateInput, VisitorStats,
 } from './types';
 
 export * from './types';
@@ -150,6 +151,17 @@ export const createGallery = async (data: GalleryInput) => (await api.post<Galle
 export const updateGallery = async (id: number, data: Partial<GalleryInput>) =>
   (await api.put<GalleryItem>(`/gallery/${id}`, data)).data;
 export const deleteGallery = async (id: number) => (await api.delete<GalleryItem>(`/gallery/${id}`)).data;
+
+/** Uploads a gallery photo straight to S3 (presigned POST) and returns its public URL. */
+export async function uploadGalleryPhoto(file: File): Promise<string> {
+  const { data } = await api.post<UploadUrlResponse>('/gallery/upload-url', { content_type: file.type });
+  const form = new FormData();
+  Object.entries(data.fields).forEach(([key, value]) => form.append(key, value));
+  form.append('file', file);
+  // Plain axios, not the `api` instance: it must not carry the admin's bearer token to S3.
+  await axios.post(data.upload_url, form);
+  return data.public_url;
+}
 
 // ------------------------------------------------------------------------------- members
 export const listMembers = (p = 1, pageSize = 100) => page<Member>('/temple-members/', { page: p, page_size: pageSize });

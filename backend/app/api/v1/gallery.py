@@ -6,12 +6,32 @@ from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.models.user import User
 from app.schemas.gallery import GalleryCreate, GalleryOut, GalleryUpdate
+from app.schemas.upload import UploadUrlRequest, UploadUrlResponse
 from app.services.gallery_service import GalleryService
-from app.utils.dependencies import AuditContext, get_audit, get_gallery_service, require_permission
+from app.services.storage_service import StorageService
+from app.utils.dependencies import (
+    AuditContext,
+    get_audit,
+    get_gallery_service,
+    get_storage_service,
+    require_permission,
+)
 
 router = APIRouter(prefix="/gallery", tags=["Gallery"])
 
 _can_write = require_permission(Permission.CONTENT_WRITE)
+
+
+@router.post("/upload-url", response_model=UploadUrlResponse)
+def create_upload_url(
+    payload: UploadUrlRequest,
+    storage: StorageService = Depends(get_storage_service),
+    _: User = Depends(_can_write),
+):
+    """Presigned S3 upload for a gallery photo. The browser uploads the file
+    directly to S3 with the returned fields, then saves `public_url` as the
+    gallery item's image_url. 503 if S3 isn't configured (no S3_BUCKET_NAME)."""
+    return storage.create_upload(payload.content_type)
 
 
 @router.get("/", response_model=List[GalleryOut])
