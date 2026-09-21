@@ -37,6 +37,8 @@ services:
       ALLOW_PUBLIC_REGISTRATION: ${ALLOW_PUBLIC_REGISTRATION:-false}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
+      ADMIN_NOTIFICATION_EMAIL: ${ADMIN_NOTIFICATION_EMAIL:-}
     # No volume mounts in production - use built image
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --log-level warning  # rate limits are per worker; keep this small
     restart: always

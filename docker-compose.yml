@@ -36,6 +36,8 @@ services:
       TZ: Asia/Kolkata
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
+      ADMIN_NOTIFICATION_EMAIL: ${ADMIN_NOTIFICATION_EMAIL:-}
     ports:
       # Loopback only: put Nginx/Caddy in front. Publishing this port publicly
       # would let clients bypass the proxy and spoof X-Forwarded-For.

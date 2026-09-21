@@ -8,6 +8,7 @@ from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.utils.dependencies import AuditContext, get_audit, get_seva_ticket_service, require_permission
 from app.utils.rate_limiter import booking_limiter, get_client_ip
+from app.services.email_service import EmailService
 from app.services.seva_ticket_service import SevaTicketService
 from app.schemas.seva_ticket import (
     SevaBookingPublic,
@@ -37,7 +38,13 @@ def book_seva_ticket(
     """
     if not booking_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many bookings. Please try again later.")
-    return service.book_ticket(payload)
+    ticket = service.book_ticket(payload)
+    EmailService().notify_admin(
+        f"New seva booking: {ticket.seva_name} ({ticket.ticket_number})",
+        f"Devotee: {ticket.devotee_name}\nMobile: {ticket.mobile_number}\n"
+        f"Seva: {ticket.seva_name}\nDate: {ticket.seva_date}\nTicket: {ticket.ticket_number}",
+    )
+    return ticket
 
 
 @router.post("/admin", response_model=SevaTicketOut)

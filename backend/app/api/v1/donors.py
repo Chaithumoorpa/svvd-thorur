@@ -14,6 +14,7 @@ from app.schemas.donor import (
 )
 from app.services.donation_receipt_service import DonationReceiptService
 from app.services.donor_service import DonationService, DonorService, donor_to_out
+from app.services.email_service import EmailService
 from app.utils.dependencies import AuditContext, get_audit, get_db, require_permission
 
 router = APIRouter(tags=["Donors & Donations"])
@@ -130,7 +131,14 @@ def create_donation(
     donation = service.create(payload, user.id)
     audit.log("CREATE", "donation", donation.id, f"Recorded donation of Rs. {donation.amount} from donor #{donation.donor_id}",
               {"amount": donation.amount, "type": donation.donation_type, "mode": donation.payment_mode})
-    return _donation_out(donation)
+    out = _donation_out(donation)
+    EmailService().notify_admin(
+        f"New donation recorded: Rs. {donation.amount}",
+        f"Donor: {out.donor_name or 'Unknown'}\nAmount: Rs. {donation.amount}\n"
+        f"Type: {donation.donation_type}\nMode: {donation.payment_mode.value}\n"
+        f"Recorded by user #{user.id}",
+    )
+    return out
 
 
 @router.put("/donations/{donation_id}", response_model=DonationOut)
