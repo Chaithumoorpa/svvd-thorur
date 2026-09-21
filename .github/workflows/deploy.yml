@@ -1,0 +1,33 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [development]
+
+# Cancel an in-flight deploy if a newer push lands before it finishes, so we
+# never run two deploys concurrently against the same instance.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure deploy key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "ubuntu@${{ secrets.EC2_HOST }}" \
+            "deploy triggered by GitHub Actions"
+        # The command above is ignored server-side: this key's
+        # authorized_keys entry forces deploy/aws/deploy.sh regardless of
+        # what's requested, so a leaked key can only trigger a redeploy of
+        # the current development branch, nothing else.

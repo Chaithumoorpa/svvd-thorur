@@ -306,3 +306,62 @@ for 12 months, then pennies/month at this data size).
 
 Set up an S3 lifecycle rule or `aws s3 sync` in the same cron job if you
 want it off-instance too.
+
+## CI/CD: auto-deploy on push to `development`
+
+`.github/workflows/deploy.yml` SSHes into the instance on every push to
+`development` and runs `deploy/aws/deploy.sh` (pull, rebuild, restart). It
+uses a **dedicated deploy-only key**, not your personal `svvd-key-pair.pem` -
+restricted server-side to only ever run that one script, so a leaked key
+can trigger a redeploy of the current branch and nothing else.
+
+### 1. Generate the deploy key and install it (CloudShell)
+
+```bash
+ssh-keygen -t ed25519 -f ~/gha-deploy-key -N "" -C "github-actions-deploy"
+
+# Install the forced-command restriction: whatever GitHub Actions asks this
+# key to run, the server always runs deploy.sh instead.
+PUBKEY=$(cat ~/gha-deploy-key.pub)
+ssh -i ~/svvd-key-pair.pem ubuntu@<elastic-ip> \
+  "echo 'command=\"/home/ubuntu/svvd-thorur/deploy/aws/deploy.sh\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding $PUBKEY' >> ~/.ssh/authorized_keys"
+
+echo "=== copy everything between the lines below into the EC2_SSH_KEY secret ==="
+cat ~/gha-deploy-key
+echo "=== end ==="
+```
+
+### 2. Add GitHub repository secrets
+
+Repo → **Settings → Secrets and variables → Actions → New repository
+secret**:
+
+| Name | Value |
+|---|---|
+| `EC2_SSH_KEY` | the private key printed above (the whole thing, including the `-----BEGIN/END-----` lines) |
+| `EC2_HOST` | the Elastic IP |
+
+### 3. Open SSH to GitHub's runners
+
+GitHub-hosted runners don't have a fixed IP range narrow enough to
+practically allowlist (their published range changes and has dozens of
+entries, which eats into the security group's rule quota). Since the deploy
+key is the actual access control here - not the source IP - open port 22
+generally:
+
+```bash
+aws ec2 authorize-security-group-ingress --group-id sg-08eefdecc1bcfdb78 \
+  --protocol tcp --port 22 --cidr 0.0.0.0/0 --region ap-south-1
+```
+
+This doesn't weaken security meaningfully: cloud Ubuntu images disable SSH
+password auth by default, so an open port without a matching private key is
+just noise in the logs, not a way in. If you'd rather avoid this entirely,
+the alternative is AWS Systems Manager Run Command (no open port needed at
+all, but requires an IAM OIDC trust setup for GitHub Actions) - ask if you
+want that instead.
+
+### Verifying it works
+
+Push any commit to `development` and check the Actions tab on GitHub for
+the "Deploy to production" run, or just watch for the site to update.
