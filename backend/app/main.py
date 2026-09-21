@@ -1,8 +1,9 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 
 # Configure logging before anything else
 from app.core.logging_config import setup_logging
@@ -100,6 +101,17 @@ else:
 
 # Include API router
 app.include_router(api_router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # Starlette's own default 500 handler returns this exact plain-text body
+    # but doesn't reliably surface a traceback in this deployment's logs
+    # (uvicorn's --log-level flag interacts oddly with our own logging
+    # config) - log explicitly through our configured logger so a real bug
+    # doesn't look identical to "nothing happened" in `docker compose logs`.
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}", exc_info=exc)
+    return PlainTextResponse("Internal Server Error", status_code=500)
 
 
 @app.get("/health")
