@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ImageIcon, Pencil, Plus, Trash2 } from 'lucide-react';
+import { isAxiosError } from 'axios';
+import { ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import AdminPage, { StatusPill } from '@/components/admin/AdminPage';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import Field from '@/components/ui/Field';
@@ -11,7 +12,7 @@ import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/St
 import { btnDanger, btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
-import { createGallery, deleteGallery, listAllGallery, updateGallery } from '@/lib/api';
+import { createGallery, deleteGallery, listAllGallery, updateGallery, uploadGalleryPhoto } from '@/lib/api';
 import { emptyToNull } from '@/lib/format';
 import type { GalleryItem } from '@/lib/types';
 
@@ -38,6 +39,8 @@ export default function GalleryAdmin() {
   const action = useAction();
   const [editing, setEditing] = useState<{ id: number | null; form: FormState } | null>(null);
   const [toDelete, setToDelete] = useState<GalleryItem | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const openEdit = (g: GalleryItem) =>
     setEditing({
@@ -79,6 +82,26 @@ export default function GalleryAdmin() {
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setEditing((cur) => (cur ? { ...cur, form: { ...cur.form, [key]: value } } : cur));
 
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const publicUrl = await uploadGalleryPhoto(file);
+      set('image_url', publicUrl);
+    } catch (err) {
+      setUploadError(
+        isAxiosError(err) && err.response?.status === 503
+          ? 'Photo uploads are not set up yet. Paste an image link instead, or ask an admin to configure S3.'
+          : 'Upload failed. Try a smaller image, or paste an image link instead.',
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <AdminPage
       title="Gallery"
@@ -97,7 +120,7 @@ export default function GalleryAdmin() {
       ) : list.error ? (
         <ErrorBlock message={list.error} onRetry={list.reload} />
       ) : !list.data?.items.length ? (
-        <EmptyBlock icon={<ImageIcon className="h-10 w-10" />} title="No photos yet" hint="Add a photo using its web address (link)." />
+        <EmptyBlock icon={<ImageIcon className="h-10 w-10" />} title="No photos yet" hint="Upload a photo or add one using its web address (link)." />
       ) : (
         <>
           <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
@@ -130,14 +153,34 @@ export default function GalleryAdmin() {
       )}
 
       {editing && (
-        <Modal title={editing.id === null ? 'Add photo' : 'Edit photo'} onClose={() => { setEditing(null); action.clear(); }}>
+        <Modal title={editing.id === null ? 'Add photo' : 'Edit photo'} onClose={() => { setEditing(null); setUploadError(null); action.clear(); }}>
           <form onSubmit={save} className="space-y-4">
             {action.error && <Notice kind="error">{action.error}</Notice>}
             <Field label="Title" required>
               <input className={inputCls} maxLength={200} value={editing.form.title} onChange={(e) => set('title', e.target.value)} />
             </Field>
-            <Field label="Image link" required hint="A web address starting with https:// or a path like /images/photo.jpg">
-              <input className={inputCls} inputMode="url" value={editing.form.image_url} onChange={(e) => set('image_url', e.target.value)} />
+            <Field label="Photo" required hint="Upload an image, or paste a web address to one already hosted elsewhere.">
+              <div className="flex items-center gap-2">
+                <label className={`${btnGhost} cursor-pointer`}>
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                  {uploading ? 'Uploading…' : 'Upload photo'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    disabled={uploading}
+                    onChange={handleFileSelect}
+                  />
+                </label>
+              </div>
+              {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
+              <input
+                className={`${inputCls} mt-2`}
+                inputMode="url"
+                placeholder="https://…"
+                value={editing.form.image_url}
+                onChange={(e) => set('image_url', e.target.value)}
+              />
             </Field>
             {editing.form.image_url && /^(https?:\/\/|\/)/.test(editing.form.image_url) && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -161,8 +204,8 @@ export default function GalleryAdmin() {
               Visible on the website
             </label>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" className={btnGhost} onClick={() => { setEditing(null); action.clear(); }}>Cancel</button>
-              <button type="submit" className={btnPrimary} disabled={action.busy || !editing.form.title.trim() || !editing.form.image_url.trim()}>
+              <button type="button" className={btnGhost} onClick={() => { setEditing(null); setUploadError(null); action.clear(); }}>Cancel</button>
+              <button type="submit" className={btnPrimary} disabled={action.busy || uploading || !editing.form.title.trim() || !editing.form.image_url.trim()}>
                 {action.busy ? 'Saving…' : 'Save'}
               </button>
             </div>

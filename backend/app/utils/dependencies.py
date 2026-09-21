@@ -26,6 +26,7 @@ from app.services.gallery_service import GalleryService
 from app.services.member_service import MemberService
 from app.services.pooja_service import PoojaService
 from app.services.seva_ticket_service import SevaTicketService
+from app.services.storage_service import StorageService
 
 security = HTTPBearer(auto_error=False)
 logger = logging.getLogger(__name__)
@@ -173,6 +174,10 @@ def get_gallery_repository(db: Session = Depends(get_db)) -> GalleryRepository:
 
 def get_gallery_service(db: Session = Depends(get_db)) -> GalleryService:
     return GalleryService(GalleryRepository(db))
+
+
+def get_storage_service() -> StorageService:
+    return StorageService()
 
 
 def get_seva_ticket_repository(db: Session = Depends(get_db)) -> SevaTicketRepository:
