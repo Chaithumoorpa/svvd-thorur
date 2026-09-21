@@ -16,6 +16,7 @@ from app.repositories.seva_ticket_repo import SevaTicketRepository
 from app.repositories.pooja_repo import PoojaRepository
 from app.schemas.seva_ticket import SevaBookingPublic, SevaTicketCreate, SevaTicketOut, SevaTicketFilter, TicketStatus, PaymentStatus, TicketSource
 from app.models.seva_ticket import SevaTicket, TicketSource as ModelTicketSource
+from app.models.finance import IncomeSourceType, IncomeTransaction, PaymentMode
 
 
 class SevaTicketService:
@@ -94,7 +95,7 @@ class SevaTicketService:
         if not pooja:
             raise HTTPException(status_code=400, detail="Invalid Seva selected")
 
-        return self._create_with_unique_number({
+        ticket = self._create_with_unique_number({
             "seva_id": pooja.id,
             "seva_name": data.seva_name or pooja.name,
             "devotee_name": data.devotee_name,
@@ -107,6 +108,21 @@ class SevaTicketService:
             "source": ModelTicketSource.COUNTER,
             "created_by_admin_id": admin_user.id,
         })
+
+        if ticket.payment_status == PaymentStatus.PAID and ticket.amount and ticket.amount > 0:
+            # Counter tickets are collected in cash today; PaymentMode will need
+            # to come from the ticket itself once online payment (Razorpay) lands.
+            self.ticket_repo.db.add(IncomeTransaction(
+                source_type=IncomeSourceType.SEVA,
+                reference_id=f"seva_ticket:{ticket.id}",
+                amount=ticket.amount,
+                payment_mode=PaymentMode.CASH,
+                received_by=admin_user.id,
+                notes=f"Seva ticket {ticket.ticket_number} - {ticket.seva_name} ({ticket.devotee_name})",
+            ))
+            self.ticket_repo.db.commit()
+
+        return ticket
 
     def query_tickets(self, filters: SevaTicketFilter):
         return self.ticket_repo.query_tickets(

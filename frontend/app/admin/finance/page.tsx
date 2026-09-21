@@ -17,7 +17,9 @@ import type { ExpenseCategory, IncomeSource, PaymentMode } from '@/lib/types';
 
 const PAGE_SIZE = 25;
 const MODES: PaymentMode[] = ['CASH', 'UPI', 'BANK', 'CHEQUE'];
-const SOURCES: IncomeSource[] = ['HUNDI', 'SEVA', 'DONATION', 'MANUAL'];
+// SEVA/DONATION income is recorded automatically from ticket bookings and
+// donation entries - manual entry only covers what has no other source.
+const SOURCES: IncomeSource[] = ['HUNDI', 'MANUAL'];
 const CATEGORIES: ExpenseCategory[] = ['SALARY', 'MATERIAL', 'MAINTENANCE', 'FESTIVAL', 'OTHER'];
 const label = (v: string) => v.charAt(0) + v.slice(1).toLowerCase();
 
@@ -84,7 +86,7 @@ export default function FinanceAdmin() {
   return (
     <AdminPage
       title="Finance"
-      description="Income, expenses and the temple ledger. Donations recorded under Donations appear here automatically."
+      description="Income, expenses and the temple ledger. Donations and paid seva tickets appear here automatically."
       actions={
         canWrite && (
           <>

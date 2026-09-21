@@ -41,13 +41,65 @@ def test_donation_posts_income_in_same_transaction(client, admin, db):
     summary = client.get("/api/v1/finance/summary", headers=headers).json()
     assert summary["total_income"] == 1500.5 and summary["income_by_source"] == {"DONATION": 1500.5}
 
-    # opt out of the ledger posting
+    # every donation posts to the ledger automatically - no opt-out
     client.post("/api/v1/donations/", headers=headers, json={
-        "donor_id": donor["id"], "amount": 10, "record_income": False})
-    assert db.query(IncomeTransaction).count() == 1
+        "donor_id": donor["id"], "amount": 10})
+    assert db.query(IncomeTransaction).count() == 2
 
     row = client.get("/api/v1/donors/", headers=headers).json()[0]
     assert row["donation_count"] == 2 and row["total_donated"] == 1510.5
+
+
+def test_donation_amount_edit_keeps_ledger_in_sync(client, admin, db):
+    _, headers = admin
+    donor = _donor(client, headers)
+    created = client.post("/api/v1/donations/", headers=headers, json={
+        "donor_id": donor["id"], "amount": 100, "payment_mode": "CASH"}).json()
+
+    client.put(f"/api/v1/donations/{created['id']}", headers=headers,
+               json={"amount": 250, "payment_mode": "UPI"})
+
+    income = db.query(IncomeTransaction).filter(
+        IncomeTransaction.reference_id == f"donation:{created['id']}").one()
+    assert income.amount == Decimal("250") and income.payment_mode.value == "UPI"
+
+
+def test_manual_income_rejects_seva_and_donation_sources(client, admin):
+    _, headers = admin
+    for source in ("SEVA", "DONATION"):
+        r = client.post("/api/v1/finance/income", headers=headers,
+                        json={"source_type": source, "amount": 50, "payment_mode": "CASH"})
+        assert r.status_code == 422, source
+
+    for source in ("MANUAL", "HUNDI"):
+        r = client.post("/api/v1/finance/income", headers=headers,
+                        json={"source_type": source, "amount": 50, "payment_mode": "CASH"})
+        assert r.status_code == 201, source
+
+
+def test_paid_counter_ticket_posts_income_free_ticket_does_not(client, admin, db):
+    _, headers = admin
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    pooja = client.post("/api/v1/poojas/", headers=headers,
+                        json={"name": "Counter Archana", "is_paid": True, "suggested_amount": 50}).json()
+
+    free = client.post("/api/v1/seva-tickets/admin", headers=headers, json={
+        "seva_id": pooja["id"], "devotee_name": "Ravi", "mobile_number": "9876543210",
+        "seva_date": tomorrow, "payment_status": "FREE", "amount": 0})
+    assert free.status_code == 200, free.text
+    assert db.query(IncomeTransaction).count() == 0
+
+    paid = client.post("/api/v1/seva-tickets/admin", headers=headers, json={
+        "seva_id": pooja["id"], "devotee_name": "Geeta", "mobile_number": "9876543211",
+        "seva_date": tomorrow, "payment_status": "PAID", "amount": 101})
+    assert paid.status_code == 200, paid.text
+
+    income = db.query(IncomeTransaction).one()
+    assert income.source_type.value == "SEVA" and income.amount == Decimal("101")
+    assert income.reference_id == f"seva_ticket:{paid.json()['id']}"
+
+    summary = client.get("/api/v1/finance/summary", headers=headers).json()
+    assert summary["income_by_source"] == {"SEVA": 101.0}
 
 
 def test_donation_validation(client, admin):

@@ -10,11 +10,25 @@ from app.schemas.common import MoneyIn, MoneyOut, blank_to_none
 
 
 class IncomeTransactionCreate(BaseModel):
-    source_type: IncomeSourceType
+    # SEVA and DONATION are recorded automatically (seva ticket booking /
+    # donation entry) - allowing them here would let a manual entry pose as
+    # one, double-counting or bypassing the actual ticket/donation record.
+    # HUNDI has no other originating record, so it stays manual-only.
+    source_type: Annotated[IncomeSourceType, Field()]
     amount: MoneyIn
     payment_mode: PaymentMode
     reference_id: Optional[str] = Field(default=None, max_length=255)
     notes: Optional[str] = Field(default=None, max_length=2000)
+
+    @field_validator("source_type")
+    @classmethod
+    def _manual_source_only(cls, v: IncomeSourceType) -> IncomeSourceType:
+        if v not in (IncomeSourceType.MANUAL, IncomeSourceType.HUNDI):
+            raise ValueError(
+                "Only MANUAL or HUNDI income can be entered directly - "
+                "SEVA and DONATION income is recorded automatically"
+            )
+        return v
 
     @field_validator("reference_id", "notes", mode="before")
     @classmethod

@@ -99,19 +99,25 @@ class DonationService:
         self.db.add(donation)
         self.db.flush()  # need the id for the ledger reference
 
-        if data.record_income:
-            # Same transaction: a gift and its ledger entry are stored together or not at all.
-            self.db.add(IncomeTransaction(
-                source_type=IncomeSourceType.DONATION,
-                reference_id=f"donation:{donation.id}",
-                amount=data.amount,
-                payment_mode=data.payment_mode,
-                received_by=user_id,
-                received_at=donation.donated_on,
-                notes=f"Donation from {donor.name}",
-            ))
+        # Same transaction: a gift and its ledger entry are stored together or not at all.
+        self.db.add(IncomeTransaction(
+            source_type=IncomeSourceType.DONATION,
+            reference_id=f"donation:{donation.id}",
+            amount=data.amount,
+            payment_mode=data.payment_mode,
+            received_by=user_id,
+            received_at=donation.donated_on,
+            notes=f"Donation from {donor.name}",
+        ))
         self.db.commit()
         return self.get(donation.id)
+
+    def _linked_income(self, donation_id: int) -> Optional[IncomeTransaction]:
+        return (
+            self.db.query(IncomeTransaction)
+            .filter(IncomeTransaction.reference_id == f"donation:{donation_id}")
+            .first()
+        )
 
     def update(self, donation_id: int, data: DonationUpdate) -> Donation:
         donation = self.get(donation_id)
@@ -125,6 +131,18 @@ class DonationService:
             if value is None and key in ("amount", "donation_type", "donated_on", "payment_mode"):
                 continue
             setattr(donation, key, value.value if hasattr(value, "value") and key == "donation_type" else value)
+
+        # Keep the auto-created ledger entry in sync - otherwise an edited
+        # amount/payment mode silently goes stale in the finance tab.
+        income = self._linked_income(donation_id)
+        if income:
+            if "amount" in fields and fields["amount"] is not None:
+                income.amount = donation.amount
+            if "payment_mode" in fields and fields["payment_mode"] is not None:
+                income.payment_mode = donation.payment_mode
+            if "donated_on" in fields and fields["donated_on"] is not None:
+                income.received_at = donation.donated_on
+
         self.db.commit()
         return self.get(donation_id)
 

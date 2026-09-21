@@ -40,7 +40,7 @@ def _donation_out(donation) -> DonationOut:
 
 
 # ------------------------------------------------------------------------- donors
-@router.get("/donors/", response_model=List[DonorOut])
+@router.get("/donors", response_model=List[DonorOut])
 def list_donors(
     response: Response,
     search: Optional[str] = Query(None, max_length=100),
@@ -64,7 +64,7 @@ def get_donor(
     return donor_to_out(service.get_donor_row(donor_id), has_permission(user.roles, Permission.DONORS_WRITE))
 
 
-@router.post("/donors/", response_model=DonorOut, status_code=201)
+@router.post("/donors", response_model=DonorOut, status_code=201)
 def create_donor(
     payload: DonorCreate,
     service: DonorService = Depends(get_donor_service),
@@ -104,7 +104,7 @@ def delete_donor(
 
 
 # ---------------------------------------------------------------------- donations
-@router.get("/donations/", response_model=List[DonationOut])
+@router.get("/donations", response_model=List[DonationOut])
 def list_donations(
     response: Response,
     donor_id: Optional[int] = None,
@@ -121,7 +121,7 @@ def list_donations(
     return [_donation_out(d) for d in items]
 
 
-@router.post("/donations/", response_model=DonationOut, status_code=201)
+@router.post("/donations", response_model=DonationOut, status_code=201)
 def create_donation(
     payload: DonationCreate,
     service: DonationService = Depends(get_donation_service),

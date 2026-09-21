@@ -227,7 +227,6 @@ export interface DonationInput {
   purpose?: string | null;
   donated_on?: string | null;
   payment_mode?: PaymentMode;
-  record_income?: boolean;
 }
 
 export type ContactStatus = 'PENDING' | 'IN_PROGRESS' | 'RESOLVED' | 'REJECTED';

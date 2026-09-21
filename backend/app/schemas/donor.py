@@ -125,9 +125,6 @@ class DonationCreate(BaseModel):
     purpose: Optional[str] = Field(default=None, max_length=1000)
     donated_on: Optional[datetime] = None
     payment_mode: PaymentMode = PaymentMode.CASH
-    record_income: bool = Field(
-        default=True, description="Also post this gift to the finance ledger as DONATION income"
-    )
 
     @field_validator("purpose", mode="before")
     @classmethod

@@ -84,7 +84,7 @@ function DonationsInner() {
   const action = useAction();
   const [creating, setCreating] = useState(false);
   const [donor, setDonor] = useState<Donor | null>(null);
-  const [form, setForm] = useState({ amount: '', donation_type: 'general' as DonationType, payment_mode: 'CASH' as PaymentMode, purpose: '', donated_on: '', record_income: true });
+  const [form, setForm] = useState({ amount: '', donation_type: 'general' as DonationType, payment_mode: 'CASH' as PaymentMode, purpose: '', donated_on: '' });
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -98,14 +98,13 @@ function DonationsInner() {
           payment_mode: form.payment_mode,
           purpose: emptyToNull(form.purpose),
           donated_on: form.donated_on ? `${form.donated_on}T12:00:00` : null,
-          record_income: form.record_income,
         }),
       'Donation recorded.',
     );
     if (ok) {
       setCreating(false);
       setDonor(null);
-      setForm({ amount: '', donation_type: 'general', payment_mode: 'CASH', purpose: '', donated_on: '', record_income: true });
+      setForm({ amount: '', donation_type: 'general', payment_mode: 'CASH', purpose: '', donated_on: '' });
       list.reload();
     }
   }
@@ -206,10 +205,7 @@ function DonationsInner() {
               </Field>
             </div>
             <Field label="Note"><input className={inputCls} maxLength={1000} value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} /></Field>
-            <label className="flex items-start gap-2 text-sm text-gray-700">
-              <input type="checkbox" className="mt-1" checked={form.record_income} onChange={(e) => setForm({ ...form, record_income: e.target.checked })} />
-              <span>Add to the finance ledger as donation income<span className="block text-xs text-gray-500">Untick only if this gift was already entered under Finance.</span></span>
-            </label>
+            <p className="text-xs text-gray-500">This will also be added to the finance ledger automatically.</p>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className={btnGhost} onClick={() => { setCreating(false); action.clear(); }}>Cancel</button>
               <button type="submit" className={btnPrimary} disabled={action.busy || !donor || !(Number(form.amount) > 0)}>
