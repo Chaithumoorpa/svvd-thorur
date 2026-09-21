@@ -34,6 +34,8 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       ENV: production
       TZ: Asia/Kolkata
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
     ports:
       # Loopback only: put Nginx/Caddy in front. Publishing this port publicly
       # would let clients bypass the proxy and spoof X-Forwarded-For.

@@ -35,6 +35,8 @@ services:
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://svvdthorur.org}
       ALLOW_PUBLIC_REGISTRATION: ${ALLOW_PUBLIC_REGISTRATION:-false}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
     # No volume mounts in production - use built image
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --log-level warning  # rate limits are per worker; keep this small
     restart: always
