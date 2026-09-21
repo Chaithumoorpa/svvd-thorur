@@ -78,6 +78,13 @@ class Settings(BaseSettings):
     SES_FROM_EMAIL: str | None = None
     ADMIN_NOTIFICATION_EMAIL: str | None = None
 
+    # Razorpay (online payments). Scaffolding only - not yet wired into the
+    # donation/ticket booking flows. Unset = the /payments/razorpay endpoints
+    # return 503, same opt-in pattern as S3/SES above. Test-mode keys
+    # (rzp_test_...) work fine here for development before going live.
+    RAZORPAY_KEY_ID: str | None = None
+    RAZORPAY_KEY_SECRET: str | None = None
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
