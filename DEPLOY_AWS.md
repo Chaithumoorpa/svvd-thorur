@@ -365,3 +365,29 @@ want that instead.
 
 Push any commit to `development` and check the Actions tab on GitHub for
 the "Deploy to production" run, or just watch for the site to update.
+
+## Razorpay (online payments) - not yet activated
+
+`feature/razorpay-payments` branch has scaffolding for online payments:
+`POST /api/v1/payments/razorpay/orders` (create an order) and
+`POST /api/v1/payments/razorpay/verify` (verify a completed payment's
+signature) - see `backend/app/services/razorpay_service.py` for the intended
+full flow. Both return 503 until configured, same pattern as S3/SES. Not yet
+called from the donation or seva ticket booking UI - that wiring (create the
+actual donation/ticket record + its finance ledger entry only after
+`verified: true`) is still to be done once you're ready to go live.
+
+To activate once you have real Razorpay API keys (test-mode `rzp_test_...`
+keys work fine to develop against first):
+
+```bash
+# on the instance, in svvd-thorur/.env
+echo "RAZORPAY_KEY_ID=rzp_live_..." >> .env
+echo "RAZORPAY_KEY_SECRET=..." >> .env
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d backend
+```
+
+(Also add `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` to both compose files'
+backend `environment:` blocks first - same step every other secret here has
+needed, and easy to forget: see the ALLOW_PUBLIC_REGISTRATION/S3/SES history
+in this repo's commits for what happens when it's skipped.)

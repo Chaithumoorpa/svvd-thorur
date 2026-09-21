@@ -45,7 +45,8 @@ def client(db):
     app.dependency_overrides[get_db] = override_get_db
     # limiters are process-global; reset so tests do not affect each other
     for limiter in (rate_limiter.login_limiter, rate_limiter.register_limiter,
-                    rate_limiter.contact_limiter, rate_limiter.booking_limiter):
+                    rate_limiter.contact_limiter, rate_limiter.booking_limiter,
+                    rate_limiter.payment_order_limiter):
         limiter.requests.clear()
     # No `with`: skips the lifespan (which validates Alembic against a real database).
     yield TestClient(app)

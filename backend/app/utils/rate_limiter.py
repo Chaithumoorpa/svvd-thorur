@@ -64,6 +64,7 @@ login_user_limiter = SimpleRateLimiter(max_requests=10, window_seconds=15 * 60)
 contact_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60 * 60)
 booking_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60 * 60)
 visit_limiter = SimpleRateLimiter(max_requests=30, window_seconds=60)
+payment_order_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60 * 60)
 
 
 def get_client_ip(request: Request, trusted_hops: Optional[int] = None) -> str:
