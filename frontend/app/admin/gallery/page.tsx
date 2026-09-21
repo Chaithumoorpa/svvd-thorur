@@ -159,28 +159,31 @@ export default function GalleryAdmin() {
             <Field label="Title" required>
               <input className={inputCls} maxLength={200} value={editing.form.title} onChange={(e) => set('title', e.target.value)} />
             </Field>
-            <Field label="Photo" required hint="Upload an image, or paste a web address to one already hosted elsewhere.">
-              <div className="flex items-center gap-2">
-                <label className={`${btnGhost} cursor-pointer`}>
-                  <Upload className="h-4 w-4" aria-hidden="true" />
-                  {uploading ? 'Uploading…' : 'Upload photo'}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    className="hidden"
-                    disabled={uploading}
-                    onChange={handleFileSelect}
-                  />
-                </label>
+            <Field label="Photo" hint="Upload an image, or paste a web address to one already hosted elsewhere.">
+              <div>
+                <div className="flex items-center gap-2">
+                  <label className={`${btnGhost} cursor-pointer`}>
+                    <Upload className="h-4 w-4" aria-hidden="true" />
+                    {uploading ? 'Uploading…' : 'Upload photo'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={handleFileSelect}
+                    />
+                  </label>
+                </div>
+                {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
+                <input
+                  className={`${inputCls} mt-2`}
+                  inputMode="url"
+                  required
+                  placeholder="https://…"
+                  value={editing.form.image_url}
+                  onChange={(e) => set('image_url', e.target.value)}
+                />
               </div>
-              {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
-              <input
-                className={`${inputCls} mt-2`}
-                inputMode="url"
-                placeholder="https://…"
-                value={editing.form.image_url}
-                onChange={(e) => set('image_url', e.target.value)}
-              />
             </Field>
             {editing.form.image_url && /^(https?:\/\/|\/)/.test(editing.form.image_url) && (
               // eslint-disable-next-line @next/next/no-img-element
