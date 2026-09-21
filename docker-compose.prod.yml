@@ -52,6 +52,9 @@ services:
       - NEXT_PUBLIC_ENV=production
       - NEXT_PUBLIC_ENABLE_DEBUG_BANNER=false
       - NEXT_PUBLIC_ENABLE_API_LOGGING=false
-    # No volume mounts in production - use built image
-    command: npm start
+    # No volume mounts in production - use built image.
+    # No command override here: the Dockerfile builds a standalone Next.js
+    # output (next.config.mjs: output: 'standalone') whose runner stage has
+    # no node_modules/next CLI at all - it only runs via the Dockerfile's own
+    # CMD ["node", "server.js"]. `npm start` (-> `next start`) fails here.
     restart: always
