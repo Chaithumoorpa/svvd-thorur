@@ -22,7 +22,7 @@ def _cache(response: Response, seconds: int = 60) -> None:
 
 
 # ---- public ---------------------------------------------------------------------------
-@router.get("/", response_model=TempleOut)
+@router.get("", response_model=TempleOut)
 def get_temple(response: Response, service: TempleService = Depends(get_temple_service)):
     """Public temple profile."""
     _cache(response)
@@ -37,7 +37,7 @@ def list_timings(response: Response, service: TempleService = Depends(get_temple
 
 
 # ---- admin ----------------------------------------------------------------------------
-@router.put("/", response_model=TempleOut)
+@router.put("", response_model=TempleOut)
 def update_temple(
     payload: TempleUpdate,
     service: TempleService = Depends(get_temple_service),

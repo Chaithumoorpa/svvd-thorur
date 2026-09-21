@@ -14,7 +14,7 @@ router = APIRouter(prefix="/festivals", tags=["Festivals"])
 _can_write = require_permission(Permission.CONTENT_WRITE)
 
 
-@router.get("/", response_model=List[FestivalOut])
+@router.get("", response_model=List[FestivalOut])
 def list_festivals(
     upcoming: bool = Query(False, description="Only festivals that have not ended yet"),
     limit: Optional[int] = Query(None, ge=1, le=100),
@@ -40,7 +40,7 @@ def get_festival(festival_id: int, service: FestivalService = Depends(get_festiv
     return service.get_festival_details(festival_id)
 
 
-@router.post("/", response_model=FestivalOut, status_code=201)
+@router.post("", response_model=FestivalOut, status_code=201)
 def create_festival(
     payload: FestivalCreate,
     service: FestivalService = Depends(get_festival_service),

@@ -25,7 +25,7 @@ router = APIRouter(prefix="/seva-tickets", tags=["Seva Tickets"])
 _manage = require_permission(Permission.TICKETS_MANAGE)
 
 
-@router.post("/", response_model=SevaTicketOut)
+@router.post("", response_model=SevaTicketOut)
 def book_seva_ticket(
     payload: SevaBookingPublic,
     request: Request,
@@ -54,7 +54,7 @@ def create_admin_seva_ticket(
     return ticket
 
 
-@router.get("/", response_model=List[SevaTicketOut])
+@router.get("", response_model=List[SevaTicketOut])
 def list_seva_tickets(
     response: Response,
     seva_id: Optional[int] = None,

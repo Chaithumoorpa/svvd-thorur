@@ -51,7 +51,7 @@ class ActivityItem(BaseModel):
 router = APIRouter(prefix="/meta", tags=["Meta"])
 
 
-@router.get("/", response_model=MetaResponse)
+@router.get("", response_model=MetaResponse)
 def get_meta():
     """Service metadata (public, non-sensitive)."""
     return MetaResponse(service="SVVD Temple Backend", version="2.0.0", status="active")

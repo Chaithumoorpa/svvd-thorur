@@ -15,7 +15,7 @@ _can_write = require_permission(Permission.CONTENT_WRITE)
 
 
 # ---- public: only published announcements (active and inside their date window) ----------
-@router.get("/", response_model=List[AnnouncementOut])
+@router.get("", response_model=List[AnnouncementOut])
 def list_announcements(
     limit: Optional[int] = Query(None, ge=1, le=50),
     service: AnnouncementService = Depends(get_announcement_service),
@@ -44,7 +44,7 @@ def get_announcement(
     return service.get_published(announcement_id)
 
 
-@router.post("/", response_model=AnnouncementOut, status_code=201)
+@router.post("", response_model=AnnouncementOut, status_code=201)
 def create_announcement(
     payload: AnnouncementCreate,
     service: AnnouncementService = Depends(get_announcement_service),

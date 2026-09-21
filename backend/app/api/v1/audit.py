@@ -26,7 +26,7 @@ class AuditLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-@router.get("/", response_model=List[AuditLogOut])
+@router.get("", response_model=List[AuditLogOut])
 def list_audit_logs(
     response: Response,
     entity_type: Optional[str] = Query(None, max_length=50),

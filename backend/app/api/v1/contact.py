@@ -16,7 +16,7 @@ router = APIRouter(prefix="/contacts", tags=["Contact Us"])
 _can_manage = require_permission(Permission.MESSAGES_MANAGE)
 
 
-@router.post("/", response_model=ContactPublicAck, status_code=201)
+@router.post("", response_model=ContactPublicAck, status_code=201)
 def submit_contact_message(
     payload: ContactCreate,
     request: Request,
@@ -30,7 +30,7 @@ def submit_contact_message(
     return service.submit_message(payload)
 
 
-@router.get("/", response_model=List[ContactOut])
+@router.get("", response_model=List[ContactOut])
 def list_contact_messages(
     response: Response,
     status: Optional[ContactStatus] = None,

@@ -14,7 +14,7 @@ router = APIRouter(prefix="/poojas", tags=["Poojas"])
 _can_write = require_permission(Permission.CONTENT_WRITE)
 
 
-@router.get("/", response_model=List[PoojaOut])
+@router.get("", response_model=List[PoojaOut])
 def list_poojas(service: PoojaService = Depends(get_pooja_service)):
     """Public list of active poojas / sevas."""
     return service.list_active_poojas()
@@ -37,7 +37,7 @@ def get_pooja(pooja_id: int, service: PoojaService = Depends(get_pooja_service))
     return service.get_pooja(pooja_id)
 
 
-@router.post("/", response_model=PoojaOut, status_code=201)
+@router.post("", response_model=PoojaOut, status_code=201)
 def create_pooja(
     payload: PoojaCreate,
     service: PoojaService = Depends(get_pooja_service),

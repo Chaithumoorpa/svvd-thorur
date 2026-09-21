@@ -15,7 +15,7 @@ _can_read = require_permission(Permission.MEMBERS_READ)
 _can_write = require_permission(Permission.MEMBERS_WRITE)
 
 
-@router.get("/", response_model=List[MemberOut])
+@router.get("", response_model=List[MemberOut])
 def list_members(
     response: Response,
     service: MemberService = Depends(get_member_service),
@@ -37,7 +37,7 @@ def get_member(
     return service.get_member(member_id)
 
 
-@router.post("/", response_model=MemberOut, status_code=201)
+@router.post("", response_model=MemberOut, status_code=201)
 def create_member(
     payload: MemberCreate,
     service: MemberService = Depends(get_member_service),

@@ -34,7 +34,7 @@ def create_upload_url(
     return storage.create_upload(payload.content_type)
 
 
-@router.get("/", response_model=List[GalleryOut])
+@router.get("", response_model=List[GalleryOut])
 def list_gallery(
     response: Response,
     category: Optional[str] = Query(None, max_length=50),
@@ -60,7 +60,7 @@ def list_all_gallery(
     return items
 
 
-@router.post("/", response_model=GalleryOut, status_code=201)
+@router.post("", response_model=GalleryOut, status_code=201)
 def create_gallery_item(
     payload: GalleryCreate,
     service: GalleryService = Depends(get_gallery_service),
