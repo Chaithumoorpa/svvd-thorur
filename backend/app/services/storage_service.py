@@ -27,6 +27,19 @@ class StorageService:
     def enabled(self) -> bool:
         return bool(self.bucket)
 
+    def _client(self):
+        # boto3's default endpoint resolution for S3 points at the legacy
+        # global s3.amazonaws.com host for some regions, which returns a 307
+        # redirect to the real regional endpoint for any bucket outside
+        # us-east-1. A browser doesn't reliably re-send a multipart POST body
+        # through that redirect (works fine for a plain GET/PUT from a
+        # script, which is why this only broke real uploads) - pinning the
+        # regional endpoint here means a presigned URL is correct on the
+        # first request, no redirect involved.
+        return boto3.client(
+            "s3", region_name=self.region, endpoint_url=f"https://s3.{self.region}.amazonaws.com"
+        )
+
     def create_upload(self, content_type: str, key_prefix: str = "gallery") -> dict:
         if not self.enabled:
             raise HTTPException(status_code=503, detail="Photo uploads are not configured")
@@ -41,7 +54,7 @@ class StorageService:
         key = f"{key_prefix}/{uuid.uuid4().hex}.{ext}"
         max_bytes = settings.S3_MAX_UPLOAD_MB * 1024 * 1024
 
-        client = boto3.client("s3", region_name=self.region)
+        client = self._client()
         presigned = client.generate_presigned_post(
             Bucket=self.bucket,
             Key=key,
@@ -70,6 +83,6 @@ class StorageService:
         generated on demand) or direct console/API access."""
         if not self.enabled:
             raise RuntimeError("S3 is not configured (S3_BUCKET_NAME unset)")
-        client = boto3.client("s3", region_name=self.region)
+        client = self._client()
         client.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
         return key
