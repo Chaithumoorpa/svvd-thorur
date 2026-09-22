@@ -210,7 +210,7 @@ class SevaTicketService:
         display_time = ticket.seva_time.strftime("%I:%M %p") if ticket.seva_time else "N/A"
 
         temple = self.ticket_repo.db.query(Temple).first()
-        temple_name = html.escape(temple.name) if temple and temple.name else "Sri Varasiddi Vinayaka Swamy Devasthanam"
+        temple_name = html.escape(temple.name) if temple and temple.name else "Sri Varasiddhi Vinayaka Swamy Devasthanam"
         temple_loc = html.escape(", ".join(
             p for p in [temple.village, temple.district, temple.state] if p
         )) if temple else "Thorur, Andhra Pradesh"
