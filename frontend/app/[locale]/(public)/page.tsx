@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { CalendarDays, Clock, HandHeart, MapPin, Megaphone, Sparkles } from 'lucide-react';
 import DeityCarousel from '@/components/DeityCarousel';
@@ -6,10 +7,14 @@ import SectionHeading from '@/components/public/SectionHeading';
 import { Link } from '@/i18n/navigation';
 import { formatDate, formatTime, formatTimeRange, parseDate } from '@/lib/format';
 import { fetchHome } from '@/lib/server-api';
-import { SITE_URL, templeAddress, templeName } from '@/lib/site';
+import { SITE_URL, localizedAlternates, templeAddress, templeName } from '@/lib/site';
 
 
 const HH_MM = (t: string) => t.slice(0, 5);
+
+export async function generateMetadata(): Promise<Metadata> {
+  return { alternates: await localizedAlternates('/') };
+}
 
 export default async function HomePage() {
   const { temple, timings, announcements, festivals, poojas } = await fetchHome();

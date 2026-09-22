@@ -1,3 +1,5 @@
+import { getLocale } from 'next-intl/server';
+import { routing } from '@/i18n/routing';
 import type { Temple } from './types';
 
 /**
@@ -24,6 +26,25 @@ export function templeLocation(temple: Temple | null): string {
 export function templeAddress(temple: Temple | null): string {
   if (!temple) return '';
   return [temple.address, temple.village, temple.district, temple.state, temple.pincode].filter(Boolean).join(', ');
+}
+
+/**
+ * Canonical + hreflang alternates for a public page at `path` (e.g. '/timings', '/'
+ * for the homepage). Each locale gets a SELF-referencing canonical (its own URL, not
+ * always the English one) plus a full cross-reference to every other locale's version
+ * of the same page - the standard Google-recommended shape for genuinely translated
+ * content, so the language variants read as siblings, not accidental duplicates of
+ * each other. Call from a page's own `generateMetadata` with that page's static path.
+ */
+export async function localizedAlternates(path: string) {
+  const locale = await getLocale();
+  const clean = path === '/' ? '' : path;
+  const urlFor = (loc: string) => `${SITE_URL}${loc === routing.defaultLocale ? '' : `/${loc}`}${clean}`;
+
+  const languages: Record<string, string> = { 'x-default': urlFor(routing.defaultLocale) };
+  for (const loc of routing.locales) languages[loc] = urlFor(loc);
+
+  return { canonical: urlFor(locale), languages };
 }
 
 /** Google Maps only allows embedding its /maps/embed URLs; anything else is shown as a link. */

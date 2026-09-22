@@ -1,5 +1,11 @@
+import type { Metadata } from 'next'
 import { getTranslations } from 'next-intl/server'
 import PageContainer from '@/components/PageContainer'
+import { localizedAlternates } from '@/lib/site'
+
+export async function generateMetadata(): Promise<Metadata> {
+  return { alternates: await localizedAlternates('/legal/privacy-policy') }
+}
 
 export default async function PrivacyPolicyPage() {
   const t = await getTranslations('legal.privacyPolicy')

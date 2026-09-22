@@ -5,10 +5,11 @@ import { PageShell } from '@/components/public/SectionHeading';
 import { formatTimeRange } from '@/lib/format';
 import { fetchPoojas, fetchTimings } from '@/lib/server-api';
 import { formatTime } from '@/lib/format';
+import { localizedAlternates } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.timings');
-  return { title: t('title'), description: t('description') };
+  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/timings') };
 }
 
 export default async function TimingsPage() {
