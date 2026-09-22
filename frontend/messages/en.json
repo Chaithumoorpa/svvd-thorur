@@ -1,0 +1,260 @@
+{
+  "common": {
+    "skipToContent": "Skip to content",
+    "viewAll": "View all",
+    "getDirections": "Get directions →",
+    "readMore": "Read more"
+  },
+  "nav": {
+    "home": "Home",
+    "timings": "Timings",
+    "poojas": "Poojas & Sevas",
+    "festivals": "Festivals",
+    "announcements": "Announcements",
+    "gallery": "Gallery",
+    "about": "About",
+    "contact": "Contact",
+    "donations": "Donations",
+    "committee": "Temple Committee",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "mainNav": "Main",
+    "legalNav": "Legal",
+    "staffLogin": "Staff login"
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "te": "తెలుగు",
+    "ta": "தமிழ்",
+    "kn": "ಕನ್ನಡ",
+    "hi": "हिन्दी"
+  },
+  "header": {
+    "omPrayer": "ఓం గం గణపతయే నమః"
+  },
+  "footer": {
+    "darshanTimings": "Darshan Timings",
+    "timingsSoon": "Timings will be published soon.",
+    "explore": "Explore",
+    "visitAndContact": "Visit & Contact",
+    "mapTitle": "Map showing the location of {name}",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "refunds": "Refunds",
+    "staffLogin": "Staff login",
+    "rightsReserved": "All rights reserved."
+  },
+  "home": {
+    "darshanHeading": "Darshan Timings",
+    "timingsSoon": "Timings will be announced soon.",
+    "fullSchedule": "Full schedule →",
+    "announcementsTitle": "Announcements",
+    "announcementsSubtitle": "The latest news from the temple",
+    "latestAnnouncements": "Latest announcements",
+    "noAnnouncements": "No announcements at the moment.",
+    "upcomingFestivalsTitle": "Upcoming Festivals",
+    "upcomingFestivalsSubtitle": "Join us in the celebrations",
+    "upcomingFestivalsSr": "Upcoming festivals",
+    "noFestivals": "No upcoming festivals right now. Please check back soon.",
+    "festivalDateTbd": "TBD",
+    "ritualsHeading": "Daily Rituals & Sevas",
+    "ritualsSubtitle": "Offer your prayers through the temple's daily poojas and special sevas.",
+    "ritualsSoon": "Rituals will be listed soon.",
+    "anytime": "Anytime",
+    "viewAllPoojas": "View all poojas & sevas",
+    "waysToParticipate": "Ways to participate",
+    "bookSevaTitle": "Book a Seva",
+    "bookSevaText": "Reserve a free seva for you and your family.",
+    "supportTempleTitle": "Support the Temple",
+    "supportTempleText": "Contribute to annadanam, festivals and upkeep.",
+    "planVisitTitle": "Plan Your Visit",
+    "planVisitText": "Timings, directions and how to reach us."
+  },
+  "timings": {
+    "title": "Temple Timings",
+    "subtitle": "Darshan hours and the daily schedule of poojas",
+    "empty": "Timings will be published soon.",
+    "dailyScheduleHeading": "Daily Pooja Schedule",
+    "note": "Timings may change on festival days, eclipses and special occasions. Please check the announcements page for updates."
+  },
+  "poojas": {
+    "title": "Poojas & Sevas",
+    "subtitle": "Offer your prayers through the temple's rituals",
+    "filterLabel": "Filter by type",
+    "all": "All",
+    "groupDaily": "Daily Poojas",
+    "groupSpecial": "Special Sevas",
+    "groupFestival": "Festival Sevas",
+    "other": "Other",
+    "free": "Free",
+    "bookAtCounter": "Please book this seva at the temple counter.",
+    "empty": "Poojas and sevas will be listed soon."
+  },
+  "festivals": {
+    "title": "Festivals & Events",
+    "subtitle": "Join us in the divine celebrations throughout the year",
+    "upcomingHeading": "Upcoming",
+    "noUpcoming": "No upcoming festivals are scheduled right now.",
+    "pastHeading": "Recently concluded",
+    "dateTba": "Date TBA"
+  },
+  "announcements": {
+    "title": "Announcements",
+    "subtitle": "Stay updated with the latest news and happenings at the temple",
+    "notice": "Notice",
+    "validUntil": "Valid until {date}",
+    "emptyTitle": "No announcements right now",
+    "emptyText": "Please check back later for updates."
+  },
+  "committee": {
+    "title": "Temple Committee",
+    "subtitle": "The trustees and office bearers who serve the temple",
+    "empty": "The committee will be listed here soon."
+  },
+  "contact": {
+    "title": "Contact Us",
+    "subtitle": "We are happy to help with visits, sevas and donations",
+    "address": "Address",
+    "phone": "Phone",
+    "whatsapp": "WhatsApp",
+    "email": "Email",
+    "empty": "Contact details will be published soon. Please use the form to reach us.",
+    "mapTitle": "Temple location map",
+    "sendMessage": "Send us a message"
+  },
+  "gallery": {
+    "title": "Temple Gallery",
+    "subtitle": "Glimpses of the sacred spaces, festivals and rituals"
+  },
+  "about": {
+    "history": {
+      "title": "History of the Temple",
+      "presidingDeity": "Presiding deity:",
+      "empty": "The temple's history will be shared here soon."
+    }
+  },
+  "information": {
+    "title": "General Information",
+    "dressCode": {
+      "heading": "Dress Code",
+      "intro": "Devotees are requested to wear traditional Indian attire when visiting the temple. Modest clothing that respects the sanctity of the temple is mandatory.",
+      "men": "Men",
+      "menText": "Dhoti, Kurta or Formal Clothing",
+      "women": "Women",
+      "womenText": "Saree, Chudidhar or Traditional Wear"
+    },
+    "rules": {
+      "heading": "Rules & Regulations",
+      "photography": "Photography and videography inside the sanctum are strictly prohibited.",
+      "phones": "Please switch off or keep mobile phones in silent mode.",
+      "silence": "Devotees are requested to maintain silence and discipline inside the temple premises.",
+      "food": "Outside food and beverages are not allowed inside the temple."
+    },
+    "facilities": {
+      "heading": "Facilities",
+      "text": "The temple provides facilities such as safe drinking water, clean restrooms, and a dedicated area for pilgrims to rest. Special assistance is available for elderly and physically challenged devotees."
+    }
+  },
+  "media": {
+    "title": "Media & Updates",
+    "intro": "Latest announcements, events, and gallery updates will appear here when available.",
+    "announcements": "Announcements",
+    "events": "Events",
+    "gallery": "Gallery",
+    "contentSoon": "Content will be updated soon."
+  },
+  "donations": {
+    "title": "Donations — Coming Soon",
+    "intro": "We are preparing a transparent and devotional donations experience. Your contributions will be handled with care and clear accounting.",
+    "recordsHeading": "Historical Donation Records (ధనరాశి విరాళాలు)",
+    "archiveCardTitle": "ధనరాశి విరాళాలు",
+    "archiveCardSubtitle": "Historical Monetary Records",
+    "oldDonorsCardTitle": "వస్తు & స్థల దాతలు",
+    "oldDonorsCardSubtitle": "Land & Item Donors (Archive)",
+    "trusteesCardTitle": "పూర్వ పాలక మండలి",
+    "trusteesCardSubtitle": "Historical Committee & Founders",
+    "recordsFootnote": "\"ఈ సమాచారం చారిత్రక రికార్డుల ఆధారంగా పొందుపరచబడింది.\"",
+    "onlineComingSoonTitle": "Online Donations Coming Soon",
+    "onlineComingSoonText": "Donation forms and payment options will be enabled soon by the temple administration.",
+    "donateDisabled": "Donate (Disabled)",
+    "archive": {
+      "heading": "Historical Donation Records",
+      "downloadPdf": "Download as PDF",
+      "colSerial": "క్ర. సం.",
+      "colDonor": "విరాళదారుని పేరు & వివరాలు (Donor Name & Details)",
+      "colAmount": "మొత్తం (Amount)",
+      "currencyPrefix": "రూ.",
+      "footnote1": "\"ఈ విరాళాల వివరాలు పాత రికార్డుల నుండి తీసుకోబడ్డవి. ఇవి మార్పులకు లోబడవు.\"",
+      "footnote2": "\"ఈ పేజీలో ఉన్న సమాచారం చారిత్రక రికార్డుల ఆధారంగా పొందుపరచబడింది. ఇది సమాచార ప్రయోజనాల కొరకు మాత్రమే.\""
+    },
+    "oldDonors": {
+      "heading": "Archived Donors (Land & items)",
+      "downloadPdf": "Download as PDF",
+      "landDonorsHeading": "స్థల దాతలు (Land Donors)",
+      "itemDonorsHeading": "వస్తు రూపేణా యిచ్చిన దాతలు (Item Donors)",
+      "colSerial": "క్ర. సం.",
+      "colDonor": "విరాళదారుని పేరు & వివరాలు (Donor Name & Details)",
+      "colItem": "వస్తువు వివరాలు (Item Details)",
+      "footnote": "\"ఈ పేజీలో ఉన్న సమాచారం చారిత్రక రికార్డుల ఆధారంగా పొందుపరచబడింది. ఇది సమాచార ప్రయోజనాల కొరకు మాత్రమే.\""
+    },
+    "trusteesHistory": {
+      "heading": "History & Founders",
+      "downloadPdf": "Download as PDF",
+      "founderHeading": "ఆలయ వ్యవస్థాపకులు (Temple Founder)",
+      "footnote": "\"ఈ పేజీలో ఉన్న సమాచారం చారిత్రక రికార్డుల ఆధారంగా పొందుపరచబడింది. ఇది సమాచార ప్రయోజనాల కొరకు మాత్రమే.\""
+    }
+  },
+  "legal": {
+    "privacyPolicy": {
+      "title": "Privacy Policy",
+      "intro": "This is placeholder legal text describing privacy practices. The final policy will be provided by the temple administration.",
+      "sectionHeading": "Data Use",
+      "sectionText": "Placeholder: how visitor information is handled.",
+      "lastUpdated": "Last updated: {date}"
+    },
+    "termsPage": {
+      "title": "Terms & Conditions",
+      "intro": "This is placeholder legal text for terms and conditions. The final document will be prepared by the temple trustees.",
+      "sectionHeading": "Use of Site",
+      "sectionText": "Placeholder: acceptable use and limitations.",
+      "lastUpdated": "Last updated: {date}"
+    },
+    "refundPolicy": {
+      "title": "Refund Policy",
+      "intro": "Placeholder refund policy. Any refunds for donations or services will be handled transparently by the temple administration.",
+      "sectionHeading": "Eligibility",
+      "sectionText": "Placeholder: conditions under which refunds may be considered.",
+      "lastUpdated": "Last updated: {date}"
+    }
+  },
+  "support": {
+    "feedback": {
+      "title": "Feedback",
+      "intro": "We welcome your feedback. A simple feedback form will be provided soon.",
+      "sectionHeading": "Note",
+      "sectionText": "Feedback submission will be enabled by the temple administration."
+    },
+    "helpDesk": {
+      "title": "Help Desk",
+      "intro": "For assistance during visits and events, the help desk will provide guidance and support.",
+      "sectionHeading": "Assistance",
+      "sectionText": "Staff and volunteers will be available during visiting hours to assist visitors."
+    }
+  },
+  "comingSoon": {
+    "title": "Coming Soon",
+    "text": "This feature is currently under development and will be available to devotees very soon. Thank you for your patience and devotion.",
+    "returnHome": "Return to Home"
+  },
+  "metadata": {
+    "history": { "title": "History of the Temple", "description": "The history and significance of the temple." },
+    "announcements": { "title": "Announcements", "description": "Latest news, notices and updates from the temple." },
+    "committee": { "title": "Temple Committee", "description": "The trustees and office bearers who serve the temple." },
+    "contact": { "title": "Contact Us", "description": "Get in touch with the temple office: address, phone, email and a contact form." },
+    "festivals": { "title": "Festivals & Events", "description": "Annual festivals, utsavams and special events at the temple." },
+    "gallery": { "title": "Gallery", "description": "Photographs of the temple, festivals and events." },
+    "poojas": { "title": "Poojas & Sevas", "description": "Daily poojas, festival sevas and special sevas offered at the temple, with timings and fees." },
+    "timings": { "title": "Darshan Timings", "description": "Daily darshan and pooja timings at the temple." }
+  }
+}
