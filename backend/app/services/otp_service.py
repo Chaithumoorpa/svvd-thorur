@@ -28,7 +28,14 @@ class OtpService:
     def request_otp(self, email: str) -> str:
         """Emails the code and returns it too - the raw code is never included in
         any API response; callers (see the router) discard the return value and
-        it exists only so tests can drive the verify step without reading email."""
+        it exists only so tests can drive the verify step without reading email.
+
+        Unlike most of this codebase's email sends (best-effort, silent on
+        failure - a mail hiccup shouldn't block the action that triggered it),
+        a devotee stuck on the OTP step with no code coming needs to know
+        immediately rather than wait forever for an email that was never
+        actually accepted by SES - there's no account-enumeration concern here
+        to justify staying silent, unlike forgot-password."""
         email = email.strip().lower()
         code = f"{secrets.randbelow(1_000_000):06d}"
         code_hash = hashlib.sha256(code.encode()).hexdigest()
@@ -37,7 +44,7 @@ class OtpService:
             email=email, purpose=BOOKING_PURPOSE, code_hash=code_hash, expires_at=now + OTP_TTL,
         ))
         self.db.commit()
-        EmailService().send(
+        sent = EmailService().send(
             email,
             "Your SVVD Thorur verification code",
             f"Your verification code is: {code}\n\n"
@@ -45,6 +52,11 @@ class OtpService:
             "If you didn't request this, you can safely ignore this email.\n\n"
             "Thank you,\nSVVD Thorur",
         )
+        if not sent:
+            raise HTTPException(
+                status_code=502,
+                detail="Could not send the verification email. Please check the address and try again.",
+            )
         return code
 
     def verify_otp(self, email: str, code: str) -> str:

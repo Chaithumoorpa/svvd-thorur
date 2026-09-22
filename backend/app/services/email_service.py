@@ -29,25 +29,28 @@ class EmailService:
         sandbox this is the same requirement (a verified from_email) as admin mail."""
         return bool(self.from_email)
 
-    def notify_admin(self, subject: str, body: str) -> None:
+    def notify_admin(self, subject: str, body: str) -> bool:
         if not self.enabled:
             logger.info("Skipping admin notification (SES not configured): %s", subject)
-            return
-        self._send(self.admin_email, subject, body, log_label="admin notification")
+            return False
+        return self._send(self.admin_email, subject, body, log_label="admin notification")
 
-    def send(self, to_email: str, subject: str, body: str) -> None:
+    def send(self, to_email: str, subject: str, body: str) -> bool:
         """Best-effort mail to an arbitrary recipient (a devotee, a new admin user, ...).
         A no-op (logged, not raised) if SES isn't configured or there's no recipient -
-        never blocks the action that triggered it."""
+        never blocks the action that triggered it. Returns whether the mail was
+        actually accepted by SES, for the rare caller (e.g. OTP request) where
+        the user needs to know delivery failed rather than wait forever - most
+        callers can and should ignore the return value, same as before."""
         if not self.can_send_to_users:
             logger.info("Skipping email (SES not configured): %s", subject)
-            return
+            return False
         if not to_email:
             logger.info("Skipping email (no recipient address): %s", subject)
-            return
-        self._send(to_email, subject, body, log_label="email")
+            return False
+        return self._send(to_email, subject, body, log_label="email")
 
-    def _send(self, to_email: str, subject: str, body: str, log_label: str) -> None:
+    def _send(self, to_email: str, subject: str, body: str, log_label: str) -> bool:
         try:
             client = boto3.client("ses", region_name=self.region)
             client.send_email(
@@ -58,5 +61,7 @@ class EmailService:
                     "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
                 },
             )
+            return True
         except Exception:
             logger.warning("Failed to send %s to %s: %s", log_label, to_email, subject, exc_info=True)
+            return False

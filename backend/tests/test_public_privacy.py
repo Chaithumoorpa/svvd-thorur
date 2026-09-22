@@ -1,5 +1,6 @@
 """The public API must never expose private, draft or inactive data."""
 from datetime import date, timedelta
+from unittest.mock import MagicMock
 
 from app.models.announcement import Announcement
 from app.models.donor import Donor
@@ -8,10 +9,13 @@ from app.models.pooja import Pooja
 from app.services.otp_service import OtpService
 
 
-def _verified_email(db, email: str) -> tuple:
+def _verified_email(db, monkeypatch, email: str) -> tuple:
     """(email, booking_token) for a freshly OTP-verified email, bypassing the
-    actual email send (SES isn't configured in tests) by driving the service
-    directly - same pattern used for password-reset tokens elsewhere."""
+    actual email send (SES isn't configured in tests, and request_otp now
+    raises rather than silently pretending an unsent email went out) by
+    driving the service directly - same pattern used for password-reset
+    tokens elsewhere."""
+    monkeypatch.setattr("app.services.otp_service.EmailService.send", MagicMock(return_value=True))
     service = OtpService(db)
     code = service.request_otp(email)
     return email, service.verify_otp(email, code)
@@ -103,13 +107,13 @@ def test_contact_honeypot_stores_nothing(client, db, admin):
     assert db.query(ContactMessage).count() == 0
 
 
-def test_seva_booking_cannot_set_price_or_paid_seva(client, db):
+def test_seva_booking_cannot_set_price_or_paid_seva(client, db, monkeypatch):
     free = Pooja(name="Free Archana", pooja_type="daily", is_paid=False, is_active=True)
     paid = Pooja(name="Abhishekam", pooja_type="special", is_paid=True, suggested_amount=500, is_active=True)
     db.add_all([free, paid])
     db.commit()
     tomorrow = (date.today() + timedelta(days=1)).isoformat()
-    email, token = _verified_email(db, "ravi@example.com")
+    email, token = _verified_email(db, monkeypatch, "ravi@example.com")
 
     ok = client.post("/api/v1/seva-tickets/", json={
         "seva_id": free.id, "devotee_name": "Ravi", "mobile_number": "9876543210", "seva_date": tomorrow,
