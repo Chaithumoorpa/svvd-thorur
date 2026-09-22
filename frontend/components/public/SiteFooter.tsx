@@ -1,5 +1,7 @@
-import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
+import NextLink from 'next/link';
 import { Facebook, Instagram, Mail, MapPin, Phone, Youtube } from 'lucide-react';
+import { Link } from '@/i18n/navigation';
 import { formatTimeRange } from '@/lib/format';
 import { fetchTemple, fetchTimings } from '@/lib/server-api';
 import { isEmbeddableMap, NAV_LINKS, templeAddress, templeName } from '@/lib/site';
@@ -10,6 +12,7 @@ export default async function SiteFooter() {
   const name = templeName(temple);
   const address = templeAddress(temple);
   const year = new Date().getFullYear();
+  const [t, tNav, tCommon] = await Promise.all([getTranslations('footer'), getTranslations('nav'), getTranslations('common')]);
   const socials = [
     { href: temple?.facebook_url, label: 'Facebook', Icon: Facebook },
     { href: temple?.instagram_url, label: 'Instagram', Icon: Instagram },
@@ -36,34 +39,34 @@ export default async function SiteFooter() {
         </div>
 
         <div>
-          <h3 className="mb-3 font-semibold text-saffron-light">Darshan Timings</h3>
+          <h3 className="mb-3 font-semibold text-saffron-light">{t('darshanTimings')}</h3>
           {timings.length ? (
             <ul className="space-y-2 text-sm">
-              {timings.map((t) => (
-                <li key={t.id}>
-                  <span className="block text-amber-100/70">{t.label}{t.days !== 'Daily' ? ` (${t.days})` : ''}</span>
-                  <span className="font-medium">{formatTimeRange(t.start_time, t.end_time)}</span>
+              {timings.map((timing) => (
+                <li key={timing.id}>
+                  <span className="block text-amber-100/70">{timing.label}{timing.days !== 'Daily' ? ` (${timing.days})` : ''}</span>
+                  <span className="font-medium">{formatTimeRange(timing.start_time, timing.end_time)}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-amber-100/70">Timings will be published soon.</p>
+            <p className="text-sm text-amber-100/70">{t('timingsSoon')}</p>
           )}
         </div>
 
         <div>
-          <h3 className="mb-3 font-semibold text-saffron-light">Explore</h3>
+          <h3 className="mb-3 font-semibold text-saffron-light">{t('explore')}</h3>
           <ul className="space-y-2 text-sm">
             {NAV_LINKS.filter((l) => l.href !== '/').map((l) => (
-              <li key={l.href}><Link href={l.href} className="hover:text-white hover:underline">{l.label}</Link></li>
+              <li key={l.href}><Link href={l.href} className="hover:text-white hover:underline">{tNav(l.key)}</Link></li>
             ))}
-            <li><Link href="/donations" className="hover:text-white hover:underline">Donations</Link></li>
-            <li><Link href="/committee" className="hover:text-white hover:underline">Temple Committee</Link></li>
+            <li><Link href="/donations" className="hover:text-white hover:underline">{tNav('donations')}</Link></li>
+            <li><Link href="/committee" className="hover:text-white hover:underline">{tNav('committee')}</Link></li>
           </ul>
         </div>
 
         <div>
-          <h3 className="mb-3 font-semibold text-saffron-light">Visit & Contact</h3>
+          <h3 className="mb-3 font-semibold text-saffron-light">{t('visitAndContact')}</h3>
           <ul className="space-y-3 text-sm">
             {address && (
               <li className="flex gap-2"><MapPin className="mt-0.5 h-4 w-4 flex-none text-saffron-light" aria-hidden="true" /><span>{address}</span></li>
@@ -75,7 +78,7 @@ export default async function SiteFooter() {
               <li className="flex gap-2"><Mail className="mt-0.5 h-4 w-4 flex-none text-saffron-light" aria-hidden="true" /><a href={`mailto:${temple.contact_email}`} className="break-all hover:text-white">{temple.contact_email}</a></li>
             )}
             {temple?.map_url && !isEmbeddableMap(temple.map_url) && (
-              <li><a href={temple.map_url} target="_blank" rel="noopener noreferrer" className="font-medium text-saffron-light hover:underline">Get directions →</a></li>
+              <li><a href={temple.map_url} target="_blank" rel="noopener noreferrer" className="font-medium text-saffron-light hover:underline">{tCommon('getDirections')}</a></li>
             )}
           </ul>
         </div>
@@ -84,7 +87,7 @@ export default async function SiteFooter() {
       {isEmbeddableMap(temple?.map_url) && (
         <div className="mx-auto max-w-6xl px-4 pb-10">
           <iframe
-            title={`Map showing the location of ${name}`}
+            title={t('mapTitle', { name })}
             src={temple!.map_url!}
             className="h-56 w-full rounded-xl border-0 sm:h-64"
             loading="lazy"
@@ -96,13 +99,13 @@ export default async function SiteFooter() {
 
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-5 text-xs text-amber-100/70 sm:flex-row">
-          <p>© {year} {name}. All rights reserved.</p>
+          <p>© {year} {name}. {t('rightsReserved')}</p>
           <VisitorCount />
-          <nav aria-label="Legal" className="flex gap-4">
-            <Link href="/legal/privacy-policy" className="hover:text-white">Privacy</Link>
-            <Link href="/legal/terms" className="hover:text-white">Terms</Link>
-            <Link href="/legal/refund-policy" className="hover:text-white">Refunds</Link>
-            <Link href="/login" className="hover:text-white">Staff login</Link>
+          <nav aria-label={tNav('legalNav')} className="flex gap-4">
+            <Link href="/legal/privacy-policy" className="hover:text-white">{t('privacy')}</Link>
+            <Link href="/legal/terms" className="hover:text-white">{t('terms')}</Link>
+            <Link href="/legal/refund-policy" className="hover:text-white">{t('refunds')}</Link>
+            <NextLink href="/login" className="hover:text-white">{t('staffLogin')}</NextLink>
           </nav>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { getLocale } from 'next-intl/server';
 import './globals.css';
 import { fetchTemple } from '@/lib/server-api';
 import { SITE_FALLBACK, SITE_URL, templeName } from '@/lib/site';
@@ -35,9 +36,12 @@ export const viewport: Viewport = {
   themeColor: '#7a1c1c',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Falls back to 'en' for routes outside the [locale] segment (admin, login,
+  // forgot-password, reset-password), which the i18n middleware never touches.
+  const locale = await getLocale();
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body className="flex min-h-screen flex-col bg-cream text-templeDark antialiased">{children}</body>
     </html>
   );

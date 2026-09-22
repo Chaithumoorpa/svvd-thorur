@@ -31,13 +31,14 @@ export function isEmbeddableMap(url: string | null | undefined): boolean {
   return !!url && /^https:\/\/www\.google\.com\/maps\/embed/.test(url);
 }
 
+// `key` maps to a `nav.*` entry in messages/<locale>.json (see SiteHeader / MobileNav / SiteFooter).
 export const NAV_LINKS = [
-  { href: '/', label: 'Home' },
-  { href: '/timings', label: 'Timings' },
-  { href: '/poojas', label: 'Poojas & Sevas' },
-  { href: '/festivals', label: 'Festivals' },
-  { href: '/announcements', label: 'Announcements' },
-  { href: '/gallery', label: 'Gallery' },
-  { href: '/about/history', label: 'About' },
-  { href: '/contact', label: 'Contact' },
+  { href: '/', key: 'home' },
+  { href: '/timings', key: 'timings' },
+  { href: '/poojas', key: 'poojas' },
+  { href: '/festivals', key: 'festivals' },
+  { href: '/announcements', key: 'announcements' },
+  { href: '/gallery', key: 'gallery' },
+  { href: '/about/history', key: 'about' },
+  { href: '/contact', key: 'contact' },
 ] as const;
