@@ -65,6 +65,12 @@ def test_verify_otp_locks_out_after_max_attempts(client, monkeypatch):
     assert locked.status_code == 400
 
 
+def test_request_otp_reports_send_failure_instead_of_silently_succeeding(client, monkeypatch):
+    monkeypatch.setattr("app.services.otp_service.EmailService.send", MagicMock(return_value=False))
+    r = client.post("/api/v1/seva-tickets/booking/request-otp", json={"email": "unreachable@example.com"})
+    assert r.status_code == 502
+
+
 def test_otp_request_is_rate_limited(client, monkeypatch):
     _capture_email(monkeypatch)
     statuses = [client.post("/api/v1/seva-tickets/booking/request-otp",
