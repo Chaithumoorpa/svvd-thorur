@@ -122,15 +122,7 @@ class AuthService:
         return self.user_repository.update(user)
 
     # ---- forgot password (email link) ------------------------------------------
-    def request_password_reset(self, email: str) -> Optional[Tuple[User, str]]:
-        """Issues a one-hour, single-use reset token for the account with this
-        email, if any. Returns (user, raw_token) to email, or None when there's
-        no active account for that address - callers must show the same
-        "check your email" message either way, to avoid leaking which is true."""
-        user = self.user_repository.get_by_email(email.strip())
-        if not user or not user.is_active:
-            return None
-
+    def _issue_reset_token(self, user: User) -> str:
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -139,7 +131,27 @@ class AuthService:
             user_id=user.id, token_hash=token_hash, expires_at=now + RESET_TOKEN_TTL,
         ))
         db.commit()
-        return user, raw_token
+        return raw_token
+
+    def issue_reset_token_for_user(self, user: User) -> str:
+        """Used when an admin creates a user or resets their password: the
+        welcome/reset email links here instead of carrying the admin-chosen
+        password in plaintext, so that string never travels over email."""
+        return self._issue_reset_token(user)
+
+    def request_password_reset(self, email: str) -> Optional[Tuple[User, str]]:
+        """Issues a one-hour, single-use reset token for the account with this
+        email, if any. Returns (user, raw_token) to email, or None when there's
+        no active account for that address - callers must show the same
+        "check your email" message either way, to avoid leaking which is true."""
+        user = self.user_repository.get_by_email(email.strip())
+        if not user or not user.is_active:
+            # Same token-generation/hashing cost as the real path below, so response
+            # time doesn't reveal whether the account exists - only the DB write is
+            # actually skipped. Mirrors _DUMMY_HASH's role in authenticate_user above.
+            hashlib.sha256(secrets.token_urlsafe(32).encode()).hexdigest()
+            return None
+        return user, self._issue_reset_token(user)
 
     def reset_password(self, token: str, new_password: str) -> None:
         db = self.user_repository.db

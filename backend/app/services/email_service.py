@@ -31,13 +31,19 @@ class EmailService:
 
     def notify_admin(self, subject: str, body: str) -> None:
         if not self.enabled:
+            logger.info("Skipping admin notification (SES not configured): %s", subject)
             return
         self._send(self.admin_email, subject, body, log_label="admin notification")
 
     def send(self, to_email: str, subject: str, body: str) -> None:
         """Best-effort mail to an arbitrary recipient (a devotee, a new admin user, ...).
-        Silently a no-op if SES isn't configured - never blocks the action that triggered it."""
-        if not self.can_send_to_users or not to_email:
+        A no-op (logged, not raised) if SES isn't configured or there's no recipient -
+        never blocks the action that triggered it."""
+        if not self.can_send_to_users:
+            logger.info("Skipping email (SES not configured): %s", subject)
+            return
+        if not to_email:
+            logger.info("Skipping email (no recipient address): %s", subject)
             return
         self._send(to_email, subject, body, log_label="email")
 
@@ -53,4 +59,4 @@ class EmailService:
                 },
             )
         except Exception:
-            logger.warning("Failed to send %s: %s", log_label, subject, exc_info=True)
+            logger.warning("Failed to send %s to %s: %s", log_label, to_email, subject, exc_info=True)
