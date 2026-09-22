@@ -151,15 +151,15 @@ def create_user_admin(
     user = service.create_admin_user(payload)
     audit.log("CREATE", "user", user.id, f"Created user {user.username}", {"roles": user.roles})
     if user.email:
+        link = f"{settings.FRONTEND_BASE_URL}/reset-password?token={service.issue_reset_token_for_user(user)}"
         EmailService().send(
             user.email,
             "Your SVVD Thorur account has been created",
             f"Hello {user.username},\n\n"
             "An account has been created for you on the SVVD Thorur admin portal.\n\n"
-            f"Username: {user.username}\n"
-            f"Temporary password: {payload.password}\n\n"
-            "You will be asked to set a new password the first time you sign in at "
-            f"{settings.FRONTEND_BASE_URL}/login\n\n"
+            f"Username: {user.username}\n\n"
+            f"Set your password here (valid for 1 hour): {link}\n\n"
+            f"If the link expires, use \"Forgot password?\" at {settings.FRONTEND_BASE_URL}/login\n\n"
             "If you weren't expecting this account, please contact the temple office.\n\n"
             "Thank you,\nSVVD Thorur",
         )
@@ -177,14 +177,14 @@ def update_user_admin(
     user = service.update_user(user_id, payload, acting_user)
     audit.log("UPDATE", "user", user.id, f"Updated user {user.username}", payload.model_dump(exclude_unset=True))
     if payload.password and user.email:
+        link = f"{settings.FRONTEND_BASE_URL}/reset-password?token={service.issue_reset_token_for_user(user)}"
         EmailService().send(
             user.email,
             "Your SVVD Thorur password was reset",
             f"Hello {user.username},\n\n"
             "An administrator has reset your password on the SVVD Thorur admin portal.\n\n"
-            f"New temporary password: {payload.password}\n\n"
-            "You will be asked to set a new password the next time you sign in at "
-            f"{settings.FRONTEND_BASE_URL}/login\n\n"
+            f"Set your new password here (valid for 1 hour): {link}\n\n"
+            f"If the link expires, use \"Forgot password?\" at {settings.FRONTEND_BASE_URL}/login\n\n"
             "If you weren't expecting this, please contact the temple office immediately.\n\n"
             "Thank you,\nSVVD Thorur",
         )

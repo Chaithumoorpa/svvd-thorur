@@ -64,7 +64,10 @@ def test_new_user_creation_emails_credentials(client, super_admin, monkeypatch):
     sent.assert_called_once()
     to_email, _subject, body = sent.call_args[0]
     assert to_email == "priest2@example.com"
-    assert "Temp12345" in body
+    # the admin-chosen password itself must never appear in the email - a set-password
+    # link (backed by a one-time reset token) is sent instead
+    assert "Temp12345" not in body
+    assert "/reset-password?token=" in body
 
 
 def test_new_user_without_email_sends_nothing(client, super_admin, monkeypatch):
@@ -89,4 +92,5 @@ def test_admin_password_reset_emails_new_password(client, super_admin, make_user
     sent.assert_called_once()
     to_email, _subject, body = sent.call_args[0]
     assert to_email == "henry@example.com"
-    assert "Reset98765" in body
+    assert "Reset98765" not in body
+    assert "/reset-password?token=" in body
