@@ -89,6 +89,10 @@ async function page<T>(url: string, params?: Record<string, unknown>): Promise<P
 // ------------------------------------------------------------------------------ auth
 export const login = async (username: string, password: string) =>
   (await api.post<{ access_token: string; must_change_password: boolean }>('/auth/login', { username, password })).data;
+export const forgotPassword = async (email: string) =>
+  (await api.post<{ message: string }>('/auth/forgot-password', { email })).data;
+export const resetPassword = async (token: string, new_password: string) =>
+  (await api.post<{ message: string }>('/auth/reset-password', { token, new_password })).data;
 export const register = async (data: { username: string; password: string; email?: string }) =>
   (await api.post<AppUser>('/auth/register', data)).data;
 export const getMe = async () => (await api.get<Me>('/auth/verify')).data;

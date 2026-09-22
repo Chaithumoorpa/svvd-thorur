@@ -13,3 +13,4 @@ from app.models.finance import IncomeTransaction, ExpenseTransaction
 from app.models.visitor import VisitorLog
 from app.models.audit_log import AuditLog
 from app.models.temple_timing import TempleTiming
+from app.models.password_reset import PasswordResetToken

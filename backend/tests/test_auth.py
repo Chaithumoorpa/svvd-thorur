@@ -1,4 +1,11 @@
+import hashlib
+from datetime import datetime, timedelta, timezone
+
 import pytest
+
+from app.models.password_reset import PasswordResetToken
+from app.repositories.user_repo import UserRepository
+from app.services.auth_service import AuthService
 
 
 def _login(client, username, password):
@@ -116,3 +123,56 @@ def test_admin_reset_password_forces_change(client, super_admin, make_user):
                         json={"password": "Reset12345"}).status_code == 200
     assert _login(client, "dave", "Password123").status_code == 401
     assert _login(client, "dave", "Reset12345").json()["must_change_password"] is True
+
+
+def test_forgot_password_unknown_email_is_silent(client):
+    r = client.post("/api/v1/auth/forgot-password", json={"email": "nobody@example.com"})
+    assert r.status_code == 200
+    assert "sent" in r.json()["message"].lower()
+
+
+def test_forgot_password_and_reset_flow(client, db, make_user):
+    make_user("STAFF", username="erin", password="Password123", email="erin@example.com")
+    assert client.post("/api/v1/auth/forgot-password", json={"email": "erin@example.com"}).status_code == 200
+
+    # the raw token only ever exists in the email; issue one the same way the
+    # endpoint did (it's disabled in tests since no SES config is set) to test the confirm step
+    service = AuthService(UserRepository(db))
+    result = service.request_password_reset("erin@example.com")
+    assert result is not None
+    _, raw_token = result
+
+    reset = client.post("/api/v1/auth/reset-password", json={"token": raw_token, "new_password": "Fresh12345"})
+    assert reset.status_code == 200
+    assert _login(client, "erin", "Fresh12345").status_code == 200
+
+    # single-use: the same token cannot be replayed
+    reuse = client.post("/api/v1/auth/reset-password", json={"token": raw_token, "new_password": "Another123"})
+    assert reuse.status_code == 400
+
+
+def test_reset_password_invalid_token(client):
+    r = client.post("/api/v1/auth/reset-password", json={"token": "not-a-real-token", "new_password": "Whatever123"})
+    assert r.status_code == 400
+
+
+def test_reset_password_expired_token(client, db, make_user):
+    make_user("STAFF", username="frank", password="Password123", email="frank@example.com")
+    service = AuthService(UserRepository(db))
+    _, raw_token = service.request_password_reset("frank@example.com")
+
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    record = db.query(PasswordResetToken).filter(PasswordResetToken.token_hash == token_hash).first()
+    record.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
+    db.commit()
+
+    r = client.post("/api/v1/auth/reset-password", json={"token": raw_token, "new_password": "Whatever123"})
+    assert r.status_code == 400
+
+
+def test_forgot_password_rate_limited(client, make_user):
+    make_user("STAFF", username="grace", password="Password123", email="grace@example.com")
+    statuses = [client.post("/api/v1/auth/forgot-password", json={"email": "grace@example.com"}).status_code
+                for _ in range(6)]
+    assert statuses[:5] == [200] * 5
+    assert 429 in statuses[5:]
