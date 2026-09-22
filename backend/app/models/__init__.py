@@ -14,3 +14,4 @@ from app.models.visitor import VisitorLog
 from app.models.audit_log import AuditLog
 from app.models.temple_timing import TempleTiming
 from app.models.password_reset import PasswordResetToken
+from app.models.email_otp import EmailOtp

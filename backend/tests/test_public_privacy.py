@@ -5,6 +5,16 @@ from app.models.announcement import Announcement
 from app.models.donor import Donor
 from app.models.member import Member
 from app.models.pooja import Pooja
+from app.services.otp_service import OtpService
+
+
+def _verified_email(db, email: str) -> tuple:
+    """(email, booking_token) for a freshly OTP-verified email, bypassing the
+    actual email send (SES isn't configured in tests) by driving the service
+    directly - same pattern used for password-reset tokens elsewhere."""
+    service = OtpService(db)
+    code = service.request_otp(email)
+    return email, service.verify_otp(email, code)
 
 
 def test_announcements_only_published(client, db):
@@ -99,22 +109,27 @@ def test_seva_booking_cannot_set_price_or_paid_seva(client, db):
     db.add_all([free, paid])
     db.commit()
     tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    email, token = _verified_email(db, "ravi@example.com")
 
     ok = client.post("/api/v1/seva-tickets/", json={
         "seva_id": free.id, "devotee_name": "Ravi", "mobile_number": "9876543210", "seva_date": tomorrow,
+        "email": email, "booking_token": token,
         "amount": 9999, "payment_status": "PAID", "seva_name": "Hacked"})
     assert ok.status_code == 200, ok.text
     ticket = ok.json()
     assert ticket["amount"] == 0 and ticket["payment_status"] == "FREE"
     assert ticket["seva_name"] == "Free Archana" and ticket["source"] == "ONLINE"
+    assert ticket["email"] == email
 
     rejected = client.post("/api/v1/seva-tickets/", json={
-        "seva_id": paid.id, "devotee_name": "Ravi", "mobile_number": "9876543210", "seva_date": tomorrow})
+        "seva_id": paid.id, "devotee_name": "Ravi", "mobile_number": "9876543210", "seva_date": tomorrow,
+        "email": email, "booking_token": token})
     assert rejected.status_code == 400
 
     past = client.post("/api/v1/seva-tickets/", json={
         "seva_id": free.id, "devotee_name": "Ravi", "mobile_number": "9876543211",
-        "seva_date": (date.today() - timedelta(days=1)).isoformat()})
+        "seva_date": (date.today() - timedelta(days=1)).isoformat(),
+        "email": email, "booking_token": token})
     assert past.status_code == 400
 
 

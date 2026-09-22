@@ -139,7 +139,7 @@ export default function SevaTicketsAdmin() {
                 {list.data.items.map((t) => (
                   <tr key={t.id}>
                     <td className="px-4 py-3 font-mono text-xs">{t.ticket_number}<div className="font-sans text-gray-400">{t.source === 'ONLINE' ? 'Online' : 'Counter'}</div></td>
-                    <td className="px-4 py-3">{t.devotee_name}<div className="text-xs text-gray-400">{t.mobile_number}</div></td>
+                    <td className="px-4 py-3">{t.devotee_name}<div className="text-xs text-gray-400">{t.mobile_number}{t.email ? ` · ${t.email}` : ''}</div></td>
                     <td className="px-4 py-3 text-gray-700">{t.seva_name}</td>
                     <td className="px-4 py-3 text-gray-600">{formatDate(t.seva_date)}</td>
                     <td className="px-4 py-3 text-gray-600">{t.payment_status === 'PAID' ? formatMoney(t.amount) : 'Free'}</td>

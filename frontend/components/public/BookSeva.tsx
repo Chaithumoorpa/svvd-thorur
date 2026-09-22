@@ -1,18 +1,25 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Mail } from 'lucide-react';
 import Field from '@/components/ui/Field';
 import Modal from '@/components/ui/Modal';
 import { Notice } from '@/components/ui/States';
 import { btnGhost, btnPrimary, inputCls } from '@/components/ui/styles';
-import { apiError, bookSeva } from '@/lib/api';
+import { apiError, bookSeva, requestBookingOtp, verifyBookingOtp } from '@/lib/api';
 import { formatDate, todayISO } from '@/lib/format';
 import type { SevaTicket } from '@/lib/types';
 
-/** "Book" button + dialog for a FREE seva. Paid sevas are booked at the counter. */
+type Step = 'email' | 'otp' | 'details' | 'done';
+
+/** "Book" button + dialog for a FREE seva. Paid sevas are booked at the counter.
+ * Booking is gated on a verified email: request a code, verify it, then book. */
 export default function BookSeva({ sevaId, sevaName }: { sevaId: number; sevaName: string }) {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<Step>('email');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [bookingToken, setBookingToken] = useState('');
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [date, setDate] = useState(todayISO());
@@ -22,8 +29,43 @@ export default function BookSeva({ sevaId, sevaName }: { sevaId: number; sevaNam
 
   function close() {
     setOpen(false);
+    setStep('email');
+    setEmail('');
+    setCode('');
+    setBookingToken('');
+    setName('');
+    setMobile('');
     setError('');
     setTicket(null);
+  }
+
+  async function sendCode(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      await requestBookingOtp(email.trim());
+      setStep('otp');
+    } catch (err) {
+      setError(apiError(err, 'Could not send the verification code. Please try again.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      const { booking_token } = await verifyBookingOtp(email.trim(), code.trim());
+      setBookingToken(booking_token);
+      setStep('details');
+    } catch (err) {
+      setError(apiError(err, 'Incorrect or expired code. Please try again.'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submit(e: React.FormEvent) {
@@ -31,7 +73,12 @@ export default function BookSeva({ sevaId, sevaName }: { sevaId: number; sevaNam
     setError('');
     setBusy(true);
     try {
-      setTicket(await bookSeva({ seva_id: sevaId, devotee_name: name.trim(), mobile_number: mobile.trim(), seva_date: date }));
+      const booked = await bookSeva({
+        seva_id: sevaId, devotee_name: name.trim(), mobile_number: mobile.trim(), seva_date: date,
+        email: email.trim(), booking_token: bookingToken,
+      });
+      setTicket(booked);
+      setStep('done');
     } catch (err) {
       setError(apiError(err, 'Could not book the seva. Please try again.'));
     } finally {
@@ -44,19 +91,50 @@ export default function BookSeva({ sevaId, sevaName }: { sevaId: number; sevaNam
       <button type="button" className={btnPrimary} onClick={() => setOpen(true)}>Book this seva</button>
       {open && (
         <Modal title={`Book: ${sevaName}`} onClose={close}>
-          {ticket ? (
+          {step === 'done' && ticket ? (
             <div className="space-y-3 text-center">
               <CheckCircle2 className="mx-auto h-12 w-12 text-green-600" aria-hidden="true" />
               <h3 className="font-serif text-xl font-bold text-maroon">Seva booked</h3>
-              <p className="text-sm text-gray-600">Please show this ticket number at the temple counter.</p>
+              <p className="text-sm text-gray-600">Please show this ticket number at the temple counter. A confirmation has also been emailed to you.</p>
               <p className="rounded-lg bg-amber-50 py-3 font-mono text-lg font-bold text-maroon-dark">{ticket.ticket_number}</p>
               <p className="text-sm text-gray-600">{ticket.seva_name} · {formatDate(ticket.seva_date)}<br />{ticket.devotee_name}</p>
               <button type="button" className={btnGhost} onClick={close}>Close</button>
             </div>
+          ) : step === 'email' ? (
+            <form onSubmit={sendCode} className="space-y-4">
+              {error && <Notice kind="error">{error}</Notice>}
+              <p className="text-sm text-gray-600">We&apos;ll email you a verification code before booking.</p>
+              <Field label="Email address" required>
+                <input className={inputCls} type="email" autoComplete="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
+              </Field>
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" className={btnGhost} onClick={close}>Cancel</button>
+                <button type="submit" className={btnPrimary} disabled={busy || !email.includes('@')}>
+                  <Mail className="h-4 w-4" aria-hidden="true" />
+                  {busy ? 'Sending…' : 'Send code'}
+                </button>
+              </div>
+            </form>
+          ) : step === 'otp' ? (
+            <form onSubmit={verifyCode} className="space-y-4">
+              {error && <Notice kind="error">{error}</Notice>}
+              <p className="text-sm text-gray-600">Enter the 6-digit code sent to <strong>{email}</strong>.</p>
+              <Field label="Verification code" required>
+                <input className={inputCls} inputMode="numeric" maxLength={6} autoFocus value={code}
+                       onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
+              </Field>
+              <div className="flex justify-between gap-2 pt-1">
+                <button type="button" className={btnGhost} onClick={() => { setStep('email'); setCode(''); setError(''); }}>Back</button>
+                <div className="flex gap-2">
+                  <button type="button" className={btnGhost} disabled={busy} onClick={sendCode}>Resend</button>
+                  <button type="submit" className={btnPrimary} disabled={busy || code.length !== 6}>{busy ? 'Verifying…' : 'Verify'}</button>
+                </div>
+              </div>
+            </form>
           ) : (
             <form onSubmit={submit} className="space-y-4">
               {error && <Notice kind="error">{error}</Notice>}
-              <Field label="Devotee name" required><input className={inputCls} maxLength={100} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+              <Field label="Devotee name" required><input className={inputCls} maxLength={100} autoComplete="name" autoFocus value={name} onChange={(e) => setName(e.target.value)} /></Field>
               <Field label="Mobile number" required hint="10 digits. Used to look up your booking at the temple."><input className={inputCls} type="tel" inputMode="tel" autoComplete="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} /></Field>
               <Field label="Seva date" required><input className={inputCls} type="date" min={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></Field>
               <div className="flex justify-end gap-2 pt-1">

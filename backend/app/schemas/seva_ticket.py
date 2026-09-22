@@ -3,7 +3,7 @@ from datetime import date, datetime, time
 from typing import Annotated, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
 
 from app.models.seva_ticket import PaymentStatus, TicketSource, TicketStatus
 from app.schemas.common import MoneyInOrZero, MoneyOut
@@ -36,6 +36,13 @@ class SevaBookingPublic(BaseModel):
         return _mobile(v)
 
 
+class SevaBookingOnline(SevaBookingPublic):
+    """Public online booking, gated on a verified email: `booking_token` is the
+    one issued by POST /seva-tickets/booking/verify-otp for this exact email."""
+    email: EmailStr
+    booking_token: str
+
+
 class SevaTicketCreate(SevaBookingPublic):
     """Counter (staff) ticket: staff may record a fee and payment status."""
     seva_name: Optional[str] = Field(default=None, max_length=200)
@@ -50,6 +57,7 @@ class SevaTicketOut(BaseModel):
     seva_name: str
     devotee_name: str
     mobile_number: str
+    email: Optional[str] = None
     seva_date: date
     seva_time: Optional[time] = None
     payment_status: PaymentStatus
