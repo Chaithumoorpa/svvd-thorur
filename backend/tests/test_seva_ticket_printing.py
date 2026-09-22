@@ -1,7 +1,8 @@
-"""The printed/PDF ticket template used to hardcode the name of a different
-temple ("Sri Varasiddi Vinayaka Swamy Devasthanam") - leftover boilerplate
-never updated for this deployment. It now reads the real name from the
-temple profile row."""
+"""The printed/PDF ticket template used to hardcode the temple's name and
+location as a fixed string. It now reads both from the temple profile row,
+so editing the temple profile (Admin > Temple) is reflected on printed
+tickets without a code change - with the same values as a fallback if the
+profile row is somehow missing."""
 from datetime import date
 
 from app.models.seva_ticket import PaymentStatus, SevaTicket, TicketSource, TicketStatus
@@ -21,20 +22,20 @@ def _ticket(number: str, token: str) -> SevaTicket:
 
 
 def test_ticket_html_uses_configured_temple_name(db):
-    db.add(Temple(name="Sri Vasavi Vishwakarma Devasthanam", village="Thorur",
-                  district="Warangal", state="Telangana"))
+    db.add(Temple(name="Test Configured Temple Name", village="Testville",
+                  district="Test District", state="Test State"))
     db.commit()
 
     service = SevaTicketService(SevaTicketRepository(db), PoojaRepository(db))
     html_out = service.generate_ticket_html(_ticket("SVVD-2026-000001", "tok1"))
 
-    assert "Sri Vasavi Vishwakarma Devasthanam" in html_out
-    assert "Varasiddi Vinayaka" not in html_out
-    assert "Thorur, Warangal, Telangana" in html_out
+    assert "Test Configured Temple Name" in html_out
+    assert "Testville, Test District, Test State" in html_out
 
 
 def test_ticket_html_falls_back_when_no_temple_row(db):
     service = SevaTicketService(SevaTicketRepository(db), PoojaRepository(db))
     html_out = service.generate_ticket_html(_ticket("SVVD-2026-000002", "tok2"))
 
-    assert "Sri Vasavi Vishwakarma Devasthanam" in html_out
+    assert "Sri Varasiddi Vinayaka Swamy Devasthanam" in html_out
+    assert "Thorur, Andhra Pradesh" in html_out
