@@ -85,7 +85,12 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm">
+        <p className="mt-4 text-center text-sm">
+          <Link href="/forgot-password" className="text-red-900 hover:underline">
+            Forgot password?
+          </Link>
+        </p>
+        <p className="mt-2 text-center text-sm">
           <Link href="/" className="text-red-900 hover:underline">
             ← Back to the temple website
           </Link>

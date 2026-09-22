@@ -66,9 +66,21 @@ def update_contact_message(
     audit: AuditContext = Depends(get_audit),
     _: User = Depends(_can_manage),
 ):
+    was_resolved = service.get_message_details(message_id).status == ContactStatus.RESOLVED
     message = service.update_message(message_id, payload)
     audit.log("UPDATE", "contact_message", message_id, f"Updated message #{message_id}",
               {"status": message.status})
+    if message.status == ContactStatus.RESOLVED and not was_resolved:
+        EmailService().send(
+            message.email,
+            f"Re: {message.subject}",
+            f"Dear {message.name},\n\n"
+            f"Your message to Sri Vasavi Vishwakarma Devasthanam (subject: \"{message.subject}\") "
+            "has been marked as resolved.\n\n"
+            "If you have any further questions, please reply to this email or use the "
+            "Contact form on our website again.\n\n"
+            "Thank you,\nSVVD Thorur",
+        )
     return message
 
 

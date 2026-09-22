@@ -10,12 +10,14 @@ from app.core.rbac import Permission, permissions_for
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import (
-    PasswordChange, PublicRegister, TokenOut, UserCreate, UserLogin, UserOut, UserUpdate,
+    PasswordChange, PasswordResetConfirm, PasswordResetRequest, PublicRegister, TokenOut,
+    UserCreate, UserLogin, UserOut, UserUpdate,
 )
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
+from app.services.email_service import EmailService
 from app.utils.dependencies import AuditContext, get_audit, get_current_user, get_db, require_permission
-from app.utils.rate_limiter import get_client_ip, login_limiter, register_limiter
+from app.utils.rate_limiter import enforce, get_client_ip, login_limiter, password_reset_limiter, register_limiter
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 logger = logging.getLogger(__name__)
@@ -57,6 +59,43 @@ def register(
     if not register_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many registration attempts. Please try again in a minute.")
     return service.create_general_user(payload)
+
+
+@router.post("/forgot-password", response_model=dict)
+def forgot_password(
+    payload: PasswordResetRequest,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+):
+    """Always returns the same generic message, whether or not the email exists,
+    so the response itself never reveals which accounts are registered."""
+    enforce(password_reset_limiter, get_client_ip(request), "Too many reset requests. Please try again later.")
+    result = service.request_password_reset(payload.email)
+    if result:
+        user, raw_token = result
+        link = f"{settings.FRONTEND_BASE_URL}/reset-password?token={raw_token}"
+        EmailService().send(
+            user.email,
+            "Reset your SVVD Thorur password",
+            f"Hello {user.username},\n\n"
+            "We received a request to reset your SVVD Thorur admin portal password.\n\n"
+            f"Reset it here (valid for 1 hour): {link}\n\n"
+            "If you didn't request this, you can safely ignore this email - your password "
+            "will not change.\n\n"
+            "Thank you,\nSVVD Thorur",
+        )
+    return {"message": "If that email is registered, a reset link has been sent."}
+
+
+@router.post("/reset-password", response_model=dict)
+def reset_password(
+    payload: PasswordResetConfirm,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+):
+    enforce(password_reset_limiter, get_client_ip(request), "Too many attempts. Please try again later.")
+    service.reset_password(payload.token, payload.new_password)
+    return {"message": "Password reset successfully. You can now sign in."}
 
 
 @router.get("/verify", response_model=dict)
@@ -111,6 +150,19 @@ def create_user_admin(
 ):
     user = service.create_admin_user(payload)
     audit.log("CREATE", "user", user.id, f"Created user {user.username}", {"roles": user.roles})
+    if user.email:
+        EmailService().send(
+            user.email,
+            "Your SVVD Thorur account has been created",
+            f"Hello {user.username},\n\n"
+            "An account has been created for you on the SVVD Thorur admin portal.\n\n"
+            f"Username: {user.username}\n"
+            f"Temporary password: {payload.password}\n\n"
+            "You will be asked to set a new password the first time you sign in at "
+            f"{settings.FRONTEND_BASE_URL}/login\n\n"
+            "If you weren't expecting this account, please contact the temple office.\n\n"
+            "Thank you,\nSVVD Thorur",
+        )
     return user
 
 
@@ -124,4 +176,16 @@ def update_user_admin(
 ):
     user = service.update_user(user_id, payload, acting_user)
     audit.log("UPDATE", "user", user.id, f"Updated user {user.username}", payload.model_dump(exclude_unset=True))
+    if payload.password and user.email:
+        EmailService().send(
+            user.email,
+            "Your SVVD Thorur password was reset",
+            f"Hello {user.username},\n\n"
+            "An administrator has reset your password on the SVVD Thorur admin portal.\n\n"
+            f"New temporary password: {payload.password}\n\n"
+            "You will be asked to set a new password the next time you sign in at "
+            f"{settings.FRONTEND_BASE_URL}/login\n\n"
+            "If you weren't expecting this, please contact the temple office immediately.\n\n"
+            "Thank you,\nSVVD Thorur",
+        )
     return user

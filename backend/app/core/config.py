@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     SES_FROM_EMAIL: str | None = None
     ADMIN_NOTIFICATION_EMAIL: str | None = None
 
+    # Public site origin, used to build links inside outgoing emails (password reset, etc).
+    FRONTEND_BASE_URL: str = "https://svvdthorur.org"
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
