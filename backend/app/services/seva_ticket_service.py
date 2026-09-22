@@ -14,7 +14,7 @@ from xhtml2pdf import pisa
 
 from app.repositories.seva_ticket_repo import SevaTicketRepository
 from app.repositories.pooja_repo import PoojaRepository
-from app.schemas.seva_ticket import SevaBookingPublic, SevaTicketCreate, SevaTicketOut, SevaTicketFilter, TicketStatus, PaymentStatus, TicketSource
+from app.schemas.seva_ticket import SevaBookingOnline, SevaTicketCreate, SevaTicketOut, SevaTicketFilter, TicketStatus, PaymentStatus, TicketSource
 from app.models.seva_ticket import SevaTicket, TicketSource as ModelTicketSource
 from app.models.finance import IncomeSourceType, IncomeTransaction, PaymentMode
 from app.models.temple import Temple
@@ -59,7 +59,7 @@ class SevaTicketService:
                 self.ticket_repo.db.rollback()
         raise HTTPException(status_code=503, detail="Could not allocate a ticket number, please retry")
 
-    def book_ticket(self, data: SevaBookingPublic) -> SevaTicket:
+    def book_ticket(self, data: SevaBookingOnline) -> SevaTicket:
         pooja = self.pooja_repo.get_by_id(data.seva_id)
         if not pooja or not pooja.is_active:
             raise HTTPException(status_code=400, detail="Invalid or inactive Seva selected")
@@ -82,6 +82,7 @@ class SevaTicketService:
             "seva_name": pooja.name,          # from the database, not the client
             "devotee_name": data.devotee_name,
             "mobile_number": data.mobile_number,
+            "email": data.email,
             "seva_date": data.seva_date,
             "seva_time": data.seva_time,
             "payment_status": PaymentStatus.FREE,

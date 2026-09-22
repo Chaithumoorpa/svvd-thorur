@@ -4,7 +4,7 @@ import type {
   ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats, Donation,
   DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
   GalleryInput, GalleryItem, HomePayload, IncomeInput, LedgerEntry, Me, Member, MemberInput,
-  Paged, Pooja, PoojaInput, SevaBookingInput, SevaTicket, Temple, TempleTiming,
+  Paged, Pooja, PoojaInput, SevaBookingOnlineInput, SevaTicket, Temple, TempleTiming,
   TempleTimingInput, TempleUpdate, TicketStatus, UploadUrlResponse, UserCreateInput,
   UserUpdateInput, VisitorStats,
 } from './types';
@@ -119,7 +119,11 @@ export const trackVisit = async () => (await api.post('/stats/track')).data;
 export const getVisitorStats = async () => (await api.get<VisitorStats>('/stats/stats')).data;
 export const submitContact = async (data: ContactInput) =>
   (await api.post<{ id: number; status: ContactStatus }>('/contacts/', data)).data;
-export const bookSeva = async (data: SevaBookingInput) => (await api.post<SevaTicket>('/seva-tickets/', data)).data;
+export const requestBookingOtp = async (email: string) =>
+  (await api.post<{ message: string }>('/seva-tickets/booking/request-otp', { email })).data;
+export const verifyBookingOtp = async (email: string, code: string) =>
+  (await api.post<{ booking_token: string }>('/seva-tickets/booking/verify-otp', { email, code })).data;
+export const bookSeva = async (data: SevaBookingOnlineInput) => (await api.post<SevaTicket>('/seva-tickets/', data)).data;
 
 // -------------------------------------------------------------------- announcements
 export const getAnnouncements = async () => (await api.get<Announcement[]>('/announcements/')).data;

@@ -259,6 +259,7 @@ export interface SevaTicket {
   seva_name: string;
   devotee_name: string;
   mobile_number: string;
+  email?: string | null;
   seva_date: string;
   seva_time: string | null;
   payment_status: 'FREE' | 'PAID';
@@ -275,6 +276,12 @@ export interface SevaBookingInput {
   mobile_number: string;
   seva_date: string;
   seva_time?: string | null;
+}
+
+/** Public online booking: gated on a verified email, see requestBookingOtp/verifyBookingOtp. */
+export interface SevaBookingOnlineInput extends SevaBookingInput {
+  email: string;
+  booking_token: string;
 }
 
 export interface CounterTicketInput extends SevaBookingInput {

@@ -36,6 +36,8 @@ class SevaTicket(Base):
     # Devotee details
     devotee_name = Column(String, nullable=False)
     mobile_number = Column(String(15), nullable=False, index=True)
+    # Verified via OTP for online bookings; null for counter tickets (staff don't collect it).
+    email = Column(String(255), nullable=True)
     
     # Schedule
     seva_date = Column(Date, nullable=False, index=True)

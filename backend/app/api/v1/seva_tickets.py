@@ -6,16 +6,18 @@ from datetime import date, datetime
 
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
-from app.utils.dependencies import AuditContext, get_audit, get_seva_ticket_service, require_permission
-from app.utils.rate_limiter import booking_limiter, get_client_ip
+from app.utils.dependencies import AuditContext, get_audit, get_otp_service, get_seva_ticket_service, require_permission
+from app.utils.rate_limiter import booking_limiter, enforce, get_client_ip, otp_request_limiter, otp_verify_limiter
 from app.services.email_service import EmailService
+from app.services.otp_service import OtpService
 from app.services.seva_ticket_service import SevaTicketService
+from app.schemas.otp import OtpRequest, OtpVerifyRequest, OtpVerifyResponse
 from app.schemas.seva_ticket import (
-    SevaBookingPublic,
-    SevaTicketCreate, 
-    SevaTicketOut, 
-    SevaTicketFilter, 
-    ScanRequest, 
+    SevaBookingOnline,
+    SevaTicketCreate,
+    SevaTicketOut,
+    SevaTicketFilter,
+    ScanRequest,
     ScanResponse,
     TicketStatus
 )
@@ -26,23 +28,62 @@ router = APIRouter(prefix="/seva-tickets", tags=["Seva Tickets"])
 _manage = require_permission(Permission.TICKETS_MANAGE)
 
 
+@router.post("/booking/request-otp", response_model=dict)
+def request_booking_otp(
+    payload: OtpRequest,
+    request: Request,
+    service: OtpService = Depends(get_otp_service),
+):
+    """Emails a 6-digit code (valid 10 minutes) to verify a devotee's email
+    before an online booking. Rate limited per IP."""
+    enforce(otp_request_limiter, get_client_ip(request), "Too many requests. Please try again later.")
+    service.request_otp(payload.email)
+    return {"message": "Verification code sent. Please check your email."}
+
+
+@router.post("/booking/verify-otp", response_model=OtpVerifyResponse)
+def verify_booking_otp(
+    payload: OtpVerifyRequest,
+    request: Request,
+    service: OtpService = Depends(get_otp_service),
+):
+    """Verifies the code and returns a short-lived token proving this email was
+    verified, required by POST /seva-tickets for this same email. Rate limited
+    per IP; the code itself allows only 5 incorrect guesses before it's dead."""
+    enforce(otp_verify_limiter, get_client_ip(request), "Too many attempts. Please try again later.")
+    return OtpVerifyResponse(booking_token=service.verify_otp(payload.email, payload.code))
+
+
 @router.post("", response_model=SevaTicketOut)
 def book_seva_ticket(
-    payload: SevaBookingPublic,
+    payload: SevaBookingOnline,
     request: Request,
     service: SevaTicketService = Depends(get_seva_ticket_service),
 ):
     """
-    Public endpoint to book a FREE seva. Price/payment/seva name are decided server-side.
-    Rate limited per IP.
+    Public endpoint to book a FREE seva, gated on a verified email (see the
+    booking/request-otp and booking/verify-otp endpoints above). Price/payment/
+    seva name are decided server-side. Rate limited per IP.
     """
     if not booking_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many bookings. Please try again later.")
+    OtpService.check_booking_token(payload.booking_token, payload.email)
     ticket = service.book_ticket(payload)
     EmailService().notify_admin(
         f"New seva booking: {ticket.seva_name} ({ticket.ticket_number})",
-        f"Devotee: {ticket.devotee_name}\nMobile: {ticket.mobile_number}\n"
+        f"Devotee: {ticket.devotee_name}\nMobile: {ticket.mobile_number}\nEmail: {ticket.email}\n"
         f"Seva: {ticket.seva_name}\nDate: {ticket.seva_date}\nTicket: {ticket.ticket_number}",
+    )
+    EmailService().send(
+        ticket.email,
+        f"Booking confirmed: {ticket.seva_name} ({ticket.ticket_number})",
+        f"Dear {ticket.devotee_name},\n\n"
+        f"Your seva booking is confirmed.\n\n"
+        f"Ticket number: {ticket.ticket_number}\n"
+        f"Seva: {ticket.seva_name}\n"
+        f"Date: {ticket.seva_date}\n\n"
+        "Please show this ticket number at the temple counter.\n\n"
+        "Thank you,\nSri Varasiddhi Vinayaka Swamy Devasthanam, Thorur",
     )
     return ticket
 
