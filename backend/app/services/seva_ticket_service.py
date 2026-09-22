@@ -17,6 +17,7 @@ from app.repositories.pooja_repo import PoojaRepository
 from app.schemas.seva_ticket import SevaBookingPublic, SevaTicketCreate, SevaTicketOut, SevaTicketFilter, TicketStatus, PaymentStatus, TicketSource
 from app.models.seva_ticket import SevaTicket, TicketSource as ModelTicketSource
 from app.models.finance import IncomeSourceType, IncomeTransaction, PaymentMode
+from app.models.temple import Temple
 
 
 class SevaTicketService:
@@ -207,7 +208,13 @@ class SevaTicketService:
         logo_base64 = self._get_logo_base64()
         display_date = ticket.seva_date.strftime("%d-%m-%Y")
         display_time = ticket.seva_time.strftime("%I:%M %p") if ticket.seva_time else "N/A"
-        
+
+        temple = self.ticket_repo.db.query(Temple).first()
+        temple_name = html.escape(temple.name) if temple and temple.name else "Sri Vasavi Vishwakarma Devasthanam"
+        temple_loc = html.escape(", ".join(
+            p for p in [temple.village, temple.district, temple.state] if p
+        )) if temple else "Thorur, Andhra Pradesh"
+
         logo_html = f'<img class="watermark" src="data:image/png;base64,{logo_base64}" />' if logo_base64 else ''
         
         return f"""
@@ -262,8 +269,8 @@ class SevaTicketService:
             <div class="ticket">
                 {logo_html}
                 <div class="header">
-                    <div class="temple-name">Sri Varasiddi Vinayaka Swamy Devasthanam</div>
-                    <div class="temple-loc">Thorur, Andhra Pradesh</div>
+                    <div class="temple-name">{temple_name}</div>
+                    <div class="temple-loc">{temple_loc}</div>
                     <div class="ticket-title">SEVA TICKET</div>
                 </div>
 
