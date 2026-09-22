@@ -98,7 +98,7 @@ Let's Encrypt validates ownership by connecting to the domain over HTTP.
 ## 3. Bootstrap the instance
 
 ```bash
-ssh -i /path/to/your-key.pem ec2-user@<elastic-ip>
+ssh -i /path/to/your-key.pem ubuntu@<elastic-ip>
 
 git clone <this-repo-url> svvd-thorur
 cd svvd-thorur
@@ -107,7 +107,7 @@ git checkout claude/aws-cost-optimized-deploy   # or production/main once merged
 sudo bash deploy/aws/setup-ec2.sh
 # log out and back in so your user can run docker without sudo
 exit
-ssh -i /path/to/your-key.pem ec2-user@<elastic-ip>
+ssh -i /path/to/your-key.pem ubuntu@<elastic-ip>
 cd svvd-thorur
 ```
 
@@ -232,14 +232,43 @@ automatically). Create one:
        {
          "Effect": "Allow",
          "Action": "s3:PutObject",
-         "Resource": "arn:aws:s3:::svvd-thorur-gallery/gallery/*"
+         "Resource": [
+           "arn:aws:s3:::svvd-thorur-gallery/gallery/*",
+           "arn:aws:s3:::svvd-thorur-gallery/tickets/*",
+           "arn:aws:s3:::svvd-thorur-gallery/receipts/*",
+           "arn:aws:s3:::svvd-thorur-gallery/backups/*"
+         ]
+       },
+       {
+         "Effect": "Allow",
+         "Action": "s3:GetObject",
+         "Resource": [
+           "arn:aws:s3:::svvd-thorur-gallery/tickets/*",
+           "arn:aws:s3:::svvd-thorur-gallery/receipts/*",
+           "arn:aws:s3:::svvd-thorur-gallery/backups/*"
+         ]
        }
      ]
    }
    ```
 
+   `tickets/` and `receipts/` are where the backend archives generated seva
+   ticket PDFs and donation receipts (private - not covered by the public
+   bucket policy above, unlike `gallery/`); `backups/` is where the nightly
+   database backup (below) uploads to. `PutObject` alone was enough to
+   *break silently* - the archive/backup calls are all best-effort and swallow
+   their own errors, so a missing `Resource` entry here doesn't show up as an
+   error anywhere, it just means nothing gets archived. `GetObject` is for
+   restoring a backup or re-downloading an archived PDF later.
+
 5. EC2 Console → select your instance → **Actions → Security → Modify IAM
    role** → attach `svvd-thorur-backend-role`.
+
+   If the role is already attached (e.g. you set up gallery uploads earlier
+   and are adding this later), update the existing inline policy's JSON to
+   the block above instead of attaching again - or add these as a second,
+   separate inline policy on the same role; IAM unions every policy attached
+   to a role, so either approach works.
 
 That's the whole point of using an instance role instead of access keys:
 nothing secret to generate, rotate, or accidentally commit.
@@ -284,10 +313,14 @@ branch.
 
 ## Updating the deployed site
 
+Normally automatic: every push to `development` triggers CI/CD (see below),
+which runs `deploy/aws/deploy.sh` over SSH. Manual fallback if you ever need
+it:
+
 ```bash
-ssh -i /path/to/your-key.pem ec2-user@<elastic-ip>
+ssh -i /path/to/your-key.pem ubuntu@<elastic-ip>
 cd svvd-thorur
-git pull origin production   # or whichever branch you deploy from
+git pull origin development
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
@@ -295,17 +328,46 @@ Migrations run automatically on backend startup (`backend/entrypoint.sh`).
 
 ## Backups
 
-Nothing backs up the database automatically on a bare EC2 instance. Cheapest
-option: a small cron job that `pg_dump`s to an S3 bucket (S3 Free Tier: 5GB
-for 12 months, then pennies/month at this data size).
+`deploy/aws/backup-db.sh` dumps the database, gzips it, and uploads it to
+`s3://svvd-thorur-gallery/backups/YYYY-MM-DD.sql.gz` using the backend
+container's own boto3 + instance-role credentials (no separate AWS CLI
+install needed on the host) - it keeps the last 14 days on-instance as a
+fast-restore cache and relies on an S3 lifecycle rule (below) for
+longer-term, off-instance retention. Requires the widened IAM policy from
+step 6d (the `backups/*` resource).
 
 ```bash
-# crontab -e (on the instance)
-0 3 * * * cd /home/ec2-user/svvd-thorur && docker compose exec -T postgres pg_dump -U templeuser templedb | gzip > /home/ec2-user/backups/$(date +\%F).sql.gz
+# on the instance
+chmod +x /home/ubuntu/svvd-thorur/deploy/aws/backup-db.sh
+
+# crontab -e (on the instance) - runs nightly at 3am
+0 3 * * * /home/ubuntu/svvd-thorur/deploy/aws/backup-db.sh >> /home/ubuntu/backups/backup.log 2>&1
 ```
 
-Set up an S3 lifecycle rule or `aws s3 sync` in the same cron job if you
-want it off-instance too.
+Set an S3 lifecycle rule so backups don't accumulate forever (e.g. expire
+after 90 days) - AWS Console → your bucket → **Management** → **Lifecycle
+rules** → **Create rule**, scope it to the `backups/` prefix, and set
+"Expire current versions of objects" to however long you want to keep them.
+
+**Restoring** from a backup:
+
+```bash
+# on the instance, download the dump you want
+aws s3 cp s3://svvd-thorur-gallery/backups/2026-09-22.sql.gz .
+gunzip 2026-09-22.sql.gz
+
+# restore into the running postgres container (drops existing data first!)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
+  psql -U templeuser -d templedb -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
+  psql -U templeuser -d templedb < 2026-09-22.sql
+```
+
+(The `aws s3 cp` above needs the AWS CLI installed on the host, or run it
+from CloudShell and `scp` the file over instead - the backup *upload* itself
+doesn't need the host CLI since it goes through the backend container, but
+restoring is a manual, rare-enough operation that it's fine to reach for
+whichever tool's on hand.)
 
 ## CI/CD: auto-deploy on push to `development`
 
