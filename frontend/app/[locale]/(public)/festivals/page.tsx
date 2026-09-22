@@ -6,12 +6,12 @@ import JsonLd from '@/components/public/JsonLd';
 import { PageShell } from '@/components/public/SectionHeading';
 import { formatDate, parseDate, todayISO } from '@/lib/format';
 import { fetchFestivals } from '@/lib/server-api';
-import { SITE_URL } from '@/lib/site';
+import { SITE_URL, localizedAlternates } from '@/lib/site';
 import type { Festival } from '@/lib/types';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.festivals');
-  return { title: t('title'), description: t('description') };
+  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/festivals') };
 }
 
 const ended = (f: Festival, today: string) => !!f.festival_date && (f.end_date ?? f.festival_date) < today;

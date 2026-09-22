@@ -4,10 +4,11 @@ import { Bell, Megaphone } from 'lucide-react';
 import { PageShell } from '@/components/public/SectionHeading';
 import { formatDate } from '@/lib/format';
 import { fetchAnnouncements } from '@/lib/server-api';
+import { localizedAlternates } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.announcements');
-  return { title: t('title'), description: t('description') };
+  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/announcements') };
 }
 
 export default async function AnnouncementsPage() {

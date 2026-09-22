@@ -3,10 +3,11 @@ import { getTranslations } from 'next-intl/server';
 import { Users } from 'lucide-react';
 import { PageShell } from '@/components/public/SectionHeading';
 import { fetchCommittee } from '@/lib/server-api';
+import { localizedAlternates } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.committee');
-  return { title: t('title'), description: t('description') };
+  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/committee') };
 }
 
 export default async function CommitteePage() {

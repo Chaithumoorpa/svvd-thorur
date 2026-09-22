@@ -3,11 +3,11 @@ import { getTranslations } from 'next-intl/server';
 import { BookOpen } from 'lucide-react';
 import { PageShell } from '@/components/public/SectionHeading';
 import { fetchTemple } from '@/lib/server-api';
-import { templeLocation, templeName } from '@/lib/site';
+import { localizedAlternates, templeLocation, templeName } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.history');
-  return { title: t('title'), description: t('description') };
+  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/about/history') };
 }
 
 export default async function HistoryPage() {

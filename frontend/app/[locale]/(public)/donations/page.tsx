@@ -1,6 +1,12 @@
+import type { Metadata } from 'next'
 import { getTranslations } from 'next-intl/server'
 import PageContainer from '@/components/PageContainer'
 import { Link } from '@/i18n/navigation'
+import { localizedAlternates } from '@/lib/site'
+
+export async function generateMetadata(): Promise<Metadata> {
+  return { alternates: await localizedAlternates('/donations') }
+}
 
 export default async function DonationsComingSoon() {
   const t = await getTranslations('donations')
