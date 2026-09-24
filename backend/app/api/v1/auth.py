@@ -10,13 +10,16 @@ from app.core.rbac import Permission, permissions_for
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import (
-    DeleteAccountConfirm, PasswordChange, PasswordResetConfirm, PasswordResetRequest, PublicRegister,
-    TokenOut, UserCreate, UserLogin, UserOut, UserUpdate,
+    DeleteAccountConfirm, LoginOtpVerify, LoginResponse, PasswordChange, PasswordResetConfirm,
+    PasswordResetRequest, PublicRegister, TokenOut, UserCreate, UserLogin, UserOut, UserUpdate,
 )
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
-from app.utils.dependencies import AuditContext, get_audit, get_current_user, get_db, require_permission
+from app.services.otp_service import OtpService
+from app.utils.dependencies import (
+    AuditContext, get_audit, get_current_user, get_db, get_otp_service, require_permission,
+)
 from app.utils.rate_limiter import enforce, get_client_ip, login_limiter, password_reset_limiter, register_limiter
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -27,18 +30,60 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     return AuthService(UserRepository(db))
 
 
-@router.post("/login", response_model=TokenOut)
+@router.post("/login", response_model=LoginResponse)
 def login(
     payload: UserLogin,
     request: Request,
     service: AuthService = Depends(get_auth_service),
+    otp_service: OtpService = Depends(get_otp_service),
     db: Session = Depends(get_db),
 ):
-    """Login with username and password. Rate limited per client IP."""
+    """Step 1 of login: username and password. Rate limited per client IP.
+
+    An account with an email on file doesn't get a session yet - a sign-in
+    code is emailed, and POST /auth/login/verify-otp completes it. An
+    account with no email (a gap that predates this - UserCreate has always
+    allowed it) skips straight to a session, exactly like login worked
+    before two-factor existed: there's nowhere to send a code, and refusing
+    to log them in at all would lock real staff out of their own site."""
     if not login_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many login attempts. Please try again in a minute.")
 
     user = service.authenticate_user(payload)
+
+    if not user.email:
+        AuditService(db).record(user, "LOGIN", "user", user.id,
+                                f"{user.username} signed in (no email on file - single factor)", request=request)
+        return LoginResponse(
+            otp_required=False,
+            access_token=service.create_access_token(user),
+            token_type="bearer",
+            must_change_password=user.must_change_password,
+        )
+
+    otp_service.request_login_otp(user.email)
+    return LoginResponse(otp_required=True)
+
+
+@router.post("/login/verify-otp", response_model=TokenOut)
+def verify_login_otp(
+    payload: LoginOtpVerify,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+    otp_service: OtpService = Depends(get_otp_service),
+    db: Session = Depends(get_db),
+):
+    """Step 2: confirms the emailed code and issues the actual session. Shares
+    the login rate limiter with step 1 - both are part of the same attempt."""
+    if not login_limiter.is_allowed(get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many attempts. Please try again in a minute.")
+
+    user = service.user_repository.get_by_username(payload.username.strip())
+    if not user or not user.email:
+        raise HTTPException(status_code=400, detail="Invalid sign-in attempt. Please start again.")
+
+    otp_service.verify_login_otp(user.email, payload.code)
+
     AuditService(db).record(user, "LOGIN", "user", user.id, f"{user.username} signed in", request=request)
     return {
         "access_token": service.create_access_token(user),

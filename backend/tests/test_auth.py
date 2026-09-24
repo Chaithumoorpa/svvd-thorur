@@ -162,7 +162,7 @@ def test_forgot_password_unknown_email_is_silent(client):
     assert "sent" in r.json()["message"].lower()
 
 
-def test_forgot_password_and_reset_flow(client, db, make_user):
+def test_forgot_password_and_reset_flow(client, db, make_user, monkeypatch):
     make_user("STAFF", username="erin", password="Password123", email="erin@example.com")
     assert client.post("/api/v1/auth/forgot-password", json={"email": "erin@example.com"}).status_code == 200
 
@@ -175,7 +175,13 @@ def test_forgot_password_and_reset_flow(client, db, make_user):
 
     reset = client.post("/api/v1/auth/reset-password", json={"token": raw_token, "new_password": "Fresh12345"})
     assert reset.status_code == 200
-    assert _login(client, "erin", "Fresh12345").status_code == 200
+
+    # erin has an email on file, so login is step 1 of two (see test_login_2fa.py for
+    # the full flow) - just confirm the password itself is accepted here.
+    monkeypatch.setattr("app.services.otp_service.EmailService.send", lambda *a, **k: True)
+    login = _login(client, "erin", "Fresh12345")
+    assert login.status_code == 200
+    assert login.json()["otp_required"] is True
 
     # single-use: the same token cannot be replayed
     reuse = client.post("/api/v1/auth/reset-password", json={"token": raw_token, "new_password": "Another123"})

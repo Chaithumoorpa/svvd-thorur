@@ -3,16 +3,20 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Eye, EyeOff, UserPlus } from 'lucide-react';
-import { apiError, login, register, setStoredToken } from '@/lib/api';
+import { Eye, EyeOff, Mail, UserPlus } from 'lucide-react';
+import { apiError, login, register, setStoredToken, verifyLoginOtp } from '@/lib/api';
 import { Notice } from '@/components/ui/States';
-import { btnPrimary, inputCls } from '@/components/ui/styles';
+import { btnGhost, btnPrimary, inputCls } from '@/components/ui/styles';
+
+type Step = 'details' | 'otp';
 
 export default function RegisterPage() {
+  const [step, setStep] = useState<Step>('details');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -28,13 +32,33 @@ export default function RegisterPage() {
         email: email.trim(),
         phone: phone.trim(),
       });
-      // Sign the devotee in immediately rather than making them re-enter their
-      // credentials on a separate page right after they just typed them.
+      // Sign the devotee in right away rather than making them re-enter their
+      // credentials on a separate page - a registered account always has an
+      // email, so this always needs the sign-in code as its second step.
       const data = await login(username.trim(), password);
-      setStoredToken(data.access_token);
+      if (data.otp_required) {
+        setStep('otp');
+        setBusy(false);
+        return;
+      }
+      setStoredToken(data.access_token!);
       window.location.href = '/my-bookings';
     } catch (err) {
       setError(apiError(err, 'Could not create your account. Please try again.'));
+      setBusy(false);
+    }
+  }
+
+  async function onSubmitOtp(event: React.FormEvent) {
+    event.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      const data = await verifyLoginOtp(username.trim(), code.trim());
+      setStoredToken(data.access_token);
+      window.location.href = '/my-bookings';
+    } catch (err) {
+      setError(apiError(err, 'Incorrect or expired code. Please try again.'));
       setBusy(false);
     }
   }
@@ -48,6 +72,56 @@ export default function RegisterPage() {
           <p className="mt-1 text-sm text-gray-500">Book sevas and view your booking history</p>
         </div>
 
+        {step === 'otp' ? (
+          <form onSubmit={onSubmitOtp} className="space-y-4" noValidate>
+            {error && <Notice kind="error">{error}</Notice>}
+            <p className="text-sm text-gray-600">
+              <Mail className="mr-1 inline h-4 w-4 text-red-900" aria-hidden="true" />
+              For your security, enter the 6-digit code just emailed to {email}.
+            </p>
+            <div>
+              <label htmlFor="otp" className="mb-1 block text-sm font-medium text-gray-700">
+                Sign-in code
+              </label>
+              <input
+                id="otp"
+                className={inputCls}
+                inputMode="numeric"
+                maxLength={6}
+                autoFocus
+                autoComplete="one-time-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              />
+            </div>
+            <button type="submit" disabled={busy || code.length !== 6} className={`${btnPrimary} w-full`}>
+              {busy ? 'Verifying…' : 'Verify and finish'}
+            </button>
+            <div className="flex items-center justify-between text-sm">
+              <button type="button" className="text-red-900 hover:underline" onClick={() => { setStep('details'); setCode(''); setError(''); }}>
+                ← Back
+              </button>
+              <button
+                type="button"
+                className={btnGhost}
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError('');
+                  try {
+                    await login(username.trim(), password);
+                  } catch (err) {
+                    setError(apiError(err, 'Could not resend the code. Please try again.'));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Resend code
+              </button>
+            </div>
+          </form>
+        ) : (
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
           {error && <Notice kind="error">{error}</Notice>}
           <div>
@@ -127,13 +201,16 @@ export default function RegisterPage() {
             {busy ? 'Creating account…' : 'Create account'}
           </button>
         </form>
+        )}
 
-        <p className="mt-4 text-center text-sm">
-          Already have an account?{' '}
-          <Link href="/login" className="text-red-900 hover:underline">
-            Sign in
-          </Link>
-        </p>
+        {step === 'details' && (
+          <p className="mt-4 text-center text-sm">
+            Already have an account?{' '}
+            <Link href="/login" className="text-red-900 hover:underline">
+              Sign in
+            </Link>
+          </p>
+        )}
         <p className="mt-2 text-center text-sm">
           <Link href="/" className="text-red-900 hover:underline">
             ← Back to the temple website

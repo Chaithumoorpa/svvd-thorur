@@ -116,8 +116,22 @@ async function page<T>(url: string, params?: Record<string, unknown>): Promise<P
 }
 
 // ------------------------------------------------------------------------------ auth
+/** Step 1: username + password. An account with an email on file gets back
+ * otp_required: true (a sign-in code was just emailed) instead of a session -
+ * call verifyLoginOtp next. An account with no email gets a session directly,
+ * same as login always worked before two-factor existed. */
 export const login = async (username: string, password: string) =>
-  (await api.post<{ access_token: string; must_change_password: boolean }>('/auth/login', { username, password })).data;
+  (await api.post<{
+    otp_required: boolean;
+    access_token?: string;
+    token_type?: string;
+    must_change_password?: boolean;
+  }>('/auth/login', { username, password })).data;
+/** Step 2, only when login() returned otp_required: true. */
+export const verifyLoginOtp = async (username: string, code: string) =>
+  (await api.post<{ access_token: string; token_type: string; must_change_password: boolean }>(
+    '/auth/login/verify-otp', { username, code },
+  )).data;
 export const forgotPassword = async (email: string) =>
   (await api.post<{ message: string }>('/auth/forgot-password', { email })).data;
 export const resetPassword = async (token: string, new_password: string) =>
