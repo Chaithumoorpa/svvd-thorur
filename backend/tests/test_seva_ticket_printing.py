@@ -39,3 +39,16 @@ def test_ticket_html_falls_back_when_no_temple_row(db):
 
     assert "Sri Varasiddhi Vinayaka Swamy Devasthanam" in html_out
     assert "Thorur, Andhra Pradesh" in html_out
+
+
+def test_ticket_html_includes_the_logo_watermark(db):
+    """_get_logo_base64() looks for assets/logo.png relative to the process's
+    working directory - /app in the deployed container (WORKDIR + Dockerfile's
+    `COPY assets ./assets`), backend/ when tests run. Regression guard for that
+    file/COPY line actually being present, since a missing logo silently
+    renders no watermark at all rather than erroring."""
+    service = SevaTicketService(SevaTicketRepository(db), PoojaRepository(db))
+    html_out = service.generate_ticket_html(_ticket("SVVD-2026-000003", "tok3"))
+
+    assert 'class="watermark"' in html_out
+    assert "data:image/png;base64," in html_out
