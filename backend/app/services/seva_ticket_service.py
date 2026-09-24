@@ -63,12 +63,6 @@ class SevaTicketService:
         pooja = self.pooja_repo.get_by_id(data.seva_id)
         if not pooja or not pooja.is_active:
             raise HTTPException(status_code=400, detail="Invalid or inactive Seva selected")
-        if pooja.is_paid:
-            # No online payment yet: never mint a paid ticket from an unauthenticated request.
-            raise HTTPException(
-                status_code=400,
-                detail="This seva has a fee. Please book it at the temple counter.",
-            )
         if data.seva_date < date.today():
             raise HTTPException(status_code=400, detail="Seva date cannot be in the past")
         if self.ticket_repo.check_duplicate(data.mobile_number, data.seva_date, data.seva_id):
@@ -76,6 +70,17 @@ class SevaTicketService:
                 status_code=400,
                 detail=f"A ticket for this Seva is already booked for this mobile number on {data.seva_date}",
             )
+
+        # No online payment gateway yet: a paid seva still gets a ticket, but the fee
+        # is collected in person at the temple counter (see collect_payment below) -
+        # PENDING, not PAID, so the finance ledger never records income that hasn't
+        # actually been received.
+        if pooja.is_paid:
+            payment_status = PaymentStatus.PENDING
+            amount = pooja.suggested_amount or 0
+        else:
+            payment_status = PaymentStatus.FREE
+            amount = 0
 
         return self._create_with_unique_number({
             "seva_id": pooja.id,
@@ -85,8 +90,8 @@ class SevaTicketService:
             "email": data.email,
             "seva_date": data.seva_date,
             "seva_time": data.seva_time,
-            "payment_status": PaymentStatus.FREE,
-            "amount": 0,
+            "payment_status": payment_status,
+            "amount": amount,
             "status": TicketStatus.ACTIVE,
             "source": ModelTicketSource.ONLINE,
             "booked_by_user_id": booked_by_user_id,
@@ -125,6 +130,30 @@ class SevaTicketService:
             ))
             self.ticket_repo.db.commit()
 
+        return ticket
+
+    def collect_payment(self, ticket_id: UUID, admin_user) -> SevaTicket:
+        """Marks a PENDING ticket (fee owed, booked online) as PAID once the
+        devotee pays at the temple counter, and records the cash income -
+        the same ledger entry a paid counter ticket posts at creation time,
+        just posted now instead, since that's when the money actually arrived."""
+        ticket = self.get_ticket(ticket_id)
+        if ticket.payment_status != PaymentStatus.PENDING:
+            raise HTTPException(status_code=400, detail="This ticket has no pending payment to collect")
+
+        ticket.payment_status = PaymentStatus.PAID
+        db = self.ticket_repo.db
+        db.add(IncomeTransaction(
+            source_type=IncomeSourceType.SEVA,
+            reference_id=f"seva_ticket:{ticket.id}",
+            amount=ticket.amount,
+            payment_mode=PaymentMode.CASH,
+            received_by=admin_user.id,
+            notes=f"Seva ticket {ticket.ticket_number} - {ticket.seva_name} ({ticket.devotee_name}) "
+                  f"- collected at counter",
+        ))
+        db.commit()
+        db.refresh(ticket)
         return ticket
 
     def query_tickets(self, filters: SevaTicketFilter):
@@ -248,6 +277,17 @@ class SevaTicketService:
             f'<div class="footer-phone">Ph: {temple_phone}</div>' if temple_phone else ''
         )
         source_label = "Online booking" if ticket.source.value == "ONLINE" else "Temple counter"
+        if ticket.payment_status == PaymentStatus.PENDING:
+            fee_display = f"Rs. {ticket.amount} - PAY AT COUNTER"
+        elif ticket.payment_status == PaymentStatus.PAID:
+            fee_display = f"Rs. {ticket.amount} (PAID)"
+        else:
+            fee_display = "FREE"
+        pending_notice_html = (
+            '<div class="row" style="border: 1px solid #000; padding: 4px; text-align: center;">'
+            'Payment pending - please pay at the temple counter</div>'
+            if ticket.payment_status == PaymentStatus.PENDING else ''
+        )
         
         return f"""
         <!DOCTYPE html>
@@ -319,8 +359,9 @@ class SevaTicketService:
                     <div class="row"><span class="label">Seva:</span> <span class="value">{html.escape(ticket.seva_name)}</span></div>
                     <div class="row"><span class="label">Date:</span> <span class="value">{display_date}</span></div>
                     <div class="row"><span class="label">Time:</span> <span class="value">{display_time}</span></div>
-                    <div class="row"><span class="label">Fee:</span> <span class="value">Rs. {ticket.amount} ({ticket.payment_status.value})</span></div>
+                    <div class="row"><span class="label">Fee:</span> <span class="value">{fee_display}</span></div>
                     <div class="row"><span class="label">Booked via:</span> <span class="value">{source_label}</span></div>
+                    {pending_notice_html}
                 </div>
 
                 <div class="qr-container">

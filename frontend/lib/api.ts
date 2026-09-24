@@ -93,7 +93,7 @@ export const forgotPassword = async (email: string) =>
   (await api.post<{ message: string }>('/auth/forgot-password', { email })).data;
 export const resetPassword = async (token: string, new_password: string) =>
   (await api.post<{ message: string }>('/auth/reset-password', { token, new_password })).data;
-export const register = async (data: { username: string; password: string; email?: string; phone?: string }) =>
+export const register = async (data: { username: string; password: string; email: string; phone: string }) =>
   (await api.post<AppUser>('/auth/register', data)).data;
 export const getMe = async () => (await api.get<Me>('/auth/verify')).data;
 export const changePassword = async (current_password: string, new_password: string) =>
@@ -210,6 +210,7 @@ export const downloadTicketPdf = async (id: string) =>
   (await api.get<Blob>(`/seva-tickets/${id}/pdf`, { params: { action: 'download' }, responseType: 'blob' })).data;
 export const deleteTicket = async (id: string) => (await api.delete(`/seva-tickets/${id}`)).data;
 export const getMyTickets = async () => (await api.get<SevaTicket[]>('/seva-tickets/mine')).data;
+export const collectPayment = async (id: string) => (await api.post<SevaTicket>(`/seva-tickets/${id}/collect-payment`)).data;
 
 // ------------------------------------------------------------------------------ finance
 export const getFinanceSummary = async () => (await api.get<FinanceSummary>('/finance/summary')).data;

@@ -1,7 +1,17 @@
+import re
 from decimal import Decimal
 from typing import Annotated, Optional
 
 from pydantic import AfterValidator, Field, PlainSerializer, StringConstraints
+
+_MOBILE_RE = re.compile(r"^\+?[0-9]{10,14}$")
+
+
+def normalize_mobile(value: str) -> str:
+    value = re.sub(r"[\s-]", "", value)
+    if not _MOBILE_RE.match(value):
+        raise ValueError("Enter a valid mobile number (10-14 digits)")
+    return value
 
 
 def _safe_url(value: str) -> str:

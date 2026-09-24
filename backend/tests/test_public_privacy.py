@@ -107,7 +107,7 @@ def test_contact_honeypot_stores_nothing(client, db, admin):
     assert db.query(ContactMessage).count() == 0
 
 
-def test_seva_booking_cannot_set_price_or_paid_seva(client, db, monkeypatch):
+def test_seva_booking_cannot_set_price_and_paid_seva_becomes_pending(client, db, monkeypatch):
     free = Pooja(name="Free Archana", pooja_type="daily", is_paid=False, is_active=True)
     paid = Pooja(name="Abhishekam", pooja_type="special", is_paid=True, suggested_amount=500, is_active=True)
     db.add_all([free, paid])
@@ -125,10 +125,17 @@ def test_seva_booking_cannot_set_price_or_paid_seva(client, db, monkeypatch):
     assert ticket["seva_name"] == "Free Archana" and ticket["source"] == "ONLINE"
     assert ticket["email"] == email
 
-    rejected = client.post("/api/v1/seva-tickets/", json={
+    # A paid seva can now be booked online too - it comes back PENDING (fee owed,
+    # not collected yet), never PAID from an unauthenticated request, and the fee
+    # is the pooja's suggested_amount, not whatever the client sends.
+    paid_booking = client.post("/api/v1/seva-tickets/", json={
         "seva_id": paid.id, "devotee_name": "Ravi", "mobile_number": "9876543210", "seva_date": tomorrow,
-        "email": email, "booking_token": token})
-    assert rejected.status_code == 400
+        "email": email, "booking_token": token,
+        "amount": 1, "payment_status": "PAID"})
+    assert paid_booking.status_code == 200, paid_booking.text
+    paid_ticket = paid_booking.json()
+    assert paid_ticket["payment_status"] == "PENDING"
+    assert paid_ticket["amount"] == 500
 
     past = client.post("/api/v1/seva-tickets/", json={
         "seva_id": free.id, "devotee_name": "Ravi", "mobile_number": "9876543211",

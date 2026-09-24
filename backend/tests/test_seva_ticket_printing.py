@@ -84,3 +84,18 @@ def test_ticket_html_shows_temple_phone_when_configured(db):
     html_out = service.generate_ticket_html(_ticket("SVVD-2026-000006", "tok6"))
 
     assert "+91 98765 43210" in html_out
+
+
+def test_ticket_html_flags_a_pending_payment(db):
+    """A paid seva booked online (see book_ticket) prints as PENDING - the ticket
+    itself should make it obvious payment is still owed, both to the devotee and
+    to the staff member who scans it at the counter."""
+    ticket = _ticket("SVVD-2026-000007", "tok7")
+    ticket.payment_status = PaymentStatus.PENDING
+    ticket.amount = 250
+
+    service = SevaTicketService(SevaTicketRepository(db), PoojaRepository(db))
+    html_out = service.generate_ticket_html(ticket)
+
+    assert "PAY AT COUNTER" in html_out
+    assert "Payment pending" in html_out

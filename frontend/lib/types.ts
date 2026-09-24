@@ -256,6 +256,10 @@ export interface ContactInput {
 }
 
 export type TicketStatus = 'ACTIVE' | 'USED' | 'CANCELLED';
+/** PENDING: a paid seva booked online, fee owed but not yet collected - see
+ * /seva-tickets/{id}/collect-payment. Counter tickets are only ever FREE or PAID,
+ * since staff collect payment (if any) at the moment they create the ticket. */
+export type PaymentStatus = 'FREE' | 'PAID' | 'PENDING';
 
 export interface SevaTicket {
   id: string;
@@ -267,7 +271,7 @@ export interface SevaTicket {
   email?: string | null;
   seva_date: string;
   seva_time: string | null;
-  payment_status: 'FREE' | 'PAID';
+  payment_status: PaymentStatus;
   amount: number;
   status: TicketStatus;
   source: 'ONLINE' | 'COUNTER';

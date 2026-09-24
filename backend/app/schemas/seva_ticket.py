@@ -1,4 +1,3 @@
-import re
 from datetime import date, datetime, time
 from typing import Annotated, Optional
 from uuid import UUID
@@ -6,17 +5,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
 
 from app.models.seva_ticket import PaymentStatus, TicketSource, TicketStatus
-from app.schemas.common import MoneyInOrZero, MoneyOut
+from app.schemas.common import MoneyInOrZero, MoneyOut, normalize_mobile
 
-_MOBILE_RE = re.compile(r"^\+?[0-9]{10,14}$")
 DevoteeName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=100)]
-
-
-def _mobile(v: str) -> str:
-    v = re.sub(r"[\s-]", "", v)
-    if not _MOBILE_RE.match(v):
-        raise ValueError("Enter a valid mobile number (10-14 digits)")
-    return v
 
 
 class SevaBookingPublic(BaseModel):
@@ -33,7 +24,7 @@ class SevaBookingPublic(BaseModel):
     @field_validator("mobile_number")
     @classmethod
     def _m(cls, v):
-        return _mobile(v)
+        return normalize_mobile(v)
 
 
 class SevaBookingOnline(SevaBookingPublic):
