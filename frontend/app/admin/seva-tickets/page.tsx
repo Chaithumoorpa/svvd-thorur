@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Download, Plus, QrCode, Ticket, Trash2 } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
+import QrCameraScanner from '@/components/admin/QrCameraScanner';
 import Field from '@/components/ui/Field';
 import Modal from '@/components/ui/Modal';
 import Pager from '@/components/ui/Pager';
@@ -37,6 +38,7 @@ export default function SevaTicketsAdmin() {
   const action = useAction();
 
   const [scanOpen, setScanOpen] = useState(false);
+  const [scanMode, setScanMode] = useState<'camera' | 'manual'>('camera');
   const [scanCode, setScanCode] = useState('');
   const [scanResult, setScanResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -54,9 +56,8 @@ export default function SevaTicketsAdmin() {
     }
   }
 
-  async function onScan(e: React.FormEvent) {
-    e.preventDefault();
-    const res = await action.run(() => scanTicket(scanCode.trim()));
+  async function runScan(code: string) {
+    const res = await action.run(() => scanTicket(code.trim()));
     if (res) {
       setScanResult({ ok: res.success, message: res.message });
       if (res.success) {
@@ -64,6 +65,16 @@ export default function SevaTicketsAdmin() {
         list.reload();
       }
     }
+  }
+
+  async function onScan(e: React.FormEvent) {
+    e.preventDefault();
+    await runScan(scanCode);
+  }
+
+  function scanAgain() {
+    setScanResult(null);
+    action.clear();
   }
 
   async function onCreate(e: React.FormEvent) {
@@ -103,7 +114,7 @@ export default function SevaTicketsAdmin() {
       description="Counter tickets, online bookings and ticket scanning."
       actions={
         <>
-          <button type="button" className={btnGhost} onClick={() => { setScanOpen(true); setScanResult(null); }}>
+          <button type="button" className={btnGhost} onClick={() => { setScanOpen(true); setScanResult(null); setScanMode('camera'); setScanCode(''); }}>
             <QrCode className="h-4 w-4" aria-hidden="true" /> Scan ticket
           </button>
           <button type="button" className={btnPrimary} onClick={() => setCreateOpen(true)}>
@@ -179,16 +190,33 @@ export default function SevaTicketsAdmin() {
 
       {scanOpen && (
         <Modal title="Scan ticket" onClose={() => { setScanOpen(false); action.clear(); }}>
-          <form onSubmit={onScan} className="space-y-4">
+          <div className="space-y-4">
             {action.error && <Notice kind="error">{action.error}</Notice>}
             {scanResult && <Notice kind={scanResult.ok ? 'success' : 'error'}>{scanResult.message}</Notice>}
-            <Field label="QR code or ticket number" hint="Use a barcode scanner or type the ticket number, e.g. SVVD-2026-000123.">
-              <input className={inputCls} autoComplete="off" value={scanCode} onChange={(e) => setScanCode(e.target.value)} />
-            </Field>
-            <div className="flex justify-end">
-              <button type="submit" className={btnPrimary} disabled={action.busy || !scanCode.trim()}>{action.busy ? 'Checking…' : 'Validate ticket'}</button>
-            </div>
-          </form>
+
+            {scanResult ? (
+              <div className="flex justify-center">
+                <button type="button" className={btnPrimary} onClick={scanAgain}>Scan another ticket</button>
+              </div>
+            ) : scanMode === 'camera' ? (
+              <QrCameraScanner
+                onDetect={(data) => runScan(data)}
+                onUseManualEntry={() => setScanMode('manual')}
+              />
+            ) : (
+              <form onSubmit={onScan} className="space-y-4">
+                <Field label="QR code or ticket number" hint="Use a barcode scanner or type the ticket number, e.g. SVVD-2026-000123.">
+                  <input className={inputCls} autoComplete="off" autoFocus value={scanCode} onChange={(e) => setScanCode(e.target.value)} />
+                </Field>
+                <div className="flex items-center justify-between gap-2">
+                  <button type="button" className={btnGhost} onClick={() => setScanMode('camera')}>
+                    <QrCode className="h-4 w-4" aria-hidden="true" /> Use camera instead
+                  </button>
+                  <button type="submit" className={btnPrimary} disabled={action.busy || !scanCode.trim()}>{action.busy ? 'Checking…' : 'Validate ticket'}</button>
+                </div>
+              </form>
+            )}
+          </div>
         </Modal>
       )}
 
