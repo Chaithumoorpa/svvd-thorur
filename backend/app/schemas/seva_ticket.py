@@ -65,6 +65,7 @@ class SevaTicketOut(BaseModel):
     status: TicketStatus
     source: TicketSource
     created_by_admin_id: Optional[int] = None
+    booked_by_user_id: Optional[int] = None
     qr_token: str
     created_at: datetime
     updated_at: datetime
