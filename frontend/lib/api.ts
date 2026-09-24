@@ -147,6 +147,7 @@ export const listUsers = (p = 1, pageSize = 50) => page<AppUser>('/auth/admin/us
 export const createUser = async (data: UserCreateInput) => (await api.post<AppUser>('/auth/admin/users', data)).data;
 export const updateUser = async (id: number, data: UserUpdateInput) =>
   (await api.patch<AppUser>(`/auth/admin/users/${id}`, data)).data;
+export const deleteUser = async (id: number) => (await api.delete(`/auth/admin/users/${id}`)).data;
 
 // ---------------------------------------------------------------------------- temple
 export const getTemple = async () => (await api.get<Temple>('/temple/')).data;
@@ -233,6 +234,7 @@ export const deleteDonor = async (id: number) => (await api.delete<Donor>(`/dono
 export const listDonations = (p = 1, filters: { donor_id?: number; start_date?: string; end_date?: string } = {}, pageSize = 25) =>
   page<Donation>('/donations/', { page: p, page_size: pageSize, ...filters });
 export const createDonation = async (data: DonationInput) => (await api.post<Donation>('/donations/', data)).data;
+export const deleteDonation = async (id: number) => (await api.delete<{ message: string }>(`/donations/${id}`)).data;
 export const issueReceipt = async (id: number) => (await api.post<Donation>(`/donations/${id}/receipt`)).data;
 export const downloadReceipt = async (id: number) =>
   (await api.get<Blob>(`/donations/${id}/receipt`, { responseType: 'blob' })).data;

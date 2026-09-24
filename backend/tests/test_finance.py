@@ -142,6 +142,34 @@ def test_receipts_are_sequential_idempotent_and_private(client, admin, trustee, 
     assert client.put(f"/api/v1/donations/{ids[0]}", headers=headers, json={"purpose": "Roof"}).status_code == 200
 
 
+def test_deleting_a_donation_removes_its_ledger_entry(client, admin, staff, db):
+    _, headers = admin
+    donor = _donor(client, headers)
+    created = client.post("/api/v1/donations/", headers=headers, json={
+        "donor_id": donor["id"], "amount": 250, "payment_mode": "CASH"}).json()
+
+    _, staff_headers = staff
+    assert client.delete(f"/api/v1/donations/{created['id']}", headers=staff_headers).status_code == 403
+
+    r = client.delete(f"/api/v1/donations/{created['id']}", headers=headers)
+    assert r.status_code == 200, r.text
+
+    assert client.get(f"/api/v1/donations/{created['id']}/receipt", headers=headers).status_code == 404
+    assert db.query(IncomeTransaction).filter(
+        IncomeTransaction.reference_id == f"donation:{created['id']}").first() is None
+
+
+def test_cannot_delete_a_donation_once_a_receipt_is_issued(client, admin):
+    _, headers = admin
+    donor = _donor(client, headers)
+    created = client.post("/api/v1/donations/", headers=headers, json={
+        "donor_id": donor["id"], "amount": 300}).json()
+    client.post(f"/api/v1/donations/{created['id']}/receipt", headers=headers)
+
+    r = client.delete(f"/api/v1/donations/{created['id']}", headers=headers)
+    assert r.status_code == 409
+
+
 def test_donation_list_filters_and_order(client, admin):
     _, headers = admin
     donor = _donor(client, headers)

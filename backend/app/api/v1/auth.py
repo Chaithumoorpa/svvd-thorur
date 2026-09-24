@@ -278,3 +278,21 @@ def update_user_admin(
             "Thank you,\nSVVD Thorur",
         )
     return user
+
+
+@router.delete("/admin/users/{user_id}", response_model=dict)
+def delete_user_admin(
+    user_id: int,
+    service: AuthService = Depends(get_auth_service),
+    audit: AuditContext = Depends(get_audit),
+    acting_user: User = Depends(require_permission(Permission.USERS_MANAGE)),
+):
+    """Super Admin only (same USERS_MANAGE gate as the rest of user
+    management). Cannot delete yourself or the last active Super Admin."""
+    user = service.user_repository.get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    username = user.username
+    service.delete_user(user_id, acting_user)
+    audit.log("DELETE", "user", user_id, f"Deleted user {username}")
+    return {"message": "User deleted"}

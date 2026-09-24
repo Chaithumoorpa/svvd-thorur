@@ -2,9 +2,10 @@
 
 import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Download, FileText, HandHeart, Plus } from 'lucide-react';
+import { Download, FileText, HandHeart, Plus, Trash2 } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
 import { useAuth } from '@/components/admin/AuthContext';
+import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import Field from '@/components/ui/Field';
 import Modal from '@/components/ui/Modal';
 import Pager from '@/components/ui/Pager';
@@ -12,7 +13,7 @@ import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/St
 import { btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
-import { createDonation, downloadReceipt, issueReceipt, listDonations, listDonors, saveBlob } from '@/lib/api';
+import { createDonation, deleteDonation, downloadReceipt, issueReceipt, listDonations, listDonors, saveBlob } from '@/lib/api';
 import { emptyToNull, formatDate, formatMoney } from '@/lib/format';
 import type { Donation, DonationType, Donor, PaymentMode } from '@/lib/types';
 
@@ -85,6 +86,16 @@ function DonationsInner() {
   const [creating, setCreating] = useState(false);
   const [donor, setDonor] = useState<Donor | null>(null);
   const [form, setForm] = useState({ amount: '', donation_type: 'general' as DonationType, payment_mode: 'CASH' as PaymentMode, purpose: '', donated_on: '' });
+  const [toDelete, setToDelete] = useState<Donation | null>(null);
+
+  async function remove() {
+    if (!toDelete) return;
+    const ok = await action.run(() => deleteDonation(toDelete.id), 'Donation deleted.');
+    if (ok) {
+      setToDelete(null);
+      list.reload();
+    }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -156,6 +167,7 @@ function DonationsInner() {
                   <th scope="col" className="px-4 py-3">Mode</th>
                   <th scope="col" className="px-4 py-3 text-right">Amount</th>
                   <th scope="col" className="px-4 py-3">Receipt</th>
+                  {canWrite && <th scope="col" className="px-4 py-3"><span className="sr-only">Actions</span></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -172,6 +184,20 @@ function DonationsInner() {
                         {d.receipt_number ?? 'Issue receipt'}
                       </button>
                     </td>
+                    {canWrite && (
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          className={btnGhost}
+                          disabled={!!d.receipt_number}
+                          title={d.receipt_number ? 'A receipt was already issued and cannot be deleted' : undefined}
+                          onClick={() => setToDelete(d)}
+                          aria-label={`Delete donation from ${d.donor_name ?? `donor #${d.donor_id}`}`}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-700" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -214,6 +240,18 @@ function DonationsInner() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {toDelete && (
+        <ConfirmDialog
+          title="Delete donation?"
+          message={`This permanently deletes the ${formatMoney(toDelete.amount)} donation from ${toDelete.donor_name ?? `donor #${toDelete.donor_id}`} and its matching finance ledger entry. This can't be undone.`}
+          confirmLabel="Delete"
+          danger
+          busy={action.busy}
+          onConfirm={remove}
+          onCancel={() => setToDelete(null)}
+        />
       )}
     </AdminPage>
   );

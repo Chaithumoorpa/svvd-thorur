@@ -155,6 +155,19 @@ def update_donation(
     return _donation_out(donation)
 
 
+@router.delete("/donations/{donation_id}", response_model=dict)
+def delete_donation(
+    donation_id: int,
+    service: DonationService = Depends(get_donation_service),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_write_donations),
+):
+    """Blocked once a receipt has been issued - see DonationService.delete."""
+    service.delete(donation_id)
+    audit.log("DELETE", "donation", donation_id, f"Deleted donation #{donation_id}")
+    return {"message": "Donation deleted"}
+
+
 @router.post("/donations/{donation_id}/receipt", response_model=DonationOut)
 def generate_receipt(
     donation_id: int,

@@ -146,6 +146,25 @@ class DonationService:
         self.db.commit()
         return self.get(donation_id)
 
+    def delete(self, donation_id: int) -> Donation:
+        """Deletes a donation and its linked income entry, if any - same
+        reasoning as seva ticket deletion: the ledger shouldn't keep showing
+        income for a donation that no longer exists. Blocked once a receipt
+        has been issued, same as editing the amount/date - a donor may
+        already hold that receipt as a tax document."""
+        donation = self.get(donation_id)
+        if donation.receipt_number:
+            raise HTTPException(
+                status_code=409,
+                detail="A receipt was already issued for this donation and cannot be deleted.",
+            )
+        income = self._linked_income(donation_id)
+        if income:
+            self.db.delete(income)
+        self.db.delete(donation)
+        self.db.commit()
+        return donation
+
     def issue_receipt(self, donation_id: int) -> Donation:
         """Assign a sequential receipt number (idempotent)."""
         donation = self.get(donation_id)
