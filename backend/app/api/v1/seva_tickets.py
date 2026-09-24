@@ -13,7 +13,7 @@ from app.utils.dependencies import (
 from app.utils.rate_limiter import booking_limiter, enforce, get_client_ip, otp_request_limiter, otp_verify_limiter
 from app.services.email_service import EmailService
 from app.services.otp_service import OtpService
-from app.services.seva_ticket_service import SevaTicketService
+from app.services.seva_ticket_service import PaymentPendingError, SevaTicketService
 from app.schemas.otp import OtpRequest, OtpVerifyRequest, OtpVerifyResponse
 from app.schemas.seva_ticket import (
     SevaBookingOnline,
@@ -203,6 +203,14 @@ def scan_ticket(
             success=True,
             message="Ticket successfully validated and marked as USED",
             ticket=ticket
+        )
+    except PaymentPendingError as e:
+        audit.log("SCAN", "seva_ticket", e.ticket.id,
+                  f"Scan blocked - payment pending for ticket {e.ticket.ticket_number}")
+        return ScanResponse(
+            success=False,
+            message=f"Payment pending (Rs. {e.ticket.amount}). Collect payment before this ticket can be used.",
+            ticket=e.ticket,
         )
     except HTTPException as e:
         return ScanResponse(

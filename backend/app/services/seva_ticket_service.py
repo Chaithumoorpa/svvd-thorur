@@ -20,6 +20,16 @@ from app.models.finance import IncomeSourceType, IncomeTransaction, PaymentMode
 from app.models.temple import Temple
 
 
+class PaymentPendingError(Exception):
+    """Raised by scan_ticket when the ticket has a fee owed but not yet collected -
+    carries the ticket so the caller can show the amount due and a way to collect it,
+    without a second lookup."""
+
+    def __init__(self, ticket: SevaTicket):
+        self.ticket = ticket
+        super().__init__(f"Payment pending for ticket {ticket.ticket_number}")
+
+
 class SevaTicketService:
     def __init__(self, ticket_repo: SevaTicketRepository, pooja_repo: PoojaRepository):
         self.ticket_repo = ticket_repo
@@ -198,23 +208,29 @@ class SevaTicketService:
     def scan_ticket(self, identifier: str) -> SevaTicket:
         """
         Scans a ticket using either the QR token (secure) or the ticket number (manual entry).
-        Marks it as USED if currently ACTIVE.
+        Marks it as USED if currently ACTIVE. A PENDING-payment ticket (a paid seva
+        booked online, fee not yet collected) is refused here - raises PaymentPendingError
+        carrying the ticket, so staff collect payment first (see collect_payment) and
+        nobody receives the seva without paying.
         """
         # 1. Try by QR Token first
         ticket = self.ticket_repo.get_by_qr_token(identifier)
-        
+
         # 2. Fallback to Ticket Number if not found by QR token
         if not ticket:
             ticket = self.ticket_repo.get_by_ticket_number(identifier)
-            
+
         if not ticket:
             raise HTTPException(status_code=404, detail="Invalid QR code or Ticket Number")
-            
+
         if ticket.status == TicketStatus.USED:
             raise HTTPException(status_code=400, detail="Ticket has already been used")
-            
+
         if ticket.status == TicketStatus.CANCELLED:
             raise HTTPException(status_code=400, detail="Ticket has been cancelled")
+
+        if ticket.payment_status == PaymentStatus.PENDING:
+            raise PaymentPendingError(ticket)
 
         # Mark as used
         return self.ticket_repo.update_status(ticket, TicketStatus.USED)

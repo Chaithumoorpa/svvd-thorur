@@ -75,6 +75,13 @@ export default function SevaTicketsAdmin() {
     }
   }
 
+  /** From the scan panel: collecting payment for a ticket that was just blocked at
+   * check-in also completes the check-in, so staff don't have to scan a second time. */
+  async function collectAndCheckIn(id: string, qrToken: string) {
+    const updated = await action.run(() => collectPayment(id));
+    if (updated) await runScan(qrToken);
+  }
+
   async function onScan(e: React.FormEvent) {
     e.preventDefault();
     await runScan(scanCode);
@@ -216,10 +223,15 @@ export default function SevaTicketsAdmin() {
                 {scanResult.ticket && scanResult.ticket.payment_status === 'PENDING' && (
                   <div className="rounded-lg bg-amber-50 p-3">
                     <p className="text-sm text-amber-900">
-                      {formatMoney(scanResult.ticket.amount)} due for this ticket.
+                      {formatMoney(scanResult.ticket.amount)} due - collect it to check this ticket in.
                     </p>
-                    <button type="button" className={`${btnPrimary} mt-2`} onClick={() => collect(scanResult.ticket!.id)} disabled={action.busy}>
-                      <Banknote className="h-4 w-4" aria-hidden="true" /> {action.busy ? 'Collecting…' : 'Collect payment'}
+                    <button
+                      type="button"
+                      className={`${btnPrimary} mt-2`}
+                      onClick={() => collectAndCheckIn(scanResult.ticket!.id, scanResult.ticket!.qr_token)}
+                      disabled={action.busy}
+                    >
+                      <Banknote className="h-4 w-4" aria-hidden="true" /> {action.busy ? 'Collecting…' : 'Collect payment & check in'}
                     </button>
                   </div>
                 )}
