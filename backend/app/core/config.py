@@ -35,9 +35,12 @@ class Settings(BaseSettings):
 
     # Security
     SECRET_KEY: str
-    # Roles and active-status are re-read from the database on every request, so a long-ish
-    # session (one working day) does not delay revocation.
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
+    # Roles and active-status are re-read from the database on every request, so this
+    # only bounds how long a *stolen* token stays usable. A session stays alive as long
+    # as the user is actually doing something - the frontend silently calls /auth/refresh
+    # every so often while there's activity (see lib/api.ts) - and simply expires after
+    # this many minutes of no activity at all.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     # Reverse proxies in front of the API that append to X-Forwarded-For (Next.js rewrite = 1,
     # nginx + Next.js = 2). 0 = trust nobody. The client IP is read from the right, so a
     # client-supplied prefix cannot spoof it.

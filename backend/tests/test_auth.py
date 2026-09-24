@@ -26,6 +26,22 @@ def test_login_success_and_verify(client, make_user):
     assert "content:write" in data["permissions"] and "users:manage" not in data["permissions"]
 
 
+def test_refresh_issues_a_new_usable_token(client, make_user):
+    _, headers = make_user("ADMIN", username="refresher")
+    r = client.post("/api/v1/auth/refresh", headers=headers)
+    assert r.status_code == 200
+    new_token = r.json()["access_token"]
+    assert new_token
+
+    verify = client.get("/api/v1/auth/verify", headers={"Authorization": f"Bearer {new_token}"})
+    assert verify.status_code == 200
+    assert verify.json()["username"] == "refresher"
+
+
+def test_refresh_requires_authentication(client):
+    assert client.post("/api/v1/auth/refresh").status_code == 401
+
+
 def test_login_failures_are_indistinguishable(client, make_user):
     make_user("ADMIN", username="alice", password="Password123")
     wrong_pw = _login(client, "alice", "nope")
