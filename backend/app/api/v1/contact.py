@@ -75,7 +75,7 @@ def update_contact_message(
             message.email,
             f"Re: {message.subject}",
             f"Dear {message.name},\n\n"
-            f"Your message to Sri Varasiddhi Vinayaka Swamy Devasthanam (subject: \"{message.subject}\") "
+            f"Your message to Sri Varasidhi Vinayaka Swamy Devasthanam (subject: \"{message.subject}\") "
             "has been marked as resolved.\n\n"
             "If you have any further questions, please reply to this email or use the "
             "Contact form on our website again.\n\n"
