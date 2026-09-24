@@ -1,18 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Download, Plus, QrCode, Ticket } from 'lucide-react';
+import { Download, Plus, QrCode, Ticket, Trash2 } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
+import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import Field from '@/components/ui/Field';
 import Modal from '@/components/ui/Modal';
 import Pager from '@/components/ui/Pager';
 import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
 import { btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
+import { useAuth } from '@/components/admin/AuthContext';
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
-import { createCounterTicket, downloadTicketPdf, getPoojas, listTickets, saveBlob, scanTicket } from '@/lib/api';
+import { createCounterTicket, deleteTicket, downloadTicketPdf, getPoojas, listTickets, saveBlob, scanTicket } from '@/lib/api';
 import { formatDate, formatMoney, todayISO } from '@/lib/format';
-import type { TicketStatus } from '@/lib/types';
+import type { SevaTicket, TicketStatus } from '@/lib/types';
 
 const PAGE_SIZE = 25;
 const STATUS_CLS: Record<TicketStatus, string> = {
@@ -22,6 +24,7 @@ const STATUS_CLS: Record<TicketStatus, string> = {
 };
 
 export default function SevaTicketsAdmin() {
+  const { me } = useAuth();
   const [page, setPage] = useState(1);
   const [date, setDate] = useState('');
   const [status, setStatus] = useState<TicketStatus | ''>('');
@@ -39,6 +42,17 @@ export default function SevaTicketsAdmin() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ seva_id: '', devotee_name: '', mobile_number: '', seva_date: todayISO(), payment_status: 'FREE' as 'FREE' | 'PAID', amount: '' });
+
+  const [toDelete, setToDelete] = useState<SevaTicket | null>(null);
+
+  async function remove() {
+    if (!toDelete) return;
+    const ok = await action.run(() => deleteTicket(toDelete.id), 'Ticket deleted.');
+    if (ok) {
+      setToDelete(null);
+      list.reload();
+    }
+  }
 
   async function onScan(e: React.FormEvent) {
     e.preventDefault();
@@ -148,6 +162,11 @@ export default function SevaTicketsAdmin() {
                       <button type="button" className={btnGhost} onClick={() => pdf(t.id, t.ticket_number)} disabled={action.busy} aria-label={`Download ticket ${t.ticket_number}`}>
                         <Download className="h-4 w-4" />
                       </button>
+                      {me.is_admin && (
+                        <button type="button" className={btnGhost} onClick={() => setToDelete(t)} disabled={action.busy} aria-label={`Delete ticket ${t.ticket_number}`}>
+                          <Trash2 className="h-4 w-4 text-red-700" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -199,7 +218,9 @@ export default function SevaTicketsAdmin() {
                 </Field>
               )}
             </div>
-            <p className="text-xs text-gray-500">Record the money separately under Finance → Income if it should appear in the ledger.</p>
+            {form.payment_status === 'PAID' && (
+              <p className="text-xs text-gray-500">This will be added to the finance ledger automatically as cash income.</p>
+            )}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className={btnGhost} onClick={() => { setCreateOpen(false); action.clear(); }}>Cancel</button>
               <button type="submit" className={btnPrimary} disabled={action.busy || !form.seva_id || form.devotee_name.trim().length < 2 || !form.mobile_number.trim()}>
@@ -208,6 +229,18 @@ export default function SevaTicketsAdmin() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {toDelete && (
+        <ConfirmDialog
+          title="Delete ticket?"
+          message={`This permanently deletes ticket ${toDelete.ticket_number}${toDelete.payment_status === 'PAID' ? ' and removes its linked finance ledger entry' : ''}.`}
+          confirmLabel="Delete"
+          danger
+          busy={action.busy}
+          onConfirm={remove}
+          onCancel={() => setToDelete(null)}
+        />
       )}
     </AdminPage>
   );

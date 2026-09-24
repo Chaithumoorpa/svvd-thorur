@@ -208,6 +208,7 @@ export const scanTicket = async (qr_token: string) =>
   (await api.post<{ success: boolean; message: string; ticket: SevaTicket | null }>('/seva-tickets/scan', { qr_token })).data;
 export const downloadTicketPdf = async (id: string) =>
   (await api.get<Blob>(`/seva-tickets/${id}/pdf`, { params: { action: 'download' }, responseType: 'blob' })).data;
+export const deleteTicket = async (id: string) => (await api.delete(`/seva-tickets/${id}`)).data;
 
 // ------------------------------------------------------------------------------ finance
 export const getFinanceSummary = async () => (await api.get<FinanceSummary>('/finance/summary')).data;

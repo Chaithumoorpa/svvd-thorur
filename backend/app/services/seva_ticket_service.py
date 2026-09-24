@@ -146,6 +146,22 @@ class SevaTicketService:
             raise HTTPException(status_code=404, detail="Ticket not found")
         return ticket
 
+    def delete_ticket(self, ticket_id: UUID) -> None:
+        """Deletes a ticket and its linked income entry, if any (a paid counter
+        ticket posts one on creation) - otherwise the ledger would keep showing
+        income for a ticket that no longer exists."""
+        ticket = self.get_ticket(ticket_id)
+        db = self.ticket_repo.db
+        linked_income = (
+            db.query(IncomeTransaction)
+            .filter(IncomeTransaction.reference_id == f"seva_ticket:{ticket.id}")
+            .first()
+        )
+        if linked_income:
+            db.delete(linked_income)
+            db.commit()
+        self.ticket_repo.delete(ticket)
+
     def scan_ticket(self, identifier: str) -> SevaTicket:
         """
         Scans a ticket using either the QR token (secure) or the ticket number (manual entry).
@@ -215,8 +231,19 @@ class SevaTicketService:
         temple_loc = html.escape(", ".join(
             p for p in [temple.village, temple.district, temple.state] if p
         )) if temple else "Thorur, Andhra Pradesh"
+        temple_phone = html.escape(temple.contact_phone) if temple and temple.contact_phone else None
 
-        logo_html = f'<img class="watermark" src="data:image/png;base64,{logo_base64}" />' if logo_base64 else ''
+        watermark_html = f'<img class="watermark" src="data:image/png;base64,{logo_base64}" />' if logo_base64 else ''
+        logo_mark_html = f'<img class="logo-mark" src="data:image/png;base64,{logo_base64}" />' if logo_base64 else ''
+
+        email_row = (
+            f'<div class="row"><span class="label">Email:</span> <span class="value">{html.escape(ticket.email)}</span></div>'
+            if ticket.email else ''
+        )
+        phone_row = (
+            f'<div class="footer-phone">Ph: {temple_phone}</div>' if temple_phone else ''
+        )
+        source_label = "Online booking" if ticket.source.value == "ONLINE" else "Temple counter"
         
         return f"""
         <!DOCTYPE html>
@@ -246,6 +273,7 @@ class SevaTicketService:
                     z-index: -1;
                 }}
                 .header {{ text-align: center; border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 10px; }}
+                .logo-mark {{ width: 46px; height: 46px; margin-bottom: 4px; }}
                 .temple-name {{ font-size: 16px; font-weight: bold; margin: 0; text-transform: uppercase; }}
                 .temple-loc {{ font-size: 11px; margin: 2px 0; }}
                 .ticket-title {{ font-size: 14px; font-weight: bold; margin-top: 5px; text-decoration: underline; }}
@@ -260,6 +288,7 @@ class SevaTicketService:
                 .ticket-num {{ font-family: monospace; font-size: 13px; font-weight: bold; margin-top: 3px; }}
                 
                 .footer {{ text-align: center; font-size: 9px; margin-top: 15px; border-top: 1px solid #000; padding-top: 5px; }}
+                .footer-phone {{ margin-bottom: 3px; }}
                 .status-badge {{ 
                     text-align: center; font-size: 12px; font-weight: bold;
                     border: 1px solid #000; width: 50%; margin: 0 auto 10px auto; padding: 2px;
@@ -268,30 +297,35 @@ class SevaTicketService:
         </head>
         <body>
             <div class="ticket">
-                {logo_html}
+                {watermark_html}
                 <div class="header">
+                    {logo_mark_html}
                     <div class="temple-name">{temple_name}</div>
                     <div class="temple-loc">{temple_loc}</div>
                     <div class="ticket-title">SEVA TICKET</div>
                 </div>
 
                 <div class="status-badge">{ticket.status.value}</div>
-                
+
                 <div class="content">
                     <div class="row"><span class="label">Ticket #:</span> <span class="value">{ticket.ticket_number}</span></div>
                     <div class="row"><span class="label">Devotee:</span> <span class="value">{html.escape(ticket.devotee_name)}</span></div>
+                    <div class="row"><span class="label">Mobile:</span> <span class="value">{html.escape(ticket.mobile_number)}</span></div>
+                    {email_row}
                     <div class="row"><span class="label">Seva:</span> <span class="value">{html.escape(ticket.seva_name)}</span></div>
                     <div class="row"><span class="label">Date:</span> <span class="value">{display_date}</span></div>
                     <div class="row"><span class="label">Time:</span> <span class="value">{display_time}</span></div>
                     <div class="row"><span class="label">Fee:</span> <span class="value">Rs. {ticket.amount} ({ticket.payment_status.value})</span></div>
+                    <div class="row"><span class="label">Booked via:</span> <span class="value">{source_label}</span></div>
                 </div>
-                
+
                 <div class="qr-container">
                     <img class="qr-code" src="data:image/png;base64,{qr_base64}" alt="QR" />
                     <div class="ticket-num">{ticket.ticket_number}</div>
                 </div>
-                
+
                 <div class="footer">
+                    {phone_row}
                     <p>Printed: {datetime.now().strftime("%d-%m-%Y %H:%M")}</p>
                     <p>Valid for one-time use only. No cancellations.</p>
                 </div>
