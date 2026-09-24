@@ -134,6 +134,24 @@ class TokenOut(Token):
     must_change_password: bool
 
 
+class LoginResponse(BaseModel):
+    """Step 1 of login. An account with an email on file gets otp_required=True
+    and nothing else - a sign-in code has been emailed, and POST /auth/login/
+    verify-otp completes the session. An account with no email skips straight
+    to a session (the token fields below), same as login always worked before
+    this existed - there's nowhere to send a code, so there's no second factor
+    to gate on."""
+    otp_required: bool
+    access_token: Optional[str] = None
+    token_type: Optional[str] = None
+    must_change_password: Optional[bool] = None
+
+
+class LoginOtpVerify(BaseModel):
+    username: str
+    code: str
+
+
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
