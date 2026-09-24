@@ -58,6 +58,35 @@ api.interceptors.response.use(
   },
 );
 
+// Sliding session: the token itself is short-lived (ACCESS_TOKEN_EXPIRE_MINUTES on the
+// backend), but as long as the user is actually doing something, this silently exchanges
+// it for a fresh one every so often - stop being active and the token simply expires,
+// and the next request's 401 signs them out via the interceptor above. Module-scoped
+// (not a React effect) so it covers the whole site - admin and devotee pages alike -
+// with one set of listeners, regardless of which page mounted first.
+const REFRESH_MIN_INTERVAL_MS = 10 * 60 * 1000;
+let lastRefreshAt = 0;
+
+function refreshSessionOnActivity() {
+  const token = getStoredToken();
+  if (!token) return;
+  const now = Date.now();
+  if (now - lastRefreshAt < REFRESH_MIN_INTERVAL_MS) return;
+  lastRefreshAt = now;
+  api
+    .post<{ access_token: string }>('/auth/refresh')
+    .then((res) => setStoredToken(res.data.access_token))
+    .catch(() => {
+      /* token already expired/invalid - leave it; the next real request 401s and signs out */
+    });
+}
+
+if (typeof window !== 'undefined') {
+  (['click', 'keydown', 'scroll', 'touchstart'] as const).forEach((evt) =>
+    window.addEventListener(evt, refreshSessionOnActivity, { passive: true }),
+  );
+}
+
 /** Human-readable message from any API failure (FastAPI `detail` string or validation list). */
 export function apiError(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
   if (axios.isAxiosError(error)) {

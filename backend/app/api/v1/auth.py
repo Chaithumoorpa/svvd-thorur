@@ -114,6 +114,19 @@ def verify_token(current_user: User = Depends(get_current_user)):
     }
 
 
+@router.post("/refresh", response_model=dict)
+def refresh_token(
+    current_user: User = Depends(get_current_user),
+    service: AuthService = Depends(get_auth_service),
+):
+    """Issues a fresh access token for the same session, extending it another
+    ACCESS_TOKEN_EXPIRE_MINUTES from now. Requires the CURRENT token to still be
+    valid - an already-expired or revoked session cannot refresh itself. Called
+    silently by the frontend while the user is active (see lib/api.ts); an idle
+    session simply stops being refreshed and expires on schedule."""
+    return {"access_token": service.create_access_token(current_user)}
+
+
 @router.post("/change-password", response_model=dict)
 def change_password(
     payload: PasswordChange,
