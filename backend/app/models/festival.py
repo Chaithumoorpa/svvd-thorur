@@ -20,3 +20,8 @@ class Festival(Base):
     festival_type = Column(String(50), default="annual", nullable=False)
 
     is_active = Column(Boolean, default=True, nullable=False)
+
+    # A daily job (see app/cli/generate_festival_announcements.py) creates one
+    # Announcement per festival, `announce_days_before` days ahead of festival_date.
+    auto_announce = Column(Boolean, default=True, nullable=False)
+    announce_days_before = Column(Integer, default=2, nullable=False)

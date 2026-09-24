@@ -67,6 +67,7 @@ export interface Announcement {
   start_date: string | null;
   end_date: string | null;
   is_active: boolean;
+  source_festival_id?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -89,6 +90,8 @@ export interface Festival {
   image_url: string | null;
   festival_type: string;
   is_active: boolean;
+  auto_announce: boolean;
+  announce_days_before: number;
 }
 
 export interface FestivalInput {
@@ -100,6 +103,8 @@ export interface FestivalInput {
   image_url?: string | null;
   festival_type?: string;
   is_active?: boolean;
+  auto_announce?: boolean;
+  announce_days_before?: number;
 }
 
 export interface Pooja {

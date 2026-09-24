@@ -16,6 +16,8 @@ class FestivalCreate(BaseModel):
     location: Optional[str] = Field(default=None, max_length=200)
     image_url: OptionalSafeUrl = None
     festival_type: str = Field(default="annual", max_length=50)
+    auto_announce: bool = True
+    announce_days_before: int = Field(default=2, ge=0, le=30)
 
     @field_validator("location", "image_url", "description", mode="before")
     @classmethod
@@ -38,6 +40,8 @@ class FestivalUpdate(BaseModel):
     image_url: OptionalSafeUrl = None
     festival_type: Optional[str] = Field(default=None, max_length=50)
     is_active: Optional[bool] = None
+    auto_announce: Optional[bool] = None
+    announce_days_before: Optional[int] = Field(default=None, ge=0, le=30)
 
     @field_validator("location", "image_url", "description", mode="before")
     @classmethod
@@ -55,6 +59,8 @@ class FestivalOut(BaseModel):
     image_url: Optional[str] = None
     festival_type: str
     is_active: bool
+    auto_announce: bool
+    announce_days_before: int
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
