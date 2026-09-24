@@ -48,7 +48,14 @@ class EmailService:
         if not to_email:
             logger.info("Skipping email (no recipient address): %s", subject)
             return False
-        return self._send(to_email, subject, body, log_label="email")
+        return self._send(to_email, subject, f"{body}\n\n{self._footer()}", log_label="email")
+
+    def _footer(self) -> str:
+        return (
+            "--\n"
+            "This is an automated message from svvdthorur.org. Privacy Policy: "
+            f"{settings.FRONTEND_BASE_URL}/legal/privacy-policy"
+        )
 
     def _send(self, to_email: str, subject: str, body: str, log_label: str) -> bool:
         try:

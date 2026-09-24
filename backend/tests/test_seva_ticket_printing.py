@@ -99,3 +99,14 @@ def test_ticket_html_flags_a_pending_payment(db):
 
     assert "PAY AT COUNTER" in html_out
     assert "Payment pending" in html_out
+
+
+def test_ticket_html_includes_a_guidelines_and_privacy_notice_back_page(db):
+    service = SevaTicketService(SevaTicketRepository(db), PoojaRepository(db))
+    html_out = service.generate_ticket_html(_ticket("SVVD-2026-000008", "tok8"))
+
+    assert 'class="notice-page"' in html_out
+    assert "TEMPLE GUIDELINES" in html_out
+    assert "Dress Code" in html_out
+    assert "Photography and videography" in html_out
+    assert "/legal/privacy-policy" in html_out
