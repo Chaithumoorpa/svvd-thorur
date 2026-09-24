@@ -78,6 +78,10 @@ class SevaTicketRepository(BaseRepository):
         self.db.refresh(ticket)
         return ticket
 
+    def delete(self, ticket: SevaTicket) -> None:
+        self.db.delete(ticket)
+        self.db.commit()
+
     def count(self) -> int:
         return self.db.query(SevaTicket).count()
 

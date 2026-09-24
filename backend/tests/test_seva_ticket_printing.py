@@ -51,4 +51,36 @@ def test_ticket_html_includes_the_logo_watermark(db):
     html_out = service.generate_ticket_html(_ticket("SVVD-2026-000003", "tok3"))
 
     assert 'class="watermark"' in html_out
+    assert 'class="logo-mark"' in html_out
     assert "data:image/png;base64," in html_out
+
+
+def test_ticket_html_shows_mobile_and_booking_source(db):
+    service = SevaTicketService(SevaTicketRepository(db), PoojaRepository(db))
+    html_out = service.generate_ticket_html(_ticket("SVVD-2026-000004", "tok4"))
+
+    assert "9999999999" in html_out
+    assert "Online booking" in html_out
+    assert "Email:" not in html_out  # no email on this ticket
+
+
+def test_ticket_html_shows_email_when_present(db):
+    ticket = _ticket("SVVD-2026-000005", "tok5")
+    ticket.email = "devotee@example.com"
+    ticket.source = TicketSource.COUNTER
+
+    service = SevaTicketService(SevaTicketRepository(db), PoojaRepository(db))
+    html_out = service.generate_ticket_html(ticket)
+
+    assert "devotee@example.com" in html_out
+    assert "Temple counter" in html_out
+
+
+def test_ticket_html_shows_temple_phone_when_configured(db):
+    db.add(Temple(name="Test Temple", contact_phone="+91 98765 43210"))
+    db.commit()
+
+    service = SevaTicketService(SevaTicketRepository(db), PoojaRepository(db))
+    html_out = service.generate_ticket_html(_ticket("SVVD-2026-000006", "tok6"))
+
+    assert "+91 98765 43210" in html_out

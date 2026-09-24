@@ -6,7 +6,9 @@ from datetime import date, datetime
 
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
-from app.utils.dependencies import AuditContext, get_audit, get_otp_service, get_seva_ticket_service, require_permission
+from app.utils.dependencies import (
+    AuditContext, get_audit, get_otp_service, get_seva_ticket_service, require_admin, require_permission,
+)
 from app.utils.rate_limiter import booking_limiter, enforce, get_client_ip, otp_request_limiter, otp_verify_limiter
 from app.services.email_service import EmailService
 from app.services.otp_service import OtpService
@@ -118,6 +120,22 @@ def list_seva_tickets(
     items, total = paginate(service.query_tickets(filters), params)
     set_total(response, total)
     return items
+
+
+@router.delete("/{ticket_id}")
+def delete_seva_ticket(
+    ticket_id: UUID,
+    service: SevaTicketService = Depends(get_seva_ticket_service),
+    audit: AuditContext = Depends(get_audit),
+    admin_user: User = Depends(require_admin),
+):
+    """Admin/Super Admin only - deliberately narrower than tickets:manage (which
+    STAFF also holds), since deleting also removes any linked finance entry."""
+    ticket = service.get_ticket(ticket_id)
+    audit.log("DELETE", "seva_ticket", ticket.id, f"Deleted ticket {ticket.ticket_number}",
+              {"seva": ticket.seva_name, "amount": ticket.amount, "payment": ticket.payment_status})
+    service.delete_ticket(ticket_id)
+    return {"message": "Ticket deleted"}
 
 
 @router.get("/{ticket_id}", response_model=SevaTicketOut)
