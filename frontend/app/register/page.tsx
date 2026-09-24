@@ -3,13 +3,15 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Eye, EyeOff, LogIn } from 'lucide-react';
-import { apiError, getMe, login, setStoredToken } from '@/lib/api';
+import { Eye, EyeOff, UserPlus } from 'lucide-react';
+import { apiError, login, register, setStoredToken } from '@/lib/api';
 import { Notice } from '@/components/ui/States';
 import { btnPrimary, inputCls } from '@/components/ui/styles';
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -20,18 +22,19 @@ export default function LoginPage() {
     setError('');
     setBusy(true);
     try {
+      await register({
+        username: username.trim(),
+        password,
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+      });
+      // Sign the devotee in immediately rather than making them re-enter their
+      // credentials on a separate page right after they just typed them.
       const data = await login(username.trim(), password);
       setStoredToken(data.access_token);
-      if (data.must_change_password) {
-        window.location.href = '/admin/change-password';
-        return;
-      }
-      // Same login for everyone; where it lands depends on the account's roles.
-      const me = await getMe();
-      // full navigation so the admin layout starts from a clean auth state
-      window.location.href = me.is_admin || me.is_trustee || me.permissions.length > 0 ? '/admin' : '/my-bookings';
+      window.location.href = '/my-bookings';
     } catch (err) {
-      setError(apiError(err, 'Sign in failed. Please try again.'));
+      setError(apiError(err, 'Could not create your account. Please try again.'));
       setBusy(false);
     }
   }
@@ -41,8 +44,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-2xl border border-amber-200 bg-white p-8 shadow-lg">
         <div className="mb-6 text-center">
           <Image src="/logo.png" alt="" width={64} height={64} className="mx-auto mb-3" />
-          <h1 className="font-serif text-2xl font-bold text-red-900">Sign in</h1>
-          <p className="mt-1 text-sm text-gray-500">For devotees and temple staff</p>
+          <h1 className="font-serif text-2xl font-bold text-red-900">Create an account</h1>
+          <p className="mt-1 text-sm text-gray-500">Book sevas and view your booking history</p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
@@ -57,8 +60,37 @@ export default function LoginPage() {
               autoComplete="username"
               autoFocus
               required
+              minLength={3}
+              maxLength={100}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700">
+              Email <span className="font-normal text-gray-400">(optional)</span>
+            </label>
+            <input
+              id="email"
+              type="email"
+              className={inputCls}
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="phone" className="mb-1 block text-sm font-medium text-gray-700">
+              Mobile number <span className="font-normal text-gray-400">(optional)</span>
+            </label>
+            <input
+              id="phone"
+              type="tel"
+              className={inputCls}
+              autoComplete="tel"
+              maxLength={20}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
           </div>
           <div>
@@ -70,8 +102,9 @@ export default function LoginPage() {
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 className={`${inputCls} pr-10`}
-                autoComplete="current-password"
+                autoComplete="new-password"
                 required
+                minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -84,22 +117,18 @@ export default function LoginPage() {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            <p className="mt-1 text-xs text-gray-500">At least 8 characters, with a letter and a digit.</p>
           </div>
           <button type="submit" disabled={busy || !username || !password} className={`${btnPrimary} w-full`}>
-            <LogIn className="h-4 w-4" aria-hidden="true" />
-            {busy ? 'Signing in…' : 'Sign in'}
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
+            {busy ? 'Creating account…' : 'Create account'}
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm">
-          New here?{' '}
-          <Link href="/register" className="text-red-900 hover:underline">
-            Create an account
-          </Link>
-        </p>
-        <p className="mt-2 text-center text-sm">
-          <Link href="/forgot-password" className="text-red-900 hover:underline">
-            Forgot password?
+          Already have an account?{' '}
+          <Link href="/login" className="text-red-900 hover:underline">
+            Sign in
           </Link>
         </p>
         <p className="mt-2 text-center text-sm">

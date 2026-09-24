@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Menu, X } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { NAV_LINKS } from '@/lib/site';
+import AccountNav from './AccountNav';
 import LanguageSwitcher from './LanguageSwitcher';
 
 /** Desktop + mobile navigation. Marks the current page and closes on navigation / Escape. */
@@ -62,6 +63,9 @@ export default function MobileNav() {
                 </Link>
               </li>
             ))}
+            <li className="py-3">
+              <AccountNav className="text-gray-800" />
+            </li>
             <li className="py-3">
               <LanguageSwitcher id="lang-switcher-mobile" className="text-gray-800" />
             </li>

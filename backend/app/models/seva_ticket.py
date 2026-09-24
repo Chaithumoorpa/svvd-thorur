@@ -51,6 +51,9 @@ class SevaTicket(Base):
     status = Column(SQLEnum(TicketStatus), nullable=False, default=TicketStatus.ACTIVE, index=True)
     source = Column(SQLEnum(TicketSource), nullable=False, default=TicketSource.ONLINE, index=True)
     created_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Set when an online booking is made while the devotee is signed in; null for
+    # anonymous online bookings and for all counter tickets. Powers "My Bookings".
+    booked_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     qr_token = Column(String, unique=True, nullable=False, index=True)  # Secure random token
 
     # S3 object key of the most recently archived PDF (private bucket prefix,

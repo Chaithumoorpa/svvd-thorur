@@ -4,6 +4,7 @@ import { Phone } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { fetchTemple } from '@/lib/server-api';
 import { templeLocation, templeName } from '@/lib/site';
+import AccountNav from './AccountNav';
 import LanguageSwitcher from './LanguageSwitcher';
 import MobileNav from './MobileNav';
 
@@ -25,6 +26,9 @@ export default async function SiteHeader() {
                 <Phone className="h-3.5 w-3.5" aria-hidden="true" /> {temple.contact_phone}
               </a>
             )}
+            <span className="hidden sm:inline-flex">
+              <AccountNav />
+            </span>
             <LanguageSwitcher id="lang-switcher-desktop" className="hidden text-amber-100 sm:inline-flex" />
           </div>
         </div>

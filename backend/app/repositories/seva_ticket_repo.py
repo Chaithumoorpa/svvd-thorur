@@ -48,6 +48,14 @@ class SevaTicketRepository(BaseRepository):
     def list_tickets(self, **filters) -> List[SevaTicket]:
         return self.query_tickets(**filters).all()
 
+    def get_by_user(self, user_id: int) -> List[SevaTicket]:
+        return (
+            self.db.query(SevaTicket)
+            .filter(SevaTicket.booked_by_user_id == user_id)
+            .order_by(SevaTicket.created_at.desc())
+            .all()
+        )
+
     def check_duplicate(self, mobile_number: str, seva_date: date, seva_id: int) -> bool:
         return self.db.query(SevaTicket).filter(
             and_(

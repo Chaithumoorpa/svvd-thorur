@@ -132,3 +132,34 @@ def test_booking_succeeds_with_a_valid_verified_token(client, db, monkeypatch):
     assert sent.call_count == 2
     to_email, subject, _body = sent.call_args_list[-1][0]
     assert to_email == "ravi@example.com" and "Booking confirmed" in subject
+
+
+def test_booking_links_ticket_to_signed_in_devotee(client, db, monkeypatch, make_user):
+    """Booking while signed in attaches the ticket to the account, so it shows
+    up under My Bookings - the account is entirely optional for booking itself."""
+    sent = _capture_email(monkeypatch)
+    seva = _seva(db)
+    devotee, headers = make_user("GENERAL_USER", username="devotee1")
+
+    client.post("/api/v1/seva-tickets/booking/request-otp", json={"email": "ravi@example.com"})
+    token = client.post("/api/v1/seva-tickets/booking/verify-otp",
+                        json={"email": "ravi@example.com", "code": _code_from(sent)}).json()["booking_token"]
+
+    payload = _booking_payload(seva, "ravi@example.com", token)
+    r = client.post("/api/v1/seva-tickets", json=payload, headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["booked_by_user_id"] == devotee.id
+
+
+def test_anonymous_booking_leaves_ticket_unlinked(client, db, monkeypatch):
+    sent = _capture_email(monkeypatch)
+    seva = _seva(db)
+
+    client.post("/api/v1/seva-tickets/booking/request-otp", json={"email": "anon@example.com"})
+    token = client.post("/api/v1/seva-tickets/booking/verify-otp",
+                        json={"email": "anon@example.com", "code": _code_from(sent)}).json()["booking_token"]
+
+    payload = _booking_payload(seva, "anon@example.com", token, mobile="9000000001")
+    r = client.post("/api/v1/seva-tickets", json=payload)
+    assert r.status_code == 200, r.text
+    assert r.json()["booked_by_user_id"] is None

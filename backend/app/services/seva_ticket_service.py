@@ -59,7 +59,7 @@ class SevaTicketService:
                 self.ticket_repo.db.rollback()
         raise HTTPException(status_code=503, detail="Could not allocate a ticket number, please retry")
 
-    def book_ticket(self, data: SevaBookingOnline) -> SevaTicket:
+    def book_ticket(self, data: SevaBookingOnline, booked_by_user_id: Optional[int] = None) -> SevaTicket:
         pooja = self.pooja_repo.get_by_id(data.seva_id)
         if not pooja or not pooja.is_active:
             raise HTTPException(status_code=400, detail="Invalid or inactive Seva selected")
@@ -89,6 +89,7 @@ class SevaTicketService:
             "amount": 0,
             "status": TicketStatus.ACTIVE,
             "source": ModelTicketSource.ONLINE,
+            "booked_by_user_id": booked_by_user_id,
         })
 
     def create_counter_ticket(self, data: SevaTicketCreate, admin_user) -> SevaTicket:
@@ -139,6 +140,9 @@ class SevaTicketService:
             status=filters.status,
             mobile_number=filters.mobile_number
         )
+
+    def list_for_user(self, user_id: int) -> List[SevaTicket]:
+        return self.ticket_repo.get_by_user(user_id)
 
     def get_ticket(self, ticket_id: UUID) -> SevaTicket:
         ticket = self.ticket_repo.get_by_id(ticket_id)

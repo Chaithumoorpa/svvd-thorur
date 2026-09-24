@@ -267,6 +267,7 @@ export interface SevaTicket {
   status: TicketStatus;
   source: 'ONLINE' | 'COUNTER';
   qr_token: string;
+  booked_by_user_id?: number | null;
   created_at: string;
 }
 

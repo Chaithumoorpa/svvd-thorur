@@ -7,7 +7,8 @@ from datetime import date, datetime
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.utils.dependencies import (
-    AuditContext, get_audit, get_otp_service, get_seva_ticket_service, require_admin, require_permission,
+    AuditContext, get_audit, get_current_user, get_current_user_optional, get_otp_service,
+    get_seva_ticket_service, require_admin, require_permission,
 )
 from app.utils.rate_limiter import booking_limiter, enforce, get_client_ip, otp_request_limiter, otp_verify_limiter
 from app.services.email_service import EmailService
@@ -61,16 +62,19 @@ def book_seva_ticket(
     payload: SevaBookingOnline,
     request: Request,
     service: SevaTicketService = Depends(get_seva_ticket_service),
+    current_user: User | None = Depends(get_current_user_optional),
 ):
     """
     Public endpoint to book a FREE seva, gated on a verified email (see the
     booking/request-otp and booking/verify-otp endpoints above). Price/payment/
-    seva name are decided server-side. Rate limited per IP.
+    seva name are decided server-side. Rate limited per IP. When the devotee
+    happens to be signed in, the ticket is linked to their account (My Bookings);
+    booking works the same either way, signed in is never required.
     """
     if not booking_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many bookings. Please try again later.")
     OtpService.check_booking_token(payload.booking_token, payload.email)
-    ticket = service.book_ticket(payload)
+    ticket = service.book_ticket(payload, booked_by_user_id=current_user.id if current_user else None)
     EmailService().notify_admin(
         f"New seva booking: {ticket.seva_name} ({ticket.ticket_number})",
         f"Devotee: {ticket.devotee_name}\nMobile: {ticket.mobile_number}\nEmail: {ticket.email}\n"
@@ -120,6 +124,16 @@ def list_seva_tickets(
     items, total = paginate(service.query_tickets(filters), params)
     set_total(response, total)
     return items
+
+
+@router.get("/mine", response_model=List[SevaTicketOut])
+def list_my_tickets(
+    service: SevaTicketService = Depends(get_seva_ticket_service),
+    current_user: User = Depends(get_current_user),
+):
+    """The signed-in devotee's own bookings (My Bookings) - only ones made while
+    logged in are linked; anonymous online bookings and counter tickets are not."""
+    return service.list_for_user(current_user.id)
 
 
 @router.delete("/{ticket_id}")

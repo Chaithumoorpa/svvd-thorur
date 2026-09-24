@@ -62,6 +62,22 @@ def get_current_user(
     return user
 
 
+def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Like get_current_user, but a missing/invalid/expired token means "anonymous"
+    instead of a 401 - for endpoints that work either way (e.g. online booking links
+    the ticket to the devotee's account when they happen to be signed in)."""
+    if credentials is None:
+        return None
+    payload = decode_access_token(credentials.credentials)
+    if not payload:
+        return None
+    user = db.query(User).filter(User.id == payload.get("user_id")).first()
+    return user if user and user.is_active else None
+
+
 def require_permission(*required: Permission) -> Callable[..., User]:
     """Dependency factory: the user must hold ALL listed permissions."""
 
