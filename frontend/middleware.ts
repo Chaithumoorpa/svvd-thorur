@@ -6,8 +6,8 @@ export default createMiddleware(routing);
 export const config = {
   // Only run the locale middleware on the public site. Excluded entirely (not just
   // "un-translated"): /api (the /api/v1/* backend proxy - see next.config.mjs), the
-  // admin panel, and the two auth flows that stay English-only. Also excluded:
-  // Next internals and any request for a file with an extension (favicon.ico,
-  // logo.png, robots.txt, sitemap.xml, etc).
-  matcher: ['/((?!api|admin|login|forgot-password|reset-password|_next|.*\\..*).*)'],
+  // admin panel, and the devotee/staff auth pages, which all stay English-only.
+  // Also excluded: Next internals and any request for a file with an extension
+  // (favicon.ico, logo.png, robots.txt, sitemap.xml, etc).
+  matcher: ['/((?!api|admin|login|register|my-bookings|forgot-password|reset-password|_next|.*\\..*).*)'],
 };
