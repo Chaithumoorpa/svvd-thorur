@@ -43,6 +43,7 @@ class AnnouncementOut(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     is_active: bool
+    source_festival_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)

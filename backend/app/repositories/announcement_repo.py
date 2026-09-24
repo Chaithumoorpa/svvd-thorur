@@ -39,6 +39,9 @@ class AnnouncementRepository(BaseRepository):
     def get_by_id(self, announcement_id: int):
         return self.db.query(Announcement).filter(Announcement.id == announcement_id).first()
 
+    def get_by_source_festival(self, festival_id: int):
+        return self.db.query(Announcement).filter(Announcement.source_festival_id == festival_id).first()
+
     def create(self, announcement: Announcement):
         self.db.add(announcement)
         self.db.commit()

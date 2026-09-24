@@ -31,10 +31,12 @@ interface FormState {
   image_url: string;
   festival_type: string;
   is_active: boolean;
+  auto_announce: boolean;
+  announce_days_before: string;
 }
 const blank: FormState = {
   name: '', description: '', festival_date: '', end_date: '', location: '', image_url: '',
-  festival_type: 'annual', is_active: true,
+  festival_type: 'annual', is_active: true, auto_announce: true, announce_days_before: '2',
 };
 
 export default function FestivalsAdmin() {
@@ -51,6 +53,7 @@ export default function FestivalsAdmin() {
         name: f.name, description: f.description ?? '', festival_date: f.festival_date ?? '',
         end_date: f.end_date ?? '', location: f.location ?? '', image_url: f.image_url ?? '',
         festival_type: f.festival_type, is_active: f.is_active,
+        auto_announce: f.auto_announce, announce_days_before: String(f.announce_days_before),
       },
     });
 
@@ -67,6 +70,8 @@ export default function FestivalsAdmin() {
       image_url: emptyToNull(form.image_url),
       festival_type: form.festival_type,
       is_active: form.is_active,
+      auto_announce: form.auto_announce,
+      announce_days_before: Number(form.announce_days_before) || 0,
     };
     const ok = await action.run(
       () => (id === null ? createFestival(payload) : updateFestival(id, payload)),
@@ -175,6 +180,26 @@ export default function FestivalsAdmin() {
               <input type="checkbox" checked={editing.form.is_active} onChange={(e) => set('is_active', e.target.checked)} />
               Visible on the website
             </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={editing.form.auto_announce} onChange={(e) => set('auto_announce', e.target.checked)} />
+              Auto-post an announcement before this festival
+            </label>
+            {editing.form.auto_announce && (
+              <Field
+                label="Days before"
+                hint="How many days ahead of the start date the announcement should appear."
+                className="max-w-[10rem]"
+              >
+                <input
+                  type="number"
+                  min={0}
+                  max={30}
+                  className={inputCls}
+                  value={editing.form.announce_days_before}
+                  onChange={(e) => set('announce_days_before', e.target.value)}
+                />
+              </Field>
+            )}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className={btnGhost} onClick={() => { setEditing(null); action.clear(); }}>Cancel</button>
               <button type="submit" className={btnPrimary} disabled={action.busy || editing.form.name.trim().length < 2}>

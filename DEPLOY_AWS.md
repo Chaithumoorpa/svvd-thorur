@@ -369,6 +369,26 @@ doesn't need the host CLI since it goes through the backend container, but
 restoring is a manual, rare-enough operation that it's fine to reach for
 whichever tool's on hand.)
 
+## Festival announcements
+
+Admin → Festivals lets you turn "Auto-announce" on per festival/occasion
+(on by default) with a "days before" lead time - e.g. add each month's
+Sankashti Chaturthi date as its own festival row, and it'll turn into a
+public announcement automatically a couple of days ahead, without anyone
+remembering to post one by hand. The generated announcement is an ordinary
+announcement row (editable/deletable from Admin → Announcements like any
+other); the only difference is it's tagged with the festival it came from,
+so the job never posts the same one twice.
+
+Something still has to run that job once a day - `app/cli/generate_festival_
+announcements.py`, alongside `backup-db.sh`:
+
+```bash
+# crontab -e (on the instance) - runs daily at 6am, after the 3am backup
+0 6 * * * cd /home/ubuntu/svvd-thorur && docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  exec -T backend python -m app.cli.generate_festival_announcements >> /home/ubuntu/backups/festival-announce.log 2>&1
+```
+
 ## CI/CD: auto-deploy on push to `development`
 
 `.github/workflows/deploy.yml` SSHes into the instance on every push to

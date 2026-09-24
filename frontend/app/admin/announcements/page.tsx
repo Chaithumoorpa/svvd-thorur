@@ -122,6 +122,14 @@ export default function AnnouncementsAdmin() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-semibold text-gray-900">{a.title}</h2>
                       <StatusPill on={st.on} onLabel={st.label} offLabel={st.label} />
+                      {a.source_festival_id != null && (
+                        <span
+                          className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                          title="Posted automatically from a festival's auto-announce setting"
+                        >
+                          Auto
+                        </span>
+                      )}
                     </div>
                     {a.message && <p className="mt-1 line-clamp-2 text-sm text-gray-600">{a.message}</p>}
                     <p className="mt-2 text-xs text-gray-400">

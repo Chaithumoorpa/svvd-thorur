@@ -36,7 +36,7 @@ class FestivalService:
         if new_name and new_name != festival.name and self.repo.get_by_name(new_name):
             raise HTTPException(status_code=400, detail="Festival with this name already exists")
         for key, value in fields.items():
-            if key in ("name", "festival_type", "is_active") and value is None:
+            if key in ("name", "festival_type", "is_active", "auto_announce", "announce_days_before") and value is None:
                 continue
             setattr(festival, key, value)
         if festival.festival_date and festival.end_date and festival.end_date < festival.festival_date:

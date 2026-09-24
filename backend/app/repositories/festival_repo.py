@@ -38,6 +38,20 @@ class FestivalRepository(BaseRepository):
             query = query.limit(limit)
         return query.all()
 
+    def query_auto_announce_candidates(self):
+        """Active festivals opted in to auto-announcing, with a date to announce
+        from. Callers filter down to the ones actually due (see
+        FestivalAnnouncementService) - simpler and DB-agnostic vs. date-math in SQL."""
+        return (
+            self.db.query(Festival)
+            .filter(
+                Festival.is_active.is_(True),
+                Festival.auto_announce.is_(True),
+                Festival.festival_date.isnot(None),
+            )
+            .all()
+        )
+
     def get_by_id(self, festival_id: int):
         return self.db.query(Festival).filter(Festival.id == festival_id).first()
 
