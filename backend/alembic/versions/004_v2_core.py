@@ -155,7 +155,7 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO temples (name, deity_name, village, state, contact_email, map_url, is_active)
-        SELECT 'Sri Varasiddhi Vinayaka Swamy Temple', 'Sri Varasiddhi Vinayaka Swamy',
+        SELECT 'Sri Varasidhi Vinayaka Swamy Temple', 'Sri Varasidhi Vinayaka Swamy',
                'Thorur', 'Andhra Pradesh', 'info@svvdthorur.org',
                'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d881002.5788503479!2d79.21050739825243!3d13.641851241157436!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a4d5bc04479e687%3A0x9365d686a757f596!2ssri%20vinayaka%20temple!5e0!3m2!1sen!2sin!4v1766833981047!5m2!1sen!2sin',
                true

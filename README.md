@@ -1,6 +1,6 @@
 # SVVD Thorur
 
-Temple management platform for **Sri Varasiddhi Vinayaka Swamy Devasthanam**, Thorur, Andhra Pradesh — a public site (darshan timings, poojas, festivals, gallery, online seva booking) plus an admin panel for temple staff (donors & donations, finance ledger, seva tickets, members, content management).
+Temple management platform for **Sri Varasidhi Vinayaka Swamy Devasthanam**, Thorur, Andhra Pradesh — a public site (darshan timings, poojas, festivals, gallery, online seva booking) plus an admin panel for temple staff (donors & donations, finance ledger, seva tickets, members, content management).
 
 Live at [svvdthorur.org](https://svvdthorur.org).
 

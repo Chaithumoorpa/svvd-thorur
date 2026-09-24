@@ -6,10 +6,10 @@ const slides = [
   {
     id: 0,
     templeNameSub: 'Thorur',
-    deityName: 'Sri Varasiddhi Vinayaka',
+    deityName: 'Sri Varasidhi Vinayaka',
     mantra: 'ఓం గం గణపతయే నమః',
     description: 'Remover of obstacles and bestower of blessings.',
-    image: '/deities/varasiddhi.png',
+    image: '/deities/varasidhi.png',
   },
   {
     id: 1,
@@ -99,7 +99,7 @@ export default function DeityCarousel() {
                 {/* Left Section: Text */}
                 <div className="flex flex-col justify-center w-full md:w-1/2 pr-0 md:pr-4 text-center md:text-left">
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold text-templeDark leading-tight">
-                    Sri Varasiddhi
+                    Sri Varasidhi
                     <br />
                     Vinayaka Swamy Temple
                   </h1>

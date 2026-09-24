@@ -73,7 +73,7 @@ class SevaTicketPrintData(BaseModel):
     seva_time: Optional[str] = None  # Formatted as HH:MM AM/PM
     status: str
     qr_code_base64: str  # Base64 encoded QR code image
-    temple_name: str = "Sri Varasiddhi Vinayaka Devasthanam"
+    temple_name: str = "Sri Varasidhi Vinayaka Devasthanam"
 
 
 class ScanRequest(BaseModel):

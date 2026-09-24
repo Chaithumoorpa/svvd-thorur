@@ -95,7 +95,7 @@ def book_seva_ticket(
         f"Date: {ticket.seva_date}\n\n"
         f"{payment_note}"
         "Please show this ticket number at the temple counter.\n\n"
-        "Thank you,\nSri Varasiddhi Vinayaka Swamy Devasthanam, Thorur",
+        "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
     )
     return ticket
 

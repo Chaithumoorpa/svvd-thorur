@@ -37,7 +37,7 @@ def test_ticket_html_falls_back_when_no_temple_row(db):
     service = SevaTicketService(SevaTicketRepository(db), PoojaRepository(db))
     html_out = service.generate_ticket_html(_ticket("SVVD-2026-000002", "tok2"))
 
-    assert "Sri Varasiddhi Vinayaka Swamy Devasthanam" in html_out
+    assert "Sri Varasidhi Vinayaka Swamy Devasthanam" in html_out
     assert "Thorur, Andhra Pradesh" in html_out
 
 

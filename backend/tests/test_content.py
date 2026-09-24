@@ -119,7 +119,7 @@ def test_temple_profile_and_timings(client, admin, staff):
     assert client.get("/api/v1/temple/").status_code == 404  # not set up yet
     _, headers = admin
     created = client.put("/api/v1/temple/", headers=headers, json={
-        "name": "Sri Varasiddhi Vinayaka Swamy Temple", "village": "Thorur", "pincode": "506163",
+        "name": "Sri Varasidhi Vinayaka Swamy Temple", "village": "Thorur", "pincode": "506163",
         "map_url": "https://maps.example.com/x", "contact_email": "info@example.org"})
     assert created.status_code == 200
     public = client.get("/api/v1/temple/")
@@ -130,7 +130,7 @@ def test_temple_profile_and_timings(client, admin, staff):
     assert client.put("/api/v1/temple/", headers=headers, json={"pincode": "abc"}).status_code == 422
     # clearing a field with "" stores NULL; the mandatory name cannot be blanked
     cleared = client.put("/api/v1/temple/", headers=headers, json={"tagline": "", "name": ""})
-    assert cleared.json()["tagline"] is None and cleared.json()["name"].startswith("Sri Varasiddhi")
+    assert cleared.json()["tagline"] is None and cleared.json()["name"].startswith("Sri Varasidhi")
 
     _, staff_headers = staff
     assert client.put("/api/v1/temple/", headers=staff_headers, json={"tagline": "x"}).status_code == 403
