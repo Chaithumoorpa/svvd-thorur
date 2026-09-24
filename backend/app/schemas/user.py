@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.schemas.common import normalize_mobile
+
 
 class UserRole(str, Enum):
     SUPER_ADMIN = "SUPER_ADMIN"
@@ -60,10 +62,12 @@ class UserCreate(UserBase):
 
 
 class PublicRegister(BaseModel):
-    """Self-registration: can never choose roles."""
+    """Self-registration: can never choose roles. Email and phone are required -
+    a devotee account is only useful if the temple can reach its owner, and a
+    booking's contact details already require both anyway."""
     username: str
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = Field(default=None, max_length=20)
+    email: EmailStr
+    phone: str = Field(max_length=20)
     password: str
 
     @field_validator("username")
@@ -73,6 +77,11 @@ class PublicRegister(BaseModel):
         if not _USERNAME_RE.match(v):
             raise ValueError("Username must be 3-100 characters: letters, digits, . _ @ -")
         return v
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        return normalize_mobile(v)
 
     @field_validator("password")
     @classmethod

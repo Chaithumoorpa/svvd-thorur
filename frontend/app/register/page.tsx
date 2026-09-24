@@ -25,8 +25,8 @@ export default function RegisterPage() {
       await register({
         username: username.trim(),
         password,
-        email: email.trim() || undefined,
-        phone: phone.trim() || undefined,
+        email: email.trim(),
+        phone: phone.trim(),
       });
       // Sign the devotee in immediately rather than making them re-enter their
       // credentials on a separate page right after they just typed them.
@@ -68,30 +68,33 @@ export default function RegisterPage() {
           </div>
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-gray-700">
-              Email <span className="font-normal text-gray-400">(optional)</span>
+              Email
             </label>
             <input
               id="email"
               type="email"
               className={inputCls}
               autoComplete="email"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           <div>
             <label htmlFor="phone" className="mb-1 block text-sm font-medium text-gray-700">
-              Mobile number <span className="font-normal text-gray-400">(optional)</span>
+              Mobile number
             </label>
             <input
               id="phone"
               type="tel"
               className={inputCls}
               autoComplete="tel"
+              required
               maxLength={20}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
             />
+            <p className="mt-1 text-xs text-gray-500">10 digits.</p>
           </div>
           <div>
             <label htmlFor="password" className="mb-1 block text-sm font-medium text-gray-700">
@@ -119,7 +122,7 @@ export default function RegisterPage() {
             </div>
             <p className="mt-1 text-xs text-gray-500">At least 8 characters, with a letter and a digit.</p>
           </div>
-          <button type="submit" disabled={busy || !username || !password} className={`${btnPrimary} w-full`}>
+          <button type="submit" disabled={busy || !username || !email.trim() || !phone.trim() || !password} className={`${btnPrimary} w-full`}>
             <UserPlus className="h-4 w-4" aria-hidden="true" />
             {busy ? 'Creating account…' : 'Create account'}
           </button>

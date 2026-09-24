@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Download, Plus, QrCode, Ticket, Trash2 } from 'lucide-react';
+import { Banknote, Download, Plus, QrCode, Ticket, Trash2 } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import QrCameraScanner from '@/components/admin/QrCameraScanner';
@@ -13,7 +13,7 @@ import { btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles'
 import { useAuth } from '@/components/admin/AuthContext';
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
-import { createCounterTicket, deleteTicket, downloadTicketPdf, getPoojas, listTickets, saveBlob, scanTicket } from '@/lib/api';
+import { collectPayment, createCounterTicket, deleteTicket, downloadTicketPdf, getPoojas, listTickets, saveBlob, scanTicket } from '@/lib/api';
 import { formatDate, formatMoney, todayISO } from '@/lib/format';
 import type { SevaTicket, TicketStatus } from '@/lib/types';
 
@@ -40,7 +40,7 @@ export default function SevaTicketsAdmin() {
   const [scanOpen, setScanOpen] = useState(false);
   const [scanMode, setScanMode] = useState<'camera' | 'manual'>('camera');
   const [scanCode, setScanCode] = useState('');
-  const [scanResult, setScanResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [scanResult, setScanResult] = useState<{ ok: boolean; message: string; ticket: SevaTicket | null } | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ seva_id: '', devotee_name: '', mobile_number: '', seva_date: todayISO(), payment_status: 'FREE' as 'FREE' | 'PAID', amount: '' });
@@ -59,11 +59,19 @@ export default function SevaTicketsAdmin() {
   async function runScan(code: string) {
     const res = await action.run(() => scanTicket(code.trim()));
     if (res) {
-      setScanResult({ ok: res.success, message: res.message });
+      setScanResult({ ok: res.success, message: res.message, ticket: res.ticket });
       if (res.success) {
         setScanCode('');
         list.reload();
       }
+    }
+  }
+
+  async function collect(id: string) {
+    const updated = await action.run(() => collectPayment(id), 'Payment collected.');
+    if (updated) {
+      list.reload();
+      setScanResult((cur) => (cur?.ticket?.id === id ? { ...cur, ticket: updated } : cur));
     }
   }
 
@@ -167,9 +175,18 @@ export default function SevaTicketsAdmin() {
                     <td className="px-4 py-3">{t.devotee_name}<div className="text-xs text-gray-400">{t.mobile_number}{t.email ? ` · ${t.email}` : ''}</div></td>
                     <td className="px-4 py-3 text-gray-700">{t.seva_name}</td>
                     <td className="px-4 py-3 text-gray-600">{formatDate(t.seva_date)}</td>
-                    <td className="px-4 py-3 text-gray-600">{t.payment_status === 'PAID' ? formatMoney(t.amount) : 'Free'}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {t.payment_status === 'PAID' ? formatMoney(t.amount)
+                        : t.payment_status === 'PENDING' ? <span className="text-amber-700">{formatMoney(t.amount)} due</span>
+                        : 'Free'}
+                    </td>
                     <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLS[t.status]}`}>{t.status.toLowerCase()}</span></td>
                     <td className="px-4 py-3 text-right">
+                      {t.payment_status === 'PENDING' && (
+                        <button type="button" className={btnGhost} onClick={() => collect(t.id)} disabled={action.busy} aria-label={`Collect payment for ticket ${t.ticket_number}`}>
+                          <Banknote className="h-4 w-4 text-amber-700" /> Collect
+                        </button>
+                      )}
                       <button type="button" className={btnGhost} onClick={() => pdf(t.id, t.ticket_number)} disabled={action.busy} aria-label={`Download ticket ${t.ticket_number}`}>
                         <Download className="h-4 w-4" />
                       </button>
@@ -195,7 +212,17 @@ export default function SevaTicketsAdmin() {
             {scanResult && <Notice kind={scanResult.ok ? 'success' : 'error'}>{scanResult.message}</Notice>}
 
             {scanResult ? (
-              <div className="flex justify-center">
+              <div className="space-y-3 text-center">
+                {scanResult.ticket && scanResult.ticket.payment_status === 'PENDING' && (
+                  <div className="rounded-lg bg-amber-50 p-3">
+                    <p className="text-sm text-amber-900">
+                      {formatMoney(scanResult.ticket.amount)} due for this ticket.
+                    </p>
+                    <button type="button" className={`${btnPrimary} mt-2`} onClick={() => collect(scanResult.ticket!.id)} disabled={action.busy}>
+                      <Banknote className="h-4 w-4" aria-hidden="true" /> {action.busy ? 'Collecting…' : 'Collect payment'}
+                    </button>
+                  </div>
+                )}
                 <button type="button" className={btnPrimary} onClick={scanAgain}>Scan another ticket</button>
               </div>
             ) : scanMode === 'camera' ? (

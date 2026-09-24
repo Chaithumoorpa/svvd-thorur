@@ -42,7 +42,11 @@ function TicketCard({ ticket }: { ticket: SevaTicket }) {
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLE[ticket.status]}`}>{ticket.status}</span>
       </div>
       <div className="mt-3 flex items-center justify-between gap-3">
-        <p className="text-sm text-gray-700">{ticket.payment_status === 'PAID' ? formatMoney(ticket.amount) : 'Free'}</p>
+        <p className="text-sm text-gray-700">
+          {ticket.payment_status === 'PAID' ? formatMoney(ticket.amount)
+            : ticket.payment_status === 'PENDING' ? <span className="font-medium text-amber-700">{formatMoney(ticket.amount)} due at counter</span>
+            : 'Free'}
+        </p>
         <button type="button" onClick={download} disabled={downloading} className={btnGhost}>
           <Download className="h-4 w-4" aria-hidden="true" /> {downloading ? 'Downloading…' : 'Download ticket'}
         </button>

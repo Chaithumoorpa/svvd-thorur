@@ -35,11 +35,7 @@ function PoojaCard({ p }: { p: Pooja }) {
       {time && <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{time}</p>}
       {p.description && <p className="mt-3 text-sm leading-relaxed text-gray-700">{p.description}</p>}
       <div className="mt-auto pt-4">
-        {p.is_paid ? (
-          <p className="text-xs text-gray-500">{t('bookAtCounter')}</p>
-        ) : (
-          <BookSeva sevaId={p.id} sevaName={p.name} />
-        )}
+        <BookSeva sevaId={p.id} sevaName={p.name} isPaid={p.is_paid} amount={p.suggested_amount ?? 0} />
       </div>
     </li>
   );

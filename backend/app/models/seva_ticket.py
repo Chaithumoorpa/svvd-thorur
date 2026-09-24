@@ -10,6 +10,9 @@ from app.models.types import MONEY_PRECISION, MONEY_SCALE
 class PaymentStatus(str, enum.Enum):
     FREE = "FREE"
     PAID = "PAID"
+    # Fee owed but not yet collected - a paid seva booked online, where payment
+    # happens at the temple counter instead of at booking time.
+    PENDING = "PENDING"
 
 
 class TicketStatus(str, enum.Enum):

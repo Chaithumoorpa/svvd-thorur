@@ -50,20 +50,34 @@ def test_login_rate_limited(client, make_user):
 
 def test_register_creates_general_user_only(client):
     response = client.post("/api/v1/auth/register", json={
-        "username": "devotee1", "password": "Temple123", "roles": ["SUPER_ADMIN"], "is_admin": True,
+        "username": "devotee1", "password": "Temple123", "email": "devotee1@example.com",
+        "phone": "9876543210", "roles": ["SUPER_ADMIN"], "is_admin": True,
     })
     assert response.status_code == 201
     assert response.json()["roles"] == ["GENERAL_USER"]
 
 
+def test_register_requires_email_and_phone(client):
+    base = {"username": "devotee1b", "password": "Temple123"}
+    assert client.post("/api/v1/auth/register", json=base).status_code == 422
+    assert client.post("/api/v1/auth/register",
+                       json={**base, "email": "devotee1b@example.com"}).status_code == 422
+    assert client.post("/api/v1/auth/register",
+                       json={**base, "phone": "9876543210"}).status_code == 422
+    assert client.post("/api/v1/auth/register",
+                       json={**base, "email": "devotee1b@example.com", "phone": "not-a-number"}).status_code == 422
+
+
 @pytest.mark.parametrize("password", ["short1", "allletters", "12345678"])
 def test_weak_passwords_rejected(client, password):
-    response = client.post("/api/v1/auth/register", json={"username": "devotee2", "password": password})
+    response = client.post("/api/v1/auth/register", json={
+        "username": "devotee2", "password": password, "email": "devotee2@example.com", "phone": "9876543210",
+    })
     assert response.status_code == 422
 
 
 def test_duplicate_username_and_email(client):
-    ok = {"username": "devotee3", "password": "Temple123", "email": "a@example.com"}
+    ok = {"username": "devotee3", "password": "Temple123", "email": "a@example.com", "phone": "9876543210"}
     assert client.post("/api/v1/auth/register", json=ok).status_code == 201
     assert client.post("/api/v1/auth/register", json=ok).status_code == 400
     other = {**ok, "username": "devotee4"}
@@ -74,8 +88,9 @@ def test_registration_can_be_disabled(client, monkeypatch):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "ALLOW_PUBLIC_REGISTRATION", False)
-    assert client.post("/api/v1/auth/register",
-                       json={"username": "devotee5", "password": "Temple123"}).status_code == 403
+    assert client.post("/api/v1/auth/register", json={
+        "username": "devotee5", "password": "Temple123", "email": "devotee5@example.com", "phone": "9876543210",
+    }).status_code == 403
 
 
 def test_change_password(client, make_user):

@@ -80,6 +80,11 @@ def book_seva_ticket(
         f"Devotee: {ticket.devotee_name}\nMobile: {ticket.mobile_number}\nEmail: {ticket.email}\n"
         f"Seva: {ticket.seva_name}\nDate: {ticket.seva_date}\nTicket: {ticket.ticket_number}",
     )
+    payment_note = (
+        f"This seva has a fee of Rs. {ticket.amount}, payable in cash at the temple counter "
+        "when you arrive.\n\n"
+        if ticket.payment_status.value == "PENDING" else ""
+    )
     EmailService().send(
         ticket.email,
         f"Booking confirmed: {ticket.seva_name} ({ticket.ticket_number})",
@@ -88,6 +93,7 @@ def book_seva_ticket(
         f"Ticket number: {ticket.ticket_number}\n"
         f"Seva: {ticket.seva_name}\n"
         f"Date: {ticket.seva_date}\n\n"
+        f"{payment_note}"
         "Please show this ticket number at the temple counter.\n\n"
         "Thank you,\nSri Varasiddhi Vinayaka Swamy Devasthanam, Thorur",
     )
@@ -134,6 +140,21 @@ def list_my_tickets(
     """The signed-in devotee's own bookings (My Bookings) - only ones made while
     logged in are linked; anonymous online bookings and counter tickets are not."""
     return service.list_for_user(current_user.id)
+
+
+@router.post("/{ticket_id}/collect-payment", response_model=SevaTicketOut)
+def collect_ticket_payment(
+    ticket_id: UUID,
+    service: SevaTicketService = Depends(get_seva_ticket_service),
+    audit: AuditContext = Depends(get_audit),
+    admin_user: User = Depends(_manage),
+):
+    """Marks a PENDING ticket (a paid seva booked online, fee not yet collected)
+    as PAID once the devotee pays in person, and records the cash income."""
+    ticket = service.collect_payment(ticket_id, admin_user)
+    audit.log("COLLECT_PAYMENT", "seva_ticket", ticket.id, f"Collected payment for ticket {ticket.ticket_number}",
+              {"amount": ticket.amount})
+    return ticket
 
 
 @router.delete("/{ticket_id}")
