@@ -10,8 +10,8 @@ from app.core.rbac import Permission, permissions_for
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import (
-    PasswordChange, PasswordResetConfirm, PasswordResetRequest, PublicRegister, TokenOut,
-    UserCreate, UserLogin, UserOut, UserUpdate,
+    DeleteAccountConfirm, PasswordChange, PasswordResetConfirm, PasswordResetRequest, PublicRegister,
+    TokenOut, UserCreate, UserLogin, UserOut, UserUpdate,
 )
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
@@ -139,6 +139,37 @@ def change_password(
     AuditService(db).record(current_user, "PASSWORD_CHANGE", "user", current_user.id,
                             f"{current_user.username} changed their password", request=request)
     return {"message": "Password changed successfully"}
+
+
+@router.delete("/me", response_model=dict)
+def delete_my_account(
+    payload: DeleteAccountConfirm,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Self-service account deletion (DPDPA right to erasure). The row is gone
+    once delete_own_account returns, so username/email/id are captured first -
+    the audit entry is written with actor=None + actor_username, the same way
+    the audit trail already survives any other user's deletion."""
+    user_id, username, email = current_user.id, current_user.username, current_user.email
+    service.delete_own_account(current_user, payload.password)
+    AuditService(db).record(None, "DELETE_ACCOUNT", "user", user_id,
+                            f"{username} deleted their own account", request=request, actor_username=username)
+    if email:
+        EmailService().send(
+            email,
+            "Your SVVD Thorur account has been deleted",
+            f"Hello {username},\n\n"
+            "Your devotee account and its registration details have been permanently deleted, "
+            "as you requested.\n\n"
+            "Any sevas you already booked remain valid and on record at the temple - only the "
+            "link between them and this account has been removed.\n\n"
+            "If you didn't request this, please contact the temple office immediately.\n\n"
+            "Thank you,\nSVVD Thorur",
+        )
+    return {"message": "Account deleted"}
 
 
 # ------------------------------------------------------------------ user management

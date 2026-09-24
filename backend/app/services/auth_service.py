@@ -7,7 +7,9 @@ from typing import Optional, Tuple
 from fastapi import HTTPException
 
 from app.core.security import create_access_token, hash_password, verify_password
+from app.models.member import Member
 from app.models.password_reset import PasswordResetToken
+from app.models.seva_ticket import SevaTicket
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import PasswordChange, PublicRegister, UserCreate, UserLogin, UserUpdate
@@ -120,6 +122,29 @@ class AuthService:
         user.hashed_password = hash_password(data.new_password)
         user.must_change_password = False
         return self.user_repository.update(user)
+
+    def delete_own_account(self, user: User, password: str) -> None:
+        """Self-service account deletion (DPDPA right to erasure) - devotee
+        (GENERAL_USER) accounts only; staff/admin accounts are a Super Admin's
+        call (Admin -> Users), since removing one can affect who can run the
+        site. Unlinks rather than deletes anything with its own independent
+        record - a seva ticket already has its own devotee_name/mobile/email
+        captured at booking time, so nothing operational is lost, only the
+        link back to this account."""
+        if not verify_password(password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="Incorrect password")
+        if user.is_admin or user.is_trustee or user.is_staff:
+            raise HTTPException(
+                status_code=403,
+                detail="Staff and admin accounts can't be deleted this way - contact a Super Admin.",
+            )
+
+        db = self.user_repository.db
+        db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete()
+        db.query(SevaTicket).filter(SevaTicket.booked_by_user_id == user.id).update({"booked_by_user_id": None})
+        db.query(Member).filter(Member.user_id == user.id).update({"user_id": None})
+        db.delete(user)
+        db.commit()
 
     # ---- forgot password (email link) ------------------------------------------
     def _issue_reset_token(self, user: User) -> str:

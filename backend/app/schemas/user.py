@@ -144,6 +144,12 @@ class PasswordChange(BaseModel):
         return _validate_password(v)
 
 
+class DeleteAccountConfirm(BaseModel):
+    """Requires the current password, same as changing it - a destructive,
+    irreversible action deserves the same confirmation."""
+    password: str
+
+
 class PasswordResetRequest(BaseModel):
     email: EmailStr
 
