@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from xhtml2pdf import pisa
 
+from app.core.config import settings
 from app.repositories.seva_ticket_repo import SevaTicketRepository
 from app.repositories.pooja_repo import PoojaRepository
 from app.schemas.seva_ticket import SevaBookingOnline, SevaTicketCreate, SevaTicketOut, SevaTicketFilter, TicketStatus, PaymentStatus, TicketSource
@@ -349,10 +350,16 @@ class SevaTicketService:
                 
                 .footer {{ text-align: center; font-size: 9px; margin-top: 15px; border-top: 1px solid #000; padding-top: 5px; }}
                 .footer-phone {{ margin-bottom: 3px; }}
-                .status-badge {{ 
+                .status-badge {{
                     text-align: center; font-size: 12px; font-weight: bold;
                     border: 1px solid #000; width: 50%; margin: 0 auto 10px auto; padding: 2px;
                 }}
+                .notice-page {{ page-break-before: always; padding: 5px; }}
+                .notice-title {{ font-size: 13px; font-weight: bold; text-align: center; text-decoration: underline; margin-bottom: 8px; }}
+                .notice-heading {{ font-size: 11px; font-weight: bold; margin-top: 8px; }}
+                .notice-text {{ font-size: 10px; margin: 2px 0; }}
+                .notice-list {{ font-size: 10px; margin: 2px 0 2px 12px; padding: 0; }}
+                .notice-list li {{ margin-bottom: 2px; }}
             </style>
         </head>
         <body>
@@ -390,6 +397,28 @@ class SevaTicketService:
                     <p>Printed: {datetime.now().strftime("%d-%m-%Y %H:%M")}</p>
                     <p>Valid for one-time use only. No cancellations.</p>
                 </div>
+            </div>
+
+            <div class="notice-page">
+                <div class="notice-title">TEMPLE GUIDELINES</div>
+
+                <div class="notice-heading">Dress Code</div>
+                <p class="notice-text">Devotees are requested to wear traditional Indian attire. Modest clothing that respects the sanctity of the temple is mandatory.</p>
+                <p class="notice-text">Men: Dhoti, Kurta or formal clothing. Women: Saree, Chudidhar or traditional wear.</p>
+
+                <div class="notice-heading">Rules &amp; Regulations</div>
+                <ul class="notice-list">
+                    <li>Photography and videography inside the sanctum are strictly prohibited.</li>
+                    <li>Please switch off or keep mobile phones in silent mode.</li>
+                    <li>Devotees are requested to maintain silence and discipline inside the temple premises.</li>
+                    <li>Outside food and beverages are not allowed inside the temple.</li>
+                </ul>
+
+                <div class="notice-heading">Privacy</div>
+                <p class="notice-text">
+                    Your name, mobile number and email were collected only to process this booking, per
+                    our Privacy Policy: {settings.FRONTEND_BASE_URL}/legal/privacy-policy
+                </p>
             </div>
         </body>
         </html>
