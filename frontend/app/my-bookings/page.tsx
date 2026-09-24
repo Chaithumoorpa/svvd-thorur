@@ -4,10 +4,11 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Download, LogIn } from 'lucide-react';
-import { apiError, downloadTicketPdf, getMyTickets, getStoredToken, saveBlob } from '@/lib/api';
+import { apiError, deleteMyAccount, downloadTicketPdf, getMyTickets, getStoredToken, saveBlob, setStoredToken } from '@/lib/api';
 import type { SevaTicket } from '@/lib/types';
-import { EmptyBlock, ErrorBlock, LoadingBlock } from '@/components/ui/States';
-import { btnGhost } from '@/components/ui/styles';
+import Modal from '@/components/ui/Modal';
+import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
+import { btnDanger, btnGhost, inputCls } from '@/components/ui/styles';
 import { formatDate, formatMoney } from '@/lib/format';
 
 const STATUS_STYLE: Record<SevaTicket['status'], string> = {
@@ -52,6 +53,73 @@ function TicketCard({ ticket }: { ticket: SevaTicket }) {
         </button>
       </div>
     </li>
+  );
+}
+
+function DeleteAccountSection() {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  function close() {
+    setOpen(false);
+    setPassword('');
+    setError('');
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await deleteMyAccount(password);
+      setStoredToken(null);
+      window.location.href = '/';
+    } catch (err) {
+      setError(apiError(err, 'Could not delete your account. Please try again.'));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-10 rounded-xl border border-red-200 bg-red-50 p-4">
+      <h2 className="font-semibold text-red-900">Delete my account</h2>
+      <p className="mt-1 text-sm text-red-800">
+        Permanently deletes your registration details. Sevas you&apos;ve already booked stay on record at
+        the temple, just no longer linked to this account. This can&apos;t be undone.
+      </p>
+      <button type="button" className={`${btnDanger} mt-3`} onClick={() => setOpen(true)}>
+        Delete my account
+      </button>
+
+      {open && (
+        <Modal title="Delete your account?" onClose={close}>
+          <form onSubmit={submit} className="space-y-4">
+            {error && <Notice kind="error">{error}</Notice>}
+            <p className="text-sm text-gray-600">
+              Enter your password to confirm. This permanently deletes your account and cannot be undone.
+            </p>
+            <input
+              type="password"
+              autoFocus
+              required
+              autoComplete="current-password"
+              placeholder="Password"
+              className={inputCls}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" className={btnGhost} onClick={close}>Cancel</button>
+              <button type="submit" className={btnDanger} disabled={busy || !password}>
+                {busy ? 'Deleting…' : 'Permanently delete my account'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
   );
 }
 
@@ -110,6 +178,8 @@ export default function MyBookingsPage() {
           ))}
         </ul>
       )}
+
+      {signedIn && <DeleteAccountSection />}
 
       <p className="mt-6 text-center text-sm">
         <Link href="/" className="text-red-900 hover:underline">

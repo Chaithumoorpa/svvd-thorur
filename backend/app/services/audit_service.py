@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Optional
@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 
 # Never written to the audit trail, whatever the caller passes.
 _REDACTED_KEYS = {"password", "new_password", "current_password", "hashed_password", "token", "qr_token"}
+
+# Any deletion, hard or soft (tickets, announcements, festivals, a devotee's own
+# account, ...) is logged under one of these - see the alert this triggers below.
+_DELETE_ACTIONS = {"DELETE", "DELETE_ACCOUNT"}
+_REPEAT_DELETE_THRESHOLD = 3
+_REPEAT_DELETE_WINDOW = timedelta(minutes=10)
 
 
 def _jsonable(value: Any) -> Any:
@@ -67,6 +73,51 @@ class AuditService:
         except Exception:  # noqa: BLE001 - auditing must not take the site down
             self.db.rollback()
             logger.exception("Failed to write audit log (%s %s %s)", action, entity_type, entity_id)
+            return
+
+        if action in _DELETE_ACTIONS and entry.actor_id is not None:
+            self._maybe_alert_on_repeated_deletions(entry.actor_id)
+
+    def _maybe_alert_on_repeated_deletions(self, actor_id: int) -> None:
+        """A single account performing several deletions in a short window is
+        unusual enough to be worth a Super Admin's attention - a compromised
+        account, a mistake, or someone cleaning house without saying so. Fires
+        once per burst (exactly when the count crosses the threshold), not on
+        every deletion past it, so it doesn't spam."""
+        try:
+            since = datetime.utcnow() - _REPEAT_DELETE_WINDOW
+            recent_count = self.db.query(AuditLog).filter(
+                AuditLog.actor_id == actor_id,
+                AuditLog.action.in_(_DELETE_ACTIONS),
+                AuditLog.created_at >= since,
+            ).count()
+            if recent_count != _REPEAT_DELETE_THRESHOLD:
+                return
+
+            actor = self.db.query(User).filter(User.id == actor_id).first()
+            actor_label = actor.username if actor else f"user #{actor_id}"
+            super_admins = [
+                u for u in self.db.query(User).filter(User.is_active.is_(True)).all()
+                if u.is_super_admin and u.email
+            ]
+            if not super_admins:
+                return
+
+            from app.services.email_service import EmailService
+            email_service = EmailService()
+            for admin in super_admins:
+                email_service.send(
+                    admin.email,
+                    "Repeated deletions on SVVD Thorur",
+                    f"Hello {admin.username},\n\n"
+                    f"{actor_label} has performed {recent_count} deletions in the last "
+                    f"{int(_REPEAT_DELETE_WINDOW.total_seconds() // 60)} minutes.\n\n"
+                    "If this is expected (a cleanup, a bulk correction), no action is needed. "
+                    "If it isn't, review Admin -> Audit Log for what was deleted and by whom.\n\n"
+                    "Thank you,\nSVVD Thorur",
+                )
+        except Exception:  # noqa: BLE001 - the alert itself must never break the request
+            logger.exception("Failed to check/send repeated-deletion alert for actor_id=%s", actor_id)
 
     def list_page(self, params, entity_type: Optional[str] = None, action: Optional[str] = None,
                   actor: Optional[str] = None):

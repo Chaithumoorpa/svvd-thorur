@@ -127,6 +127,8 @@ export const register = async (data: { username: string; password: string; email
 export const getMe = async () => (await api.get<Me>('/auth/verify')).data;
 export const changePassword = async (current_password: string, new_password: string) =>
   (await api.post('/auth/change-password', { current_password, new_password })).data;
+export const deleteMyAccount = async (password: string) =>
+  (await api.delete('/auth/me', { data: { password } })).data;
 export const listUsers = (p = 1, pageSize = 50) => page<AppUser>('/auth/admin/users', { page: p, page_size: pageSize });
 export const createUser = async (data: UserCreateInput) => (await api.post<AppUser>('/auth/admin/users', data)).data;
 export const updateUser = async (id: number, data: UserUpdateInput) =>
