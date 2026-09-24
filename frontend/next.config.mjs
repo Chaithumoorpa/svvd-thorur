@@ -9,7 +9,10 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  // camera=(self) allows the admin QR ticket-scanner (getUserMedia) on this origin -
+  // still blocked for any third-party iframe. Empty () for camera would block the
+  // permission prompt from ever appearing at all, not just deny it silently.
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' },
 ];
 
 // Legacy / duplicate URLs -> one canonical page each (keeps SEO signals in one place).
