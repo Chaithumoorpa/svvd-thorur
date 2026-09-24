@@ -224,6 +224,16 @@ export const updateMember = async (id: number, data: Partial<MemberInput>) =>
   (await api.put<Member>(`/temple-members/${id}`, data)).data;
 export const deleteMember = async (id: number) => (await api.delete<Member>(`/temple-members/${id}`)).data;
 
+/** Uploads a member's photo straight to S3 (presigned POST) and returns its public URL. */
+export async function uploadMemberPhoto(file: File): Promise<string> {
+  const { data } = await api.post<UploadUrlResponse>('/temple-members/upload-url', { content_type: file.type });
+  const form = new FormData();
+  Object.entries(data.fields).forEach(([key, value]) => form.append(key, value));
+  form.append('file', file);
+  await axios.post(data.upload_url, form);
+  return data.public_url;
+}
+
 // ------------------------------------------------------------------- donors & donations
 export const listDonors = (p = 1, search?: string, pageSize = 25) =>
   page<Donor>('/donors/', { page: p, page_size: pageSize, search: search || undefined });
