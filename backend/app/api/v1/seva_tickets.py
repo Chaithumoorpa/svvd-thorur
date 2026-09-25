@@ -31,6 +31,25 @@ router = APIRouter(prefix="/seva-tickets", tags=["Seva Tickets"])
 _manage = require_permission(Permission.TICKETS_MANAGE)
 
 
+def _send_occasion_blessing(ticket) -> None:
+    """A devotee who said what their booking is for (a birthday, a wedding
+    anniversary, ...) gets a personal blessing once the seva is actually paid
+    for - immediately for a FREE seva, or once the fee is collected at the
+    counter for a paid one. Never sent for a ticket with no occasion set."""
+    if not ticket.occasion or not ticket.email:
+        return
+    EmailService().send(
+        ticket.email,
+        f"Blessings on your {ticket.occasion}",
+        f"Dear {ticket.devotee_name},\n\n"
+        f"On the occasion of your {ticket.occasion}, Sri Varasidhi Vinayaka Swamy Devasthanam "
+        f"sends you and your family warm greetings and blessings.\n\n"
+        f"Your {ticket.seva_name} seva (ticket {ticket.ticket_number}) has been received with "
+        "your intentions for this occasion.\n\n"
+        "Thank you,\nSVVD Thorur",
+    )
+
+
 @router.post("/booking/request-otp", response_model=dict)
 def request_booking_otp(
     payload: OtpRequest,
@@ -97,6 +116,11 @@ def book_seva_ticket(
         "Please show this ticket number at the temple counter.\n\n"
         "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
     )
+    if ticket.payment_status.value != "PENDING":
+        # FREE - nothing left to pay, so the occasion is "settled" right away.
+        # A PENDING (pay-at-counter) ticket gets its blessing once the fee is
+        # actually collected - see collect_ticket_payment below.
+        _send_occasion_blessing(ticket)
     return ticket
 
 
@@ -154,6 +178,7 @@ def collect_ticket_payment(
     ticket = service.collect_payment(ticket_id, admin_user)
     audit.log("COLLECT_PAYMENT", "seva_ticket", ticket.id, f"Collected payment for ticket {ticket.ticket_number}",
               {"amount": ticket.amount})
+    _send_occasion_blessing(ticket)
     return ticket
 
 

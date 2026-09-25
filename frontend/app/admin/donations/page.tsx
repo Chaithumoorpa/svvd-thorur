@@ -85,7 +85,7 @@ function DonationsInner() {
   const action = useAction();
   const [creating, setCreating] = useState(false);
   const [donor, setDonor] = useState<Donor | null>(null);
-  const [form, setForm] = useState({ amount: '', donation_type: 'general' as DonationType, payment_mode: 'CASH' as PaymentMode, purpose: '', donated_on: '' });
+  const [form, setForm] = useState({ amount: '', donation_type: 'general' as DonationType, payment_mode: 'CASH' as PaymentMode, purpose: '', donated_on: '', occasion: '' });
   const [toDelete, setToDelete] = useState<Donation | null>(null);
 
   async function remove() {
@@ -109,13 +109,14 @@ function DonationsInner() {
           payment_mode: form.payment_mode,
           purpose: emptyToNull(form.purpose),
           donated_on: form.donated_on ? `${form.donated_on}T12:00:00` : null,
+          occasion: emptyToNull(form.occasion),
         }),
       'Donation recorded.',
     );
     if (ok) {
       setCreating(false);
       setDonor(null);
-      setForm({ amount: '', donation_type: 'general', payment_mode: 'CASH', purpose: '', donated_on: '' });
+      setForm({ amount: '', donation_type: 'general', payment_mode: 'CASH', purpose: '', donated_on: '', occasion: '' });
       list.reload();
     }
   }
@@ -231,6 +232,9 @@ function DonationsInner() {
               </Field>
             </div>
             <Field label="Note"><input className={inputCls} maxLength={1000} value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} /></Field>
+            <Field label="For a special occasion?" hint="Optional - e.g. Birthday, Wedding Anniversary. Sends the donor a blessing email if they have one on file.">
+              <input className={inputCls} maxLength={100} placeholder="e.g. Wedding Anniversary" value={form.occasion} onChange={(e) => setForm({ ...form, occasion: e.target.value })} />
+            </Field>
             <p className="text-xs text-gray-500">This will also be added to the finance ledger automatically.</p>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" className={btnGhost} onClick={() => { setCreating(false); action.clear(); }}>Cancel</button>

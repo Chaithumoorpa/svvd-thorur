@@ -103,6 +103,7 @@ class SevaTicketService:
             "seva_time": data.seva_time,
             "payment_status": payment_status,
             "amount": amount,
+            "occasion": data.occasion,
             "status": TicketStatus.ACTIVE,
             "source": ModelTicketSource.ONLINE,
             "booked_by_user_id": booked_by_user_id,

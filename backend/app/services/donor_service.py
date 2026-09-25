@@ -95,6 +95,7 @@ class DonationService:
             donated_on=data.donated_on or datetime.now(),
             payment_mode=data.payment_mode,
             recorded_by_id=user_id,
+            occasion=data.occasion,
         )
         self.db.add(donation)
         self.db.flush()  # need the id for the ledger reference

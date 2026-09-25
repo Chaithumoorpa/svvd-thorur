@@ -62,3 +62,8 @@ class SevaTicket(Base):
     # S3 object key of the most recently archived PDF (private bucket prefix,
     # contains devotee name/phone - never public like gallery photos).
     pdf_s3_key = Column(String, nullable=True)
+
+    # Optional: what the devotee is booking this seva for (a birthday, a
+    # wedding anniversary, ...). Triggers a blessing email once paid - see
+    # book_seva_ticket/collect_payment in the router.
+    occasion = Column(String(100), nullable=True)

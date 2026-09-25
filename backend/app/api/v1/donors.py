@@ -138,6 +138,16 @@ def create_donation(
         f"Type: {donation.donation_type}\nMode: {donation.payment_mode.value}\n"
         f"Recorded by user #{user.id}",
     )
+    if donation.occasion and donation.donor and donation.donor.email:
+        EmailService().send(
+            donation.donor.email,
+            f"Blessings on your {donation.occasion}",
+            f"Dear {donation.donor.name},\n\n"
+            f"On the occasion of your {donation.occasion}, Sri Varasidhi Vinayaka Swamy Devasthanam "
+            "sends you and your family warm greetings and blessings.\n\n"
+            f"Your donation of Rs. {donation.amount} has been received with your intentions for this occasion.\n\n"
+            "Thank you,\nSVVD Thorur",
+        )
     return out
 
 
