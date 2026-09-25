@@ -138,6 +138,16 @@ def create_donation(
         f"Type: {donation.donation_type}\nMode: {donation.payment_mode.value}\n"
         f"Recorded by user #{user.id}",
     )
+    if donation.occasion and donation.donor and donation.donor.email:
+        EmailService().send(
+            donation.donor.email,
+            f"Blessings on your {donation.occasion}",
+            f"Dear {donation.donor.name},\n\n"
+            f"On the occasion of your {donation.occasion}, Sri Varasidhi Vinayaka Swamy Devasthanam "
+            "sends you and your family warm greetings and blessings.\n\n"
+            f"Your donation of Rs. {donation.amount} has been received with your intentions for this occasion.\n\n"
+            "Thank you,\nSVVD Thorur",
+        )
     return out
 
 
@@ -153,6 +163,19 @@ def update_donation(
     audit.log("UPDATE", "donation", donation_id, f"Updated donation #{donation_id}",
               payload.model_dump(exclude_unset=True))
     return _donation_out(donation)
+
+
+@router.delete("/donations/{donation_id}", response_model=dict)
+def delete_donation(
+    donation_id: int,
+    service: DonationService = Depends(get_donation_service),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_write_donations),
+):
+    """Blocked once a receipt has been issued - see DonationService.delete."""
+    service.delete(donation_id)
+    audit.log("DELETE", "donation", donation_id, f"Deleted donation #{donation_id}")
+    return {"message": "Donation deleted"}
 
 
 @router.post("/donations/{donation_id}/receipt", response_model=DonationOut)

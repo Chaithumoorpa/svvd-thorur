@@ -138,7 +138,23 @@ class AuthService:
                 status_code=403,
                 detail="Staff and admin accounts can't be deleted this way - contact a Super Admin.",
             )
+        self._unlink_and_delete(user)
 
+    def delete_user(self, user_id: int, acting_user: User) -> None:
+        """Super Admin deletes any account (their own included, subject to the
+        same protections update_user already enforces for deactivating/demoting
+        - never yourself, never the last active Super Admin). Same unlink, not
+        delete, treatment of independent records as delete_own_account."""
+        user = self.user_repository.get_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if user.id == acting_user.id:
+            raise HTTPException(status_code=400, detail="You cannot delete your own account here")
+        if user.is_super_admin and self.user_repository.count_active_super_admins() <= 1:
+            raise HTTPException(status_code=400, detail="At least one active Super Admin is required")
+        self._unlink_and_delete(user)
+
+    def _unlink_and_delete(self, user: User) -> None:
         db = self.user_repository.db
         db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete()
         db.query(SevaTicket).filter(SevaTicket.booked_by_user_id == user.id).update({"booked_by_user_id": None})

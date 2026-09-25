@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { KeyRound, Pencil, Plus, ShieldCheck } from 'lucide-react';
+import { KeyRound, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import AdminPage, { StatusPill } from '@/components/admin/AdminPage';
+import { useAuth } from '@/components/admin/AuthContext';
+import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import Field from '@/components/ui/Field';
 import Modal from '@/components/ui/Modal';
 import Pager from '@/components/ui/Pager';
@@ -10,7 +12,7 @@ import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/St
 import { btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
-import { createUser, listUsers, updateUser } from '@/lib/api';
+import { createUser, deleteUser, listUsers, updateUser } from '@/lib/api';
 import { emptyToNull } from '@/lib/format';
 import type { AppUser, Role } from '@/lib/types';
 
@@ -34,10 +36,21 @@ interface FormState {
 const blank: FormState = { username: '', password: '', email: '', phone: '', role: 'STAFF', is_active: true };
 
 export default function UsersAdmin() {
+  const { me } = useAuth();
   const [page, setPage] = useState(1);
   const list = useLoad(() => listUsers(page, PAGE_SIZE), [page]);
   const action = useAction();
   const [editing, setEditing] = useState<{ id: number | null; form: FormState } | null>(null);
+  const [toDelete, setToDelete] = useState<AppUser | null>(null);
+
+  async function remove() {
+    if (!toDelete) return;
+    const ok = await action.run(() => deleteUser(toDelete.id), 'User deleted.');
+    if (ok) {
+      setToDelete(null);
+      list.reload();
+    }
+  }
 
   const openEdit = (u: AppUser) =>
     setEditing({
@@ -115,6 +128,11 @@ export default function UsersAdmin() {
                     <td className="px-4 py-3"><StatusPill on={u.is_active} onLabel="Active" offLabel="Disabled" /></td>
                     <td className="px-4 py-3 text-right">
                       <button type="button" className={btnGhost} onClick={() => openEdit(u)} aria-label={`Edit ${u.username}`}><Pencil className="h-4 w-4" /></button>
+                      {me.is_super_admin && u.id !== me.id && (
+                        <button type="button" className={btnGhost} onClick={() => setToDelete(u)} aria-label={`Delete ${u.username}`}>
+                          <Trash2 className="h-4 w-4 text-red-700" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -158,6 +176,18 @@ export default function UsersAdmin() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {toDelete && (
+        <ConfirmDialog
+          title="Delete user?"
+          message={`This permanently deletes ${toDelete.username}'s account and login access. Any sevas they booked while signed in stay on record, just unlinked from the account. This can't be undone.`}
+          confirmLabel="Delete"
+          danger
+          busy={action.busy}
+          onConfirm={remove}
+          onCancel={() => setToDelete(null)}
+        />
       )}
     </AdminPage>
   );

@@ -221,6 +221,7 @@ export interface Donation {
   purpose: string | null;
   donated_on: string;
   payment_mode: PaymentMode;
+  occasion?: string | null;
   receipt_number: string | null;
   receipt_generated_at: string | null;
 }
@@ -232,6 +233,7 @@ export interface DonationInput {
   purpose?: string | null;
   donated_on?: string | null;
   payment_mode?: PaymentMode;
+  occasion?: string | null;
 }
 
 export type ContactStatus = 'PENDING' | 'IN_PROGRESS' | 'RESOLVED' | 'REJECTED';
@@ -273,6 +275,7 @@ export interface SevaTicket {
   seva_time: string | null;
   payment_status: PaymentStatus;
   amount: number;
+  occasion?: string | null;
   status: TicketStatus;
   source: 'ONLINE' | 'COUNTER';
   qr_token: string;
@@ -286,6 +289,7 @@ export interface SevaBookingInput {
   mobile_number: string;
   seva_date: string;
   seva_time?: string | null;
+  occasion?: string;
 }
 
 /** Public online booking: gated on a verified email, see requestBookingOtp/verifyBookingOtp. */

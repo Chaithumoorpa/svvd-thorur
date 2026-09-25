@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Eye, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { isAxiosError } from 'axios';
+import { Eye, Pencil, Plus, Trash2, Upload, Users } from 'lucide-react';
 import AdminPage, { StatusPill } from '@/components/admin/AdminPage';
 import { useAuth } from '@/components/admin/AuthContext';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
@@ -12,7 +13,7 @@ import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/St
 import { btnDanger, btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
-import { createMember, deleteMember, listMembers, updateMember } from '@/lib/api';
+import { createMember, deleteMember, listMembers, updateMember, uploadMemberPhoto } from '@/lib/api';
 import { emptyToNull } from '@/lib/format';
 import type { Member } from '@/lib/types';
 
@@ -38,6 +39,8 @@ export default function MembersAdmin() {
   const action = useAction();
   const [editing, setEditing] = useState<{ id: number | null; form: FormState } | null>(null);
   const [toDelete, setToDelete] = useState<Member | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const openEdit = (m: Member) =>
     setEditing({
@@ -79,6 +82,26 @@ export default function MembersAdmin() {
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setEditing((cur) => (cur ? { ...cur, form: { ...cur.form, [key]: value } } : cur));
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const publicUrl = await uploadMemberPhoto(file);
+      set('photo_url', publicUrl);
+    } catch (err) {
+      setUploadError(
+        isAxiosError(err) && err.response?.status === 503
+          ? 'Photo uploads are not set up yet. Paste an image link instead, or ask an admin to configure S3.'
+          : 'Upload failed. Try a smaller image, or paste an image link instead.',
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <AdminPage
@@ -152,7 +175,7 @@ export default function MembersAdmin() {
       )}
 
       {editing && (
-        <Modal title={editing.id === null ? 'Add member' : 'Edit member'} onClose={() => { setEditing(null); action.clear(); }}>
+        <Modal title={editing.id === null ? 'Add member' : 'Edit member'} onClose={() => { setEditing(null); setUploadError(null); action.clear(); }}>
           <form onSubmit={save} className="space-y-4">
             {action.error && <Notice kind="error">{action.error}</Notice>}
             <Field label="Full name" required>
@@ -173,9 +196,35 @@ export default function MembersAdmin() {
                 <input type="number" min={0} className={inputCls} value={editing.form.sort_order} onChange={(e) => set('sort_order', e.target.value)} />
               </Field>
             </div>
-            <Field label="Photo link" hint="Optional. Only used if shown on the website.">
-              <input className={inputCls} inputMode="url" value={editing.form.photo_url} onChange={(e) => set('photo_url', e.target.value)} />
+            <Field label="Photo" hint="Optional, only used if shown on the website. Upload an image, or paste a web address to one already hosted elsewhere.">
+              <div>
+                <div className="flex items-center gap-2">
+                  <label className={`${btnGhost} cursor-pointer`}>
+                    <Upload className="h-4 w-4" aria-hidden="true" />
+                    {uploading ? 'Uploading…' : 'Upload photo'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={handleFileSelect}
+                    />
+                  </label>
+                </div>
+                {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
+                <input
+                  className={`${inputCls} mt-2`}
+                  inputMode="url"
+                  placeholder="https://…"
+                  value={editing.form.photo_url}
+                  onChange={(e) => set('photo_url', e.target.value)}
+                />
+              </div>
             </Field>
+            {editing.form.photo_url && /^(https?:\/\/|\/)/.test(editing.form.photo_url) && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={editing.form.photo_url} alt="Preview" className="max-h-40 rounded-lg border border-gray-200 object-contain" />
+            )}
             <label className="flex items-start gap-2 text-sm text-gray-700">
               <input type="checkbox" className="mt-1" checked={editing.form.show_on_website} onChange={(e) => set('show_on_website', e.target.checked)} />
               <span>

@@ -125,8 +125,11 @@ class DonationCreate(BaseModel):
     purpose: Optional[str] = Field(default=None, max_length=1000)
     donated_on: Optional[datetime] = None
     payment_mode: PaymentMode = PaymentMode.CASH
+    # What this gift is for (a birthday, a wedding anniversary, ...) - optional,
+    # triggers a blessing email to the donor once recorded.
+    occasion: Optional[str] = Field(default=None, max_length=100)
 
-    @field_validator("purpose", mode="before")
+    @field_validator("purpose", "occasion", mode="before")
     @classmethod
     def _blank(cls, v):
         return blank_to_none(v)
@@ -138,6 +141,12 @@ class DonationUpdate(BaseModel):
     purpose: Optional[str] = Field(default=None, max_length=1000)
     donated_on: Optional[datetime] = None
     payment_mode: Optional[PaymentMode] = None
+    occasion: Optional[str] = Field(default=None, max_length=100)
+
+    @field_validator("occasion", mode="before")
+    @classmethod
+    def _blank(cls, v):
+        return blank_to_none(v)
 
 
 class DonationOut(BaseModel):
@@ -149,6 +158,7 @@ class DonationOut(BaseModel):
     purpose: Optional[str] = None
     donated_on: datetime
     payment_mode: PaymentMode
+    occasion: Optional[str] = None
     receipt_number: Optional[str] = None
     receipt_generated_at: Optional[datetime] = None
     created_at: datetime

@@ -147,6 +147,7 @@ export const listUsers = (p = 1, pageSize = 50) => page<AppUser>('/auth/admin/us
 export const createUser = async (data: UserCreateInput) => (await api.post<AppUser>('/auth/admin/users', data)).data;
 export const updateUser = async (id: number, data: UserUpdateInput) =>
   (await api.patch<AppUser>(`/auth/admin/users/${id}`, data)).data;
+export const deleteUser = async (id: number) => (await api.delete(`/auth/admin/users/${id}`)).data;
 
 // ---------------------------------------------------------------------------- temple
 export const getTemple = async () => (await api.get<Temple>('/temple/')).data;
@@ -223,6 +224,16 @@ export const updateMember = async (id: number, data: Partial<MemberInput>) =>
   (await api.put<Member>(`/temple-members/${id}`, data)).data;
 export const deleteMember = async (id: number) => (await api.delete<Member>(`/temple-members/${id}`)).data;
 
+/** Uploads a member's photo straight to S3 (presigned POST) and returns its public URL. */
+export async function uploadMemberPhoto(file: File): Promise<string> {
+  const { data } = await api.post<UploadUrlResponse>('/temple-members/upload-url', { content_type: file.type });
+  const form = new FormData();
+  Object.entries(data.fields).forEach(([key, value]) => form.append(key, value));
+  form.append('file', file);
+  await axios.post(data.upload_url, form);
+  return data.public_url;
+}
+
 // ------------------------------------------------------------------- donors & donations
 export const listDonors = (p = 1, search?: string, pageSize = 25) =>
   page<Donor>('/donors/', { page: p, page_size: pageSize, search: search || undefined });
@@ -233,6 +244,7 @@ export const deleteDonor = async (id: number) => (await api.delete<Donor>(`/dono
 export const listDonations = (p = 1, filters: { donor_id?: number; start_date?: string; end_date?: string } = {}, pageSize = 25) =>
   page<Donation>('/donations/', { page: p, page_size: pageSize, ...filters });
 export const createDonation = async (data: DonationInput) => (await api.post<Donation>('/donations/', data)).data;
+export const deleteDonation = async (id: number) => (await api.delete<{ message: string }>(`/donations/${id}`)).data;
 export const issueReceipt = async (id: number) => (await api.post<Donation>(`/donations/${id}/receipt`)).data;
 export const downloadReceipt = async (id: number) =>
   (await api.get<Blob>(`/donations/${id}/receipt`, { responseType: 'blob' })).data;

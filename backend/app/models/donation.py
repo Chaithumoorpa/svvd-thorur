@@ -28,6 +28,10 @@ class Donation(Base):
     payment_mode = Column(SAEnum(PaymentMode), nullable=False, default=PaymentMode.CASH)
 
     recorded_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # Optional: what this gift is for (a birthday, a wedding anniversary, ...).
+    # Triggers a blessing email to the donor (if they have one on file) once
+    # recorded - a donation is already "paid" the moment it's entered.
+    occasion = Column(String(100), nullable=True)
 
     donor = relationship("Donor", back_populates="donations")
     recorded_by = relationship("User", foreign_keys=[recorded_by_id])

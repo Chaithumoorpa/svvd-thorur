@@ -42,6 +42,33 @@ def test_resolving_again_does_not_resend(client, super_admin, monkeypatch):
     sent.assert_called_once()
 
 
+def test_contact_closed_emails_the_submitter_with_admin_notes(client, super_admin, monkeypatch):
+    sent = MagicMock()
+    monkeypatch.setattr("app.api.v1.contact.EmailService.send", sent)
+    _, headers = super_admin
+
+    msg_id = _create_contact(client).json()["id"]
+    resolved = client.patch(f"/api/v1/contacts/{msg_id}", headers=headers,
+                            json={"status": "REJECTED", "admin_notes": "Evening pooja is at 7 PM daily."})
+    assert resolved.status_code == 200
+    sent.assert_called_once()
+    to_email, subject, body = sent.call_args[0]
+    assert to_email == "dev@example.com"
+    assert "Timing query" in subject and "Closed" in subject
+    assert "Evening pooja is at 7 PM daily." in body
+
+
+def test_closing_again_does_not_resend(client, super_admin, monkeypatch):
+    sent = MagicMock()
+    monkeypatch.setattr("app.api.v1.contact.EmailService.send", sent)
+    _, headers = super_admin
+
+    msg_id = _create_contact(client).json()["id"]
+    client.patch(f"/api/v1/contacts/{msg_id}", headers=headers, json={"status": "REJECTED"})
+    client.patch(f"/api/v1/contacts/{msg_id}", headers=headers, json={"admin_notes": "still closed"})
+    sent.assert_called_once()
+
+
 def test_non_resolved_status_change_does_not_email(client, super_admin, monkeypatch):
     sent = MagicMock()
     monkeypatch.setattr("app.api.v1.contact.EmailService.send", sent)

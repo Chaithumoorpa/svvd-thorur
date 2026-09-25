@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
 
 from app.models.seva_ticket import PaymentStatus, TicketSource, TicketStatus
-from app.schemas.common import MoneyInOrZero, MoneyOut, normalize_mobile
+from app.schemas.common import MoneyInOrZero, MoneyOut, blank_to_none, normalize_mobile
 
 DevoteeName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=100)]
 
@@ -20,11 +20,19 @@ class SevaBookingPublic(BaseModel):
     mobile_number: str
     seva_date: date
     seva_time: Optional[time] = None
+    # What this booking is for (a birthday, a wedding anniversary, ...) - optional,
+    # triggers a blessing email once the seva is paid for.
+    occasion: Optional[str] = Field(default=None, max_length=100)
 
     @field_validator("mobile_number")
     @classmethod
     def _m(cls, v):
         return normalize_mobile(v)
+
+    @field_validator("occasion", mode="before")
+    @classmethod
+    def _blank(cls, v):
+        return blank_to_none(v)
 
 
 class SevaBookingOnline(SevaBookingPublic):
@@ -53,6 +61,7 @@ class SevaTicketOut(BaseModel):
     seva_time: Optional[time] = None
     payment_status: PaymentStatus
     amount: MoneyOut
+    occasion: Optional[str] = None
     status: TicketStatus
     source: TicketSource
     created_by_admin_id: Optional[int] = None

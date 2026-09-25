@@ -1,13 +1,16 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.models.user import User
 from app.schemas.announcement import AnnouncementCreate, AnnouncementOut, AnnouncementUpdate
 from app.services.announcement_service import AnnouncementService
-from app.utils.dependencies import AuditContext, get_announcement_service, get_audit, require_permission
+from app.services.notification_service import notify_devotees
+from app.utils.dependencies import AuditContext, get_announcement_service, get_audit, get_db, require_permission
 
 router = APIRouter(prefix="/announcements", tags=["Announcements"])
 
@@ -49,10 +52,19 @@ def create_announcement(
     payload: AnnouncementCreate,
     service: AnnouncementService = Depends(get_announcement_service),
     audit: AuditContext = Depends(get_audit),
+    db: Session = Depends(get_db),
     current_user: User = Depends(_can_write),
 ):
     result = service.create_announcement(payload, current_user.id)
     audit.log("CREATE", "announcement", result.id, f"Created announcement '{result.title}'")
+    notify_devotees(
+        db,
+        f"New announcement: {result.title}",
+        f"{result.title}\n\n"
+        f"{result.message or ''}\n\n"
+        f"See all announcements at {settings.FRONTEND_BASE_URL}\n\n"
+        "Thank you,\nSVVD Thorur",
+    )
     return result
 
 
