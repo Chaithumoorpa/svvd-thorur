@@ -26,7 +26,7 @@ Live at [svvdthorur.org](https://svvdthorur.org).
 backend/    FastAPI app (app/api, app/services, app/models, app/schemas, alembic/ migrations, tests/)
 frontend/   Next.js app (app/, components/, lib/, messages/ translations)
 deploy/     EC2 provisioning + deploy scripts
-docs/       Design/planning docs
+docs/       Developer documentation - architecture, RBAC, API conventions, release process (see docs/README.md)
 ```
 
 ## Local development
