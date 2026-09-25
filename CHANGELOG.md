@@ -1,5 +1,49 @@
 # CHANGELOG
 
+## [1.0.1] - 2026-09-25
+
+Devotee-facing account features, payment-flow hardening, and the remaining
+admin CRUD gaps, all merged since v1.0.0:
+
+### Devotee accounts and booking
+- Self-service devotee registration/login, linked to their own seva
+  bookings ("My Bookings"); self-service account deletion (unlinks rather
+  than orphans their existing tickets), with a Super Admin alert on any
+  actor's repeated deletions in a short window
+- Email OTP two-factor login for every account with an email on file
+  (accounts with none fall back to single-factor, so nobody is locked out)
+- 30-minute idle session timeout, with silent activity-based refresh
+- A paid seva can now be booked online and paid at the temple counter
+  instead of requiring counter-only booking (`PENDING` payment status);
+  the scan/check-in flow refuses to admit a ticket with payment still
+  pending, and staff can collect payment (recording it to the finance
+  ledger) right from the scan screen
+- Optional occasion tagging (a birthday, a wedding anniversary, ...) on a
+  seva booking or a donation, which sends a personal blessing email once
+  the transaction is actually paid for
+- Sankashti Chaturthi dates and auto-generated festival announcements
+- Devotee email/mobile required at registration; corrected temple name
+  spelling (Varasiddhi → Varasidhi) throughout the codebase and emails
+
+### Compliance and communication
+- DPDPA-aligned privacy policy, linked from every outbound email and
+  printed on the back of every ticket alongside temple conduct rules
+- Devotees are emailed when darshan timings change or a new announcement
+  is posted (never staff/trustees/admins); the contact-message auto-reply
+  now fires on Closed as well as Resolved, using staff's own internal
+  notes as the reply body when present
+
+### Admin panel
+- Full CRUD everywhere except Finance (deliberately excluded - see
+  docs/RBAC_AND_PERMISSIONS.md): Super Admins can delete any user account;
+  donations can be deleted (blocked once a receipt has been issued); a
+  photo upload button on the Member edit form
+
+### Developer documentation
+- New `docs/` developer guide: architecture, RBAC/permissions model, API
+  conventions (including the "add a CRUD resource" recipe this release's
+  own features followed), and the release process this entry follows
+
 ## [Unreleased]
 
 ### SVVD 2.0 (see docs/SVVD_2.0_PLAN.md)
