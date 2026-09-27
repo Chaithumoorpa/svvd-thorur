@@ -16,12 +16,36 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:15  # same as production
+        env:
+          POSTGRES_USER: templeuser
+          POSTGRES_PASSWORD: templepass
+          POSTGRES_DB: templedb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U templeuser -d templedb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install -r requirements-dev.txt
+      # pytest runs on SQLite and never touches Alembic, so a migration that
+      # only fails on Postgres would otherwise first fail in the production
+      # container's entrypoint - crash-looping the backend.
+      - name: Apply all migrations to Postgres
+        env:
+          ENV: production
+          DATABASE_URL: postgresql://templeuser:templepass@localhost:5432/templedb
+          SECRET_KEY: ci-only-throwaway-secret-key-0123456789abcdef
+          CORS_ORIGINS: https://svvdthorur.org
+        run: alembic -c alembic.prod.ini upgrade head
       - run: pytest
 
   frontend-checks:

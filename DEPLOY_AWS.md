@@ -423,6 +423,16 @@ uses a **dedicated deploy-only key**, not your personal `svvd-key-pair.pem` -
 restricted server-side to only ever run that one script, so a leaked key
 can trigger a redeploy of the current branch and nothing else.
 
+Two safety checks make a broken release show up as a **red** run instead of
+a silently dead backend:
+
+- **Before deploying**, CI applies every Alembic migration to a throwaway
+  Postgres 15 (the pytest suite runs on SQLite and never runs migrations).
+- **After deploying**, `deploy.sh` waits up to 2 minutes for the backend's
+  `/health` to answer - it only does once migrations and app startup have
+  succeeded - and otherwise fails the run, printing the backend's recent
+  logs into the Actions output.
+
 ### 1. Generate the deploy key and install it (CloudShell)
 
 ```bash
