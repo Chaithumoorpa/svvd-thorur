@@ -16,8 +16,9 @@ PUBLISHED = {
     2026: {
         "sankashti-chaturthi": ["01-06", "02-05", "03-06", "04-05", "05-05", "06-03", "07-03", "08-02",
                                 "08-31", "09-29", "10-29", "11-27", "12-26"],
+        # Bhadrapada's (09-14) is Ganesh Chaturthi, listed once under that name
         "vinayaka-chaturthi": ["01-22", "02-21", "03-22", "04-20", "05-20", "06-18", "07-17", "08-16",
-                               "09-14", "10-14", "11-13", "12-13"],
+                               "10-14", "11-13", "12-13"],
         "makara-sankranti": ["01-14"], "vasant-panchami": ["01-23"], "ratha-saptami": ["01-25"],
         "maha-shivaratri": ["02-15"], "ugadi": ["03-19"], "sri-rama-navami": ["03-26"],
         "akshaya-tritiya": ["04-19"], "guru-purnima": ["07-29"], "varalakshmi-vratam": ["08-28"],
@@ -53,7 +54,12 @@ def test_dates_match_the_published_panchang(year):
 
 def test_vinayaka_chaturthi_2027():
     got = [o.start.strftime("%m-%d") for o in _by_rule(2027)["vinayaka-chaturthi"]]
-    assert got[:9] == VINAYAKA_2027_JAN_TO_SEP
+    assert got[:8] == VINAYAKA_2027_JAN_TO_SEP[:8]  # 09-04 is Ganesh Chaturthi
+
+
+def test_bhadrapada_chaturthi_is_listed_once_as_ganesh_chaturthi():
+    same_day = [o.name for o in occurrences(date(2027, 9, 4), date(2027, 9, 4), HYDERABAD)]
+    assert same_day == ["Vinayaka Chaturthi (Ganesh Navaratri)"]
 
 
 def test_ganesh_navaratri_runs_to_ananta_chaturdashi():

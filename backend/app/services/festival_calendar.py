@@ -159,6 +159,8 @@ def occurrences(start: date, end: date, place: Optional[Place] = None) -> List[O
     found: List[Occurrence] = []
     for month in months:
         for rule in MONTHLY:
+            if rule.key == "vinayaka-chaturthi" and month.name == "Bhadrapada" and not month.adhika:
+                continue  # that month's Chaturthi is Ganesh Chaturthi itself (ANNUAL)
             found.append(_occurrence(rule, place, month))
         if not month.adhika:
             for rule in ANNUAL:
