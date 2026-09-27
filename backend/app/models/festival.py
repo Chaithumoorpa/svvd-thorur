@@ -25,3 +25,8 @@ class Festival(Base):
     # Announcement per festival, `announce_days_before` days ahead of festival_date.
     auto_announce = Column(Boolean, default=True, nullable=False)
     announce_days_before = Column(Integer, default=2, nullable=False)
+
+    # Set on rows the festival calendar computed (app/services/festival_calendar.py),
+    # e.g. "sankashti-chaturthi:2026-10-29" - so it never adds one twice, and never
+    # re-adds one an admin hid. None for festivals entered by hand.
+    source_key = Column(String(80), nullable=True, unique=True)

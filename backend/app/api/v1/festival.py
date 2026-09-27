@@ -8,7 +8,11 @@ from app.core.rbac import Permission
 from app.models.user import User
 from app.schemas.festival import FestivalCreate, FestivalOut, FestivalUpdate
 from app.services.festival_service import FestivalService
-from app.utils.dependencies import AuditContext, get_audit, get_festival_service, require_permission
+from app.utils.dependencies import (
+    AuditContext, get_audit, get_festival_repository, get_festival_service, require_permission,
+)
+from app.repositories.festival_repo import FestivalRepository
+from app.services.festival_calendar import FestivalCalendarService
 
 router = APIRouter(prefix="/festivals", tags=["Festivals"])
 
@@ -44,6 +48,23 @@ def list_all_festivals(
 @router.get("/{festival_id}", response_model=FestivalOut)
 def get_festival(festival_id: int, service: FestivalService = Depends(get_festival_service)):
     return service.get_festival_details(festival_id)
+
+
+@router.post("/calendar/fill", response_model=dict)
+def fill_festival_calendar(
+    repo: FestivalRepository = Depends(get_festival_repository),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_can_write),
+):
+    """Adds the computed festivals (Sankashti Chaturthi, Ganesh Chaturthi,
+    Ugadi, ...) for the next 12 months that aren't there yet - the daily cron
+    job does the same; this is for not having to wait for it. Never changes
+    or re-adds an existing row, including one an admin hid."""
+    added = FestivalCalendarService(repo).fill()
+    if added:
+        audit.log("CREATE", "festival", None, f"Festival calendar added {len(added)} festival(s)")
+        invalidate("festivals:")
+    return {"added": len(added)}
 
 
 @router.post("", response_model=FestivalOut, status_code=201)

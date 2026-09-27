@@ -2,9 +2,8 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Clock, Moon, Sun } from 'lucide-react';
 import { PageShell } from '@/components/public/SectionHeading';
-import { formatTimeRange } from '@/lib/format';
+import TempleTime from '@/components/public/TempleTime';
 import { fetchPoojas, fetchTimings } from '@/lib/server-api';
-import { formatTime } from '@/lib/format';
 import { localizedAlternates } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -15,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function TimingsPage() {
   const [timings, poojas] = await Promise.all([fetchTimings(), fetchPoojas()]);
   const daily = poojas.filter((p) => p.pooja_type === 'daily' && p.start_time);
-  const t = await getTranslations('timings');
+  const [t, tCommon] = await Promise.all([getTranslations('timings'), getTranslations('common')]);
 
   return (
     <PageShell title={t('title')} subtitle={t('subtitle')} narrow>
@@ -30,7 +29,10 @@ export default async function TimingsPage() {
                   <Icon className={`h-7 w-7 ${dark ? 'text-saffron-light' : 'text-saffron'}`} aria-hidden="true" />
                   <h2 className={`font-serif text-2xl font-bold ${dark ? '' : 'text-maroon'}`}>{timing.label}</h2>
                 </div>
-                <p className={`text-3xl font-bold ${dark ? 'text-saffron-light' : 'text-gray-900'}`}>{formatTimeRange(timing.start_time, timing.end_time)}</p>
+                <p className={`text-3xl font-bold ${dark ? 'text-saffron-light' : 'text-gray-900'}`}>
+                  <TempleTime start={timing.start_time} end={timing.end_time} yourTimeLabel={tCommon('yourTime')} stacked
+                              localClassName={`mt-1 text-sm font-normal ${dark ? 'text-amber-100/80' : 'text-gray-500'}`} />
+                </p>
                 <p className={`mt-1 text-sm ${dark ? 'text-amber-100/80' : 'text-gray-500'}`}>{timing.days}</p>
                 {timing.note && <p className={`mt-3 text-sm ${dark ? 'text-amber-50' : 'text-gray-700'}`}>{timing.note}</p>}
               </section>
@@ -51,7 +53,7 @@ export default async function TimingsPage() {
             {daily.map((p) => (
               <li key={p.id} className="flex items-baseline justify-between gap-4 py-3">
                 <span className="font-medium text-gray-800">{p.name}</span>
-                <span className="text-sm text-gray-600">{formatTime(p.start_time)}</span>
+                <span className="text-right text-sm text-gray-600"><TempleTime start={p.start_time} yourTimeLabel={tCommon('yourTime')} stacked /></span>
               </li>
             ))}
           </ul>

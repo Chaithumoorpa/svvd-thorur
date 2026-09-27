@@ -412,7 +412,18 @@ doesn't need the host CLI since it goes through the backend container, but
 restoring is a manual, rare-enough operation that it's fine to reach for
 whichever tool's on hand.)
 
-## Festival announcements
+## Festival calendar and announcements
+
+The festival calendar fills itself: Sankashti Chaturthi and Masa Vinayaka
+Chaturthi every month, plus Ugadi, Sri Rama Navami, Ganesh Chaturthi (with
+Navaratri to Ananta Chaturdashi), Dasara, Deepavali, Karthika Purnima, Maha
+Shivaratri, Sankranti, Vaikuntha Ekadashi and more are calculated from the
+sun and moon for Thorur (`app/services/panchang.py`,
+`app/services/festival_calendar.py`; checked against drikpanchang.com's
+published dates) and added a year ahead by the same daily job below. Each is
+an ordinary festival row marked *Auto* in Admin → Festivals - edit its text
+or hide it like any other; the job never re-adds or changes one you touched.
+**Update calendar** there fills it immediately instead of waiting for the job.
 
 Admin → Festivals lets you turn "Auto-announce" on per festival/occasion
 (on by default) with a "days before" lead time - e.g. add each month's

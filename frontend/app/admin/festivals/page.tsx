@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Calendar, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Calendar, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import AdminPage, { StatusPill } from '@/components/admin/AdminPage';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import Field from '@/components/ui/Field';
@@ -11,7 +11,7 @@ import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/St
 import { btnDanger, btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
-import { createFestival, deleteFestival, listAllFestivals, updateFestival } from '@/lib/api';
+import { createFestival, deleteFestival, fillFestivalCalendar, listAllFestivals, updateFestival } from '@/lib/api';
 import { emptyToNull, formatDate } from '@/lib/format';
 import type { Festival } from '@/lib/types';
 
@@ -42,6 +42,7 @@ const blank: FormState = {
 export default function FestivalsAdmin() {
   const [page, setPage] = useState(1);
   const list = useLoad(() => listAllFestivals(page, PAGE_SIZE), [page]);
+  const [fillNote, setFillNote] = useState<string | null>(null);
   const action = useAction();
   const [editing, setEditing] = useState<{ id: number | null; form: FormState } | null>(null);
   const [toDelete, setToDelete] = useState<Festival | null>(null);
@@ -98,13 +99,31 @@ export default function FestivalsAdmin() {
   return (
     <AdminPage
       title="Festivals & Events"
-      description="Utsavams and special days listed on the Festivals page and home page."
+      description="Utsavams and special days listed on the Festivals page and home page. Sankashti Chaturthi, Ganesh Chaturthi, Ugadi and other recurring dates are calculated automatically a year ahead (marked Auto) - edit or hide any of them like a festival you added."
       actions={
-        <button type="button" className={btnPrimary} onClick={() => setEditing({ id: null, form: { ...blank } })}>
-          <Plus className="h-4 w-4" aria-hidden="true" /> Add festival
-        </button>
+        <>
+          <button
+            type="button"
+            className={btnGhost}
+            disabled={action.busy}
+            onClick={async () => {
+              setFillNote(null);
+              const r = await action.run(fillFestivalCalendar);
+              if (r) {
+                setFillNote(r.added ? `Added ${r.added} upcoming festival date(s).` : 'The calendar is already up to date.');
+                list.reload();
+              }
+            }}
+          >
+            <Sparkles className="h-4 w-4" aria-hidden="true" /> Update calendar
+          </button>
+          <button type="button" className={btnPrimary} onClick={() => setEditing({ id: null, form: { ...blank } })}>
+            <Plus className="h-4 w-4" aria-hidden="true" /> Add festival
+          </button>
+        </>
       }
     >
+      {fillNote && <div className="mb-4"><Notice kind="success">{fillNote}</Notice></div>}
       {action.success && <div className="mb-4"><Notice kind="success">{action.success}</Notice></div>}
       {action.error && !editing && !toDelete && <div className="mb-4"><Notice kind="error">{action.error}</Notice></div>}
 
@@ -121,7 +140,10 @@ export default function FestivalsAdmin() {
               <li key={f.id} className={`${cardCls} flex flex-wrap items-start justify-between gap-3 p-4`}>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-semibold text-gray-900">{f.name}</h2>
+                    <h2 className="font-semibold text-gray-900">
+                      {f.name}
+                      {f.source_key && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 align-middle text-xs font-medium text-amber-800" title="Date calculated automatically">Auto</span>}
+                    </h2>
                     <StatusPill on={f.is_active} />
                   </div>
                   <p className="mt-1 text-sm text-gray-600">
