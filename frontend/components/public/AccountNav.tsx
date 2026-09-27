@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { LogIn, LogOut, Ticket } from 'lucide-react';
+import { LayoutDashboard, LogIn, LogOut, Ticket } from 'lucide-react';
 import { getMe, getStoredToken, setStoredToken } from '@/lib/api';
 import type { Me } from '@/lib/types';
 
@@ -41,8 +41,15 @@ export default function AccountNav({ className = '' }: { className?: string }) {
     );
   }
 
+  const isStaff = me.is_admin || me.is_trustee || me.permissions.length > 0;
+
   return (
     <span className={`inline-flex items-center gap-3 ${className}`}>
+      {isStaff && (
+        <Link href="/admin" className="inline-flex items-center gap-1 hover:underline">
+          <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" /> Admin
+        </Link>
+      )}
       <Link href="/my-bookings" className="inline-flex items-center gap-1 hover:underline">
         <Ticket className="h-3.5 w-3.5" aria-hidden="true" /> My Bookings
       </Link>
