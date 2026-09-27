@@ -449,6 +449,7 @@ export interface Abhishekam {
   payment_status: AbhishekamPaymentStatus;
   paid_at: string | null;
   collected_by_admin_id: number | null;
+  greeting_sent_at: string | null;
   created_at: string;
 }
 
@@ -466,8 +467,10 @@ export interface AbhishekamCreateInput {
   turnstile_token?: string;
 }
 
+/** pending: fee not paid yet. scheduled: paid, occasion_date still ahead.
+ * active: from occasion_date through visible_until. expired: after that. */
 export interface AbhishekamPersonalPageView {
-  status: 'pending' | 'active' | 'expired';
+  status: 'pending' | 'scheduled' | 'active' | 'expired';
   reference_number: string;
   occasion: string;
   occasion_date: string;
@@ -475,7 +478,7 @@ export interface AbhishekamPersonalPageView {
   relation: string | null;
   message: string | null;
   photo_url: string | null;
-  expires_at: string | null;
+  visible_until: string | null;
 }
 
 /** One day's slot usage for the public 365-day calendar grid - every day of
@@ -486,16 +489,24 @@ export interface AbhishekamCalendarDay {
   slots_total: number;
 }
 
-/** One PUBLIC, PAID booking shown on a clicked day's flyer. */
+/** One PUBLIC, PAID booking on a day. Name + occasion always (the public
+ * timeline); relation + photo only while that day's blessings are active. */
 export interface AbhishekamDayEntry {
   devotee_name: string;
   occasion: string;
-  photo_url: string;
+  relation: string | null;
+  photo_url: string | null;
 }
+
+/** upcoming: before the date. active: the date through visible_until
+ * (photos shown). archived: after that (names + occasions only). */
+export type AbhishekamBlessingStatus = 'upcoming' | 'active' | 'archived';
 
 export interface AbhishekamDayFlyer {
   date: string;
   slots_used: number;
   slots_total: number;
+  blessing_status: AbhishekamBlessingStatus;
+  visible_until: string;
   entries: AbhishekamDayEntry[];
 }

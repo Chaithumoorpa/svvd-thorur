@@ -168,7 +168,7 @@ export default function BookSeva({
               <Field label="Devotee name" required><input className={inputCls} maxLength={100} autoComplete="name" autoFocus value={name} onChange={(e) => setName(e.target.value)} /></Field>
               <Field label="Mobile number" required hint="10 digits. Used to look up your booking at the temple."><input className={inputCls} type="tel" inputMode="tel" autoComplete="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} /></Field>
               <Field label="Seva date" required><input className={inputCls} type="date" min={todayISO()} value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-              <Field label="Booking for a special occasion?" hint="Optional - e.g. Birthday, Wedding Anniversary. We'll send a blessing once the seva is paid for.">
+              <Field label="Booking for a special occasion?" hint="Optional - e.g. Birthday, Wedding Anniversary. We'll email you a blessing on the seva date.">
                 <input className={inputCls} maxLength={100} placeholder="e.g. Birthday" value={occasion} onChange={(e) => setOccasion(e.target.value)} />
               </Field>
               <div className="flex justify-center">

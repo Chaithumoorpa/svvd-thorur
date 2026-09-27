@@ -1,81 +1,89 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '@/components/ui/Modal';
 import { ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
 import { btnGhost, btnPrimary } from '@/components/ui/styles';
 import { useLoad } from '@/hooks/useLoad';
 import { getAbhishekamCalendar, getAbhishekamDayFlyer } from '@/lib/api';
-import { formatDate, todayISO } from '@/lib/format';
-import type { AbhishekamCalendarDay } from '@/lib/types';
+import { buildWeeks, rollingWindow, slotLevel } from '@/lib/contribution-grid';
+import { formatDate, formatLongDate as longDate, todayISO } from '@/lib/format';
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
+const LEVEL_CLASSES = [
+  'bg-amber-50 border border-amber-200',
+  'bg-amber-200',
+  'bg-saffron-light',
+  'bg-saffron',
+  'bg-maroon',
+] as const;
+const LEVEL_LABELS = ['No bookings', 'A few slots booked', 'About half booked', 'Nearly full', 'Fully booked'];
+const WEEKDAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
+const CELL = 13; // px - GitHub's contribution squares are about this size
 
-function daysInMonth(year: number, month: number): number {
-  return new Date(year, month + 1, 0).getDate();
+const dayMonth = (day: string) => formatDate(day, { day: '2-digit', month: '2-digit' }); // 01/06
+
+function SlotDots({ used, total }: { used: number; total: number }) {
+  return (
+    <div className="flex gap-1" aria-hidden="true">
+      {Array.from({ length: total }, (_, i) => (
+        <span key={i} className={`h-3 w-3 rounded-full ${i < used ? 'bg-maroon' : 'border border-amber-300 bg-amber-50'}`} />
+      ))}
+    </div>
+  );
 }
 
-/** GitHub-contributions-style intensity, replicating the temple's paper
- * Abhishekam register (a full month x day grid) but colored by how many of
- * the DAILY_SLOT_CAP slots are taken that day. */
-function cellClass(day: AbhishekamCalendarDay | undefined): string {
-  if (!day || day.slots_used === 0) return 'bg-amber-50 text-amber-900 border-amber-100';
-  const ratio = day.slots_used / day.slots_total;
-  if (ratio >= 1) return 'bg-maroon text-white border-maroon';
-  if (ratio >= 0.7) return 'bg-orange-500 text-white border-orange-500';
-  if (ratio >= 0.4) return 'bg-amber-400 text-amber-950 border-amber-400';
-  return 'bg-amber-200 text-amber-950 border-amber-200';
-}
-
-function DayFlyerModal({ date, onClose }: { date: string; onClose: () => void }) {
-  const flyer = useLoad(() => getAbhishekamDayFlyer(date), [date]);
-  const canBook = date >= todayISO() && (!flyer.data || flyer.data.slots_used < flyer.data.slots_total);
+function DayModal({ day, today, onClose }: { day: string; today: string; onClose: () => void }) {
+  const flyer = useLoad(() => getAbhishekamDayFlyer(day), [day]);
+  const data = flyer.data;
+  const upcomingOrToday = day >= today;
+  const bookable = upcomingOrToday && !!data && data.slots_used < data.slots_total;
 
   return (
-    <Modal title={formatDate(date, { day: 'numeric', month: 'long', year: 'numeric' })} onClose={onClose}>
+    <Modal title={longDate(day)} onClose={onClose}>
       {flyer.loading ? (
         <LoadingBlock />
-      ) : flyer.error || !flyer.data ? (
+      ) : flyer.error || !data ? (
         <ErrorBlock message={flyer.error ?? 'Could not load this day.'} onRetry={flyer.reload} />
       ) : (
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">
-            {flyer.data.slots_used} of {flyer.data.slots_total} slots taken.
-          </p>
-          {flyer.data.entries.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              {flyer.data.slots_used > 0
-                ? 'All bookings for this day are kept private.'
-                : 'No Abhishekams booked for this day yet.'}
+          <div className="space-y-2">
+            <p className="text-sm text-gray-700">
+              <strong className="text-maroon-dark">{data.slots_used}</strong> of {data.slots_total} slots booked
             </p>
-          ) : (
-            <ul className="space-y-3">
-              {flyer.data.entries.map((entry, i) => (
-                <li key={i} className="flex items-center gap-3 rounded-lg border border-amber-100 bg-amber-50 p-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={entry.photo_url} alt="" className="h-12 w-12 flex-none rounded-full border border-amber-200 object-cover" />
-                  <div className="min-w-0">
-                    <p className="font-medium text-maroon-dark">{entry.devotee_name}</p>
-                    <p className="text-sm text-gray-600">{entry.occasion}</p>
-                  </div>
+            <SlotDots used={data.slots_used} total={data.slots_total} />
+          </div>
+
+          {data.entries.length > 0 ? (
+            <ul className="divide-y divide-amber-100 rounded-lg border border-amber-100 bg-amber-50/60">
+              {data.entries.map((entry, i) => (
+                <li key={i} className="px-3 py-2 text-sm">
+                  <span className="font-medium text-maroon-dark">{entry.devotee_name}</span>
+                  <span className="text-gray-600"> - {entry.occasion}</span>
                 </li>
               ))}
             </ul>
-          )}
-          {canBook ? (
-            <Link href={`/abhishekam?date=${date}`} className={`${btnPrimary} w-full justify-center`}>
-              Book this day
-            </Link>
-          ) : date < todayISO() ? (
-            <Notice kind="error">This date has passed.</Notice>
           ) : (
-            <Notice kind="error">This day is fully booked.</Notice>
+            <p className="text-sm text-gray-500">
+              {data.slots_used > 0
+                ? 'Bookings for this day are private or awaiting payment.'
+                : upcomingOrToday ? 'No bookings yet for this day.' : 'No Abhishekam was booked for this day.'}
+            </p>
           )}
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {bookable && (
+              <Link href={`/abhishekam?date=${day}`} className={`${btnPrimary} justify-center`}>
+                Book Abhishekam for {dayMonth(day)}
+              </Link>
+            )}
+            {day <= today && data.entries.length > 0 && (
+              <Link href={`/abhishekam/blessings/${day}`} className={`${btnGhost} justify-center`}>
+                View blessings for {dayMonth(day)}
+              </Link>
+            )}
+          </div>
+          {upcomingOrToday && !bookable && <Notice kind="error">This day is fully booked.</Notice>}
         </div>
       )}
     </Modal>
@@ -83,32 +91,33 @@ function DayFlyerModal({ date, onClose }: { date: string; onClose: () => void })
 }
 
 export default function AbhishekamCalendarPage() {
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(currentYear);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const calendar = useLoad(() => getAbhishekamCalendar(year), [year]);
+  const [today] = useState(todayISO);
+  const { start, end } = useMemo(() => rollingWindow(today), [today]);
+  const weeks = useMemo(() => buildWeeks(start, end), [start, end]);
+  const calendar = useLoad(() => getAbhishekamCalendar(start, end), [start, end]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const todayRef = useRef<HTMLButtonElement>(null);
 
-  const byDate = new Map((calendar.data ?? []).map((d) => [d.date, d]));
+  const byDate = useMemo(() => new Map((calendar.data ?? []).map((d) => [d.date, d])), [calendar.data]);
+
+  // On a narrow screen the grid scrolls sideways - start with today in view.
+  useEffect(() => {
+    const box = scrollRef.current;
+    const cell = todayRef.current;
+    if (box && cell) box.scrollLeft = cell.offsetLeft - box.clientWidth / 2;
+  }, [calendar.data]);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-amber-50 to-templeWhite px-4 py-10">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 text-center">
           <h1 className="font-serif text-2xl font-bold text-red-900">Abhishekam Calendar</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Click any day to see who has been blessed, and whether slots remain.
+          <p className="mx-auto mt-1 max-w-xl text-sm text-gray-600">
+            The past six months and the next six. Each square is a day - the darker it is, the more of
+            its 7 Abhishekam slots are booked. Tap a day to see who was blessed, or to book it.
           </p>
-          <Link href="/abhishekam" className={`${btnGhost} mt-3 inline-flex`}>Book an Abhishekam</Link>
-        </div>
-
-        <div className="mb-4 flex items-center justify-center gap-4">
-          <button type="button" className={btnGhost} onClick={() => setYear((y) => y - 1)} aria-label="Previous year">
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          </button>
-          <span className="text-lg font-semibold text-maroon-dark">{year}</span>
-          <button type="button" className={btnGhost} onClick={() => setYear((y) => y + 1)} aria-label="Next year">
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </button>
+          <Link href="/abhishekam" className={`${btnPrimary} mt-4 inline-flex`}>Book an Abhishekam</Link>
         </div>
 
         {calendar.loading ? (
@@ -116,56 +125,79 @@ export default function AbhishekamCalendarPage() {
         ) : calendar.error ? (
           <ErrorBlock message={calendar.error} onRetry={calendar.reload} />
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-amber-200 bg-white p-4 shadow-sm">
-            <table className="border-collapse text-xs">
-              <tbody>
-                {MONTH_NAMES.map((monthName, monthIndex) => (
-                  <tr key={monthName}>
-                    <th scope="row" className="sticky left-0 bg-white pr-3 text-right font-medium text-gray-600">
-                      {monthName}
-                    </th>
-                    {Array.from({ length: 31 }, (_, i) => i + 1).map((dayNum) => {
-                      if (dayNum > daysInMonth(year, monthIndex)) {
-                        return <td key={dayNum} className="p-0.5" />;
-                      }
-                      const date = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-                      const day = byDate.get(date);
-                      return (
-                        <td key={dayNum} className="p-0.5">
+          <div className="mx-auto w-fit max-w-full rounded-2xl border border-amber-200 bg-white p-4 shadow-sm">
+            <div className="flex gap-2">
+              <div
+                aria-hidden="true"
+                className="grid shrink-0 gap-[3px] pt-5 text-[10px] text-gray-500"
+                style={{ gridTemplateRows: `repeat(7, ${CELL}px)` }}
+              >
+                {WEEKDAY_LABELS.map((label, i) => <span key={i} className="leading-[13px]">{label}</span>)}
+              </div>
+              <div ref={scrollRef} className="min-w-0 overflow-x-auto pb-2">
+                <div className="inline-flex flex-col gap-1">
+                  <div
+                    aria-hidden="true"
+                    className="grid h-4 grid-flow-col gap-[3px] text-[10px] text-gray-500"
+                    style={{ gridAutoColumns: `${CELL}px` }}
+                  >
+                    {weeks.map((week, i) => (
+                      <span key={i} className="overflow-visible whitespace-nowrap">{week.monthLabel ?? ''}</span>
+                    ))}
+                  </div>
+                  <div
+                    role="group"
+                    aria-label={`Abhishekam bookings from ${longDate(start)} to ${longDate(end)}`}
+                    className="grid grid-flow-col gap-[3px]"
+                    style={{ gridTemplateRows: `repeat(7, ${CELL}px)`, gridAutoColumns: `${CELL}px` }}
+                  >
+                    {weeks.flatMap((week, w) =>
+                      week.days.map((day, d) => {
+                        if (!day) return <span key={`${w}-${d}`} aria-hidden="true" />;
+                        const info = byDate.get(day);
+                        const used = info?.slots_used ?? 0;
+                        const total = info?.slots_total ?? 7;
+                        const isToday = day === today;
+                        return (
                           <button
+                            key={day}
+                            ref={isToday ? todayRef : undefined}
                             type="button"
-                            onClick={() => setSelectedDate(date)}
-                            title={`${monthName} ${dayNum}, ${year} - ${day?.slots_used ?? 0}/${day?.slots_total ?? 7} slots taken`}
-                            className={`h-5 w-5 rounded border text-[10px] leading-5 transition hover:ring-2 hover:ring-saffron ${cellClass(day)}`}
-                          >
-                            {dayNum}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
+                            onClick={() => setSelected(day)}
+                            aria-label={`${longDate(day)}${isToday ? ' (today)' : ''}: ${used} of ${total} slots booked`}
+                            title={`${formatDate(day)}: ${used}/${total} booked`}
+                            className={`rounded-[3px] transition hover:ring-2 hover:ring-saffron focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon ${LEVEL_CLASSES[slotLevel(used, total)]} ${isToday ? 'ring-2 ring-maroon-dark ring-offset-1' : ''}`}
+                          />
+                        );
+                      }),
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500">
+              <span className="flex items-center gap-2">
+                <span className="inline-block h-[13px] w-[13px] rounded-[3px] bg-amber-50 ring-2 ring-maroon-dark ring-offset-1" aria-hidden="true" />
+                Today
+              </span>
+              <span className="flex items-center gap-1">
+                <span>Free</span>
+                {LEVEL_CLASSES.map((cls, i) => (
+                  <span key={i} title={LEVEL_LABELS[i]} className={`inline-block h-[13px] w-[13px] rounded-[3px] ${cls}`} aria-hidden="true" />
                 ))}
-              </tbody>
-            </table>
+                <span>Full</span>
+              </span>
+            </div>
           </div>
         )}
-
-        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-gray-500">
-          <span>Fewer slots taken</span>
-          <span className="h-4 w-4 rounded border border-amber-100 bg-amber-50" />
-          <span className="h-4 w-4 rounded border border-amber-200 bg-amber-200" />
-          <span className="h-4 w-4 rounded border border-amber-400 bg-amber-400" />
-          <span className="h-4 w-4 rounded border border-orange-500 bg-orange-500" />
-          <span className="h-4 w-4 rounded border border-maroon bg-maroon" />
-          <span>Fully booked</span>
-        </div>
 
         <p className="mt-8 text-center text-sm">
           <Link href="/" className="text-red-900 hover:underline">← Back to the temple website</Link>
         </p>
       </div>
 
-      {selectedDate && <DayFlyerModal date={selectedDate} onClose={() => setSelectedDate(null)} />}
+      {selected && <DayModal day={selected} today={today} onClose={() => setSelected(null)} />}
     </main>
   );
 }

@@ -3,11 +3,11 @@
 import React from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Clock, HeartHandshake } from 'lucide-react';
+import { CalendarCheck, Clock, HeartHandshake } from 'lucide-react';
 import BlessingAnimation from '@/components/public/BlessingAnimation';
 import { LoadingBlock, Notice } from '@/components/ui/States';
 import { getAbhishekamView } from '@/lib/api';
-import { formatDate, formatDateTime } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 import { useLoad } from '@/hooks/useLoad';
 
 export default function AbhishekamViewPage() {
@@ -31,9 +31,21 @@ export default function AbhishekamViewPage() {
             <HeartHandshake className="mx-auto h-10 w-10 text-saffron" aria-hidden="true" />
             <h1 className="mt-3 font-serif text-xl font-bold text-maroon">Almost there</h1>
             <p className="mt-2 text-sm text-gray-600">
-              Your {view.data.occasion} Abhishekam page for{' '}
-              {formatDate(view.data.occasion_date)} will be ready as soon as the temple collects
-              your Rs. 50 payment at the counter.
+              Please pay Rs. 50 at the temple counter, quoting the reference below. On{' '}
+              {formatDate(view.data.occasion_date)} you&apos;ll receive your blessing for your{' '}
+              {view.data.occasion} by email, and this page will open.
+            </p>
+            <p className="mt-3 rounded-lg bg-amber-50 py-2 font-mono text-sm font-bold text-maroon-dark">
+              {view.data.reference_number}
+            </p>
+          </>
+        ) : view.data.status === 'scheduled' ? (
+          <>
+            <CalendarCheck className="mx-auto h-10 w-10 text-saffron" aria-hidden="true" />
+            <h1 className="mt-3 font-serif text-xl font-bold text-maroon">Your Abhishekam is booked</h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Payment received. On {formatDate(view.data.occasion_date)} we&apos;ll email you your
+              blessing for your {view.data.occasion}, and this page will open for 7 days.
             </p>
             <p className="mt-3 rounded-lg bg-amber-50 py-2 font-mono text-sm font-bold text-maroon-dark">
               {view.data.reference_number}
@@ -68,8 +80,8 @@ export default function AbhishekamViewPage() {
                 &ldquo;{view.data.message}&rdquo;
               </p>
             )}
-            {view.data.expires_at && (
-              <Notice kind="success">Visible until {formatDateTime(view.data.expires_at)}</Notice>
+            {view.data.visible_until && (
+              <Notice kind="success">Visible until {formatDate(view.data.visible_until)}</Notice>
             )}
           </>
         )}

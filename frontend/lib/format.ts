@@ -26,6 +26,12 @@ export function formatDate(value: string | null | undefined, options?: Intl.Date
   return date.toLocaleDateString(LOCALE, options ?? { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+/** "2026-09-27" -> "Sunday, 27 September 2026" (en-IN alone gives "Sunday 27 September, 2026"). */
+export function formatLongDate(value: string): string {
+  const weekday = formatDate(value, { weekday: 'long' });
+  return `${weekday}, ${formatDate(value, { day: 'numeric', month: 'long', year: 'numeric' })}`;
+}
+
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) return '';
   return new Date(value.endsWith('Z') || value.includes('+') ? value : `${value}Z`).toLocaleString(LOCALE, {
@@ -36,10 +42,21 @@ export function formatDateTime(value: string | null | undefined): string {
 const money = new Intl.NumberFormat(LOCALE, { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
 export const formatMoney = (value: number | null | undefined): string => money.format(value ?? 0);
 
+/** A Date as YYYY-MM-DD in the browser's local time. */
+export function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** Today as YYYY-MM-DD in the browser's local time. */
 export function todayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return isoDate(new Date());
+}
+
+/** A YYYY-MM-DD date moved by `days` (negative = earlier). */
+export function addDaysISO(value: string, days: number): string {
+  const d = parseDate(value);
+  d.setDate(d.getDate() + days);
+  return isoDate(d);
 }
 
 /** Empty form strings become null so the API clears the field instead of storing "". */

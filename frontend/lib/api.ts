@@ -201,11 +201,11 @@ export async function uploadAbhishekamPhoto(file: File): Promise<string> {
   return data.public_url;
 }
 
-/** Every day of `year`, zero-filled - the 365-day grid, replicating the
- * temple's paper Abhishekam register. Public, cached briefly server-side. */
-export const getAbhishekamCalendar = async (year: number) =>
-  (await api.get<AbhishekamCalendarDay[]>('/abhishekams/calendar', { params: { year } })).data;
-/** The flyer for one clicked day - PUBLIC+PAID entries only. */
+/** Every day from `start` to `end` (YYYY-MM-DD, inclusive), zero-filled - the
+ * rolling contribution-style grid. Public, cached briefly server-side. */
+export const getAbhishekamCalendar = async (start: string, end: string) =>
+  (await api.get<AbhishekamCalendarDay[]>('/abhishekams/calendar', { params: { start, end } })).data;
+/** One day: the calendar pop-up, and that date's public blessings page. */
 export const getAbhishekamDayFlyer = async (date: string) =>
   (await api.get<AbhishekamDayFlyer>(`/abhishekams/calendar/${date}`)).data;
 

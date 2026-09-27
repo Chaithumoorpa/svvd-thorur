@@ -13,7 +13,7 @@ import { useTurnstile } from '@/hooks/useTurnstile';
 import {
   apiError, createAbhishekam, requestAbhishekamOtp, uploadAbhishekamPhoto, verifyAbhishekamOtp,
 } from '@/lib/api';
-import { todayISO } from '@/lib/format';
+import { formatDate, todayISO } from '@/lib/format';
 import type { Abhishekam, AbhishekamVisibility } from '@/lib/types';
 
 type Step = 'email' | 'otp' | 'details' | 'done';
@@ -132,8 +132,9 @@ export default function AbhishekamPage() {
               {result.reference_number}
             </p>
             <Notice kind="success">
-              Please pay Rs. 50 in cash at the temple counter, quoting this reference number. Your
-              page will be ready right after, and stays visible for 7 days.
+              Please pay Rs. 50 in cash at the temple counter, quoting this reference number. On{' '}
+              {formatDate(result.occasion_date)} you&apos;ll receive your blessing by email, and your page
+              opens for 7 days.
             </Notice>
             <Link href={`/abhishekam/${result.id}`} className={`${btnGhost} inline-flex`}>
               View my page
@@ -184,11 +185,11 @@ export default function AbhishekamPage() {
             <Field label="A personal message or wish" hint="Optional - shown on your page">
               <textarea className={inputCls} rows={3} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} />
             </Field>
-            <Field label="Photo" required hint="Upload the photo to show on your Abhishekam page.">
+            <Field label="Photo" required hint="One photo, shown on your blessing page. Choosing another replaces it.">
               <div>
                 <label className={`${btnGhost} cursor-pointer`}>
                   <Upload className="h-4 w-4" aria-hidden="true" />
-                  {uploading ? 'Uploading…' : photoUrl ? 'Change photo' : 'Upload photo'}
+                  {uploading ? 'Uploading…' : photoUrl ? 'Replace photo' : 'Upload one photo'}
                   <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading} onChange={handleFileSelect} />
                 </label>
                 {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
@@ -198,7 +199,7 @@ export default function AbhishekamPage() {
                 )}
               </div>
             </Field>
-            <Field label="Show on the public calendar?" hint="Public: your name, occasion and photo appear when someone clicks this date. Private: nothing is shown publicly - only you receive it, by email and on your own page.">
+            <Field label="Show on the public calendar?" hint="Public: your name and occasion appear on the Abhishekam calendar, and your photo on that day's blessings page for 7 days. Private: nothing is shown publicly - you receive your blessing by email and on your own page.">
               <div className="flex gap-4 text-sm">
                 <label className="flex items-center gap-2">
                   <input type="radio" name="visibility" checked={visibility === 'PRIVATE'} onChange={() => setVisibility('PRIVATE')} />

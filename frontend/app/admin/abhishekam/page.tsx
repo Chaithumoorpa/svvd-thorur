@@ -21,14 +21,17 @@ export default function AbhishekamAdmin() {
   const action = useAction();
 
   async function collect(id: string) {
-    const ok = await action.run(() => collectAbhishekamPayment(id), 'Payment collected - the page is now live for 7 days.');
+    const ok = await action.run(
+      () => collectAbhishekamPayment(id),
+      'Payment collected - the blessing email and page go out on the Abhishekam date.',
+    );
     if (ok) list.reload();
   }
 
   return (
     <AdminPage
       title="Abhishekam"
-      description="Devotees' paid photo + occasion pages (Rs. 50, pay-at-counter, 7 slots/day). Collect payment here to make a page go live for 7 days."
+      description="Devotees' Abhishekam bookings (Rs. 50, pay-at-counter, 7 slots/day). Once paid, the blessing email goes out on the Abhishekam date and the devotee's page is up for 7 days from then."
     >
       <div className="mb-4 flex items-center gap-2">
         <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -53,7 +56,7 @@ export default function AbhishekamAdmin() {
       ) : (
         <>
           <div className={`${cardCls} overflow-x-auto`}>
-            <table className="w-full min-w-[820px] text-left text-sm">
+            <table className="w-full min-w-[920px] text-left text-sm">
               <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th scope="col" className="px-4 py-3">Reference</th>
@@ -63,6 +66,7 @@ export default function AbhishekamAdmin() {
                   <th scope="col" className="px-4 py-3">Visibility</th>
                   <th scope="col" className="px-4 py-3 text-right">Fee</th>
                   <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Blessing email</th>
                   <th scope="col" className="px-4 py-3"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -85,6 +89,11 @@ export default function AbhishekamAdmin() {
                     <td className="px-4 py-3 text-right font-medium">{formatMoney(b.amount)}</td>
                     <td className="px-4 py-3">
                       <StatusPill on={b.payment_status === 'PAID'} onLabel="Paid" offLabel="Pending" />
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-600">
+                      {b.greeting_sent_at
+                        ? `Sent ${formatDate(b.greeting_sent_at)}`
+                        : b.payment_status === 'PAID' ? `On ${formatDate(b.occasion_date)}` : 'After payment'}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
