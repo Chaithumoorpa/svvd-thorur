@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import type {
-  ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
+  ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog, BlessingReview, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
   Donation, DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
   GalleryInput, GalleryItem, HomePayload, IncomeInput, LedgerEntry, Me, Member, MemberInput,
   Paged, PersonalBlessing, Pooja, PoojaInput, SevaBookingOnlineInput, SevaCalendarDay, SevaDay, SevaTicket,
@@ -191,15 +191,15 @@ export const getPersonalBlessing = async (ticketId: string) =>
   (await api.get<PersonalBlessing>(`/seva-tickets/${ticketId}/blessing`)).data;
 
 /** Uploads a devotee's occasion photo straight to S3 (presigned POST, public
- * but rate limited - nobody is signed in while booking) and returns its
- * public URL. Same pattern as uploadGalleryPhoto/uploadMemberPhoto. */
+ * but rate limited - nobody is signed in while booking) and returns its key.
+ * The object is private: it reaches the website only once staff approve it. */
 export async function uploadBlessingPhoto(file: File): Promise<string> {
   const { data } = await api.post<UploadUrlResponse>('/seva-tickets/booking/upload-url', { content_type: file.type });
   const form = new FormData();
   Object.entries(data.fields).forEach(([key, value]) => form.append(key, value));
   form.append('file', file);
   await axios.post(data.upload_url, form);
-  return data.public_url;
+  return data.key;
 }
 
 // -------------------------------------------------------------------- announcements
@@ -299,6 +299,10 @@ export const downloadTicketPdf = async (id: string) =>
 export const deleteTicket = async (id: string) => (await api.delete(`/seva-tickets/${id}`)).data;
 export const getMyTickets = async () => (await api.get<SevaTicket[]>('/seva-tickets/mine')).data;
 export const collectPayment = async (id: string) => (await api.post<SevaTicket>(`/seva-tickets/${id}/collect-payment`)).data;
+export const getBlessingReviews = async () => (await api.get<BlessingReview[]>('/seva-tickets/blessing-reviews')).data;
+/** Approve: publish the photo / show the blessing. Reject: delete the photo, keep the booking private. */
+export const reviewBlessing = async (id: string, approve: boolean) =>
+  (await api.post<SevaTicket>(`/seva-tickets/${id}/blessing-review`, { approve })).data;
 
 // ------------------------------------------------------------------------------ finance
 export const getFinanceSummary = async () => (await api.get<FinanceSummary>('/finance/summary')).data;

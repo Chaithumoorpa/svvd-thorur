@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Banknote, Download, Eye, Image as ImageIcon, Plus, QrCode, Ticket, Trash2 } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
+import BlessingReviews from '@/components/admin/BlessingReviews';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import QrCameraScanner from '@/components/admin/QrCameraScanner';
 import Field from '@/components/ui/Field';
@@ -156,6 +157,7 @@ export default function SevaTicketsAdmin() {
         <Field label="Mobile"><input className={inputCls} inputMode="tel" value={mobile} onChange={(e) => { setPage(1); setMobile(e.target.value); }} placeholder="Exact number" /></Field>
       </div>
 
+      <BlessingReviews onChanged={list.reload} />
       {action.success && <div className="mb-4"><Notice kind="success">{action.success}</Notice></div>}
       {action.error && !createOpen && !scanOpen && <div className="mb-4"><Notice kind="error">{action.error}</Notice></div>}
 
@@ -190,7 +192,9 @@ export default function SevaTicketsAdmin() {
                       {t.occasion && (
                         <div className="flex items-center gap-1 text-xs text-gray-400">
                           {t.occasion}
-                          {t.show_publicly && <Eye className="h-3 w-3 text-saffron" aria-label="Shown publicly" />}
+                          {t.show_publicly && t.review_status === 'APPROVED' && <Eye className="h-3 w-3 text-saffron" aria-label="Shown publicly" />}
+                          {t.review_status === 'PENDING' && <span className="rounded bg-amber-100 px-1 text-amber-800">to review</span>}
+                          {t.review_status === 'REJECTED' && <span className="rounded bg-gray-100 px-1 text-gray-600">rejected</span>}
                           {t.photo_url && (
                             <a href={t.photo_url} target="_blank" rel="noopener noreferrer" aria-label={`Occasion photo for ticket ${t.ticket_number}`} className="text-saffron hover:text-maroon">
                               <ImageIcon className="h-3 w-3" aria-hidden="true" />

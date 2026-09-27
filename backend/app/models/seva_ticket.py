@@ -21,6 +21,14 @@ class TicketStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class ReviewStatus(str, enum.Enum):
+    """Staff review of a booking's public blessing / photo (stored as a plain
+    string column)."""
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+
 class TicketSource(str, enum.Enum):
     ONLINE = "ONLINE"
     COUNTER = "COUNTER"
@@ -71,5 +79,11 @@ class SevaTicket(Base):
     greeting_sent_at = Column(DateTime, nullable=True)
     # Only for a seva with public_blessings: one occasion photo, and whether the
     # devotee chose to show name + occasion (+ photo) publicly. Default private.
+    # Nothing a devotee submits reaches the website unreviewed: the photo is
+    # uploaded to a private S3 key (photo_key) and only copied to the public
+    # gallery (photo_url) when staff approve it - see BlessingReviewService.
     photo_url = Column(String, nullable=True)
+    photo_key = Column(String, nullable=True)
     show_publicly = Column(Boolean, default=False, nullable=False)
+    # None: nothing to review. PENDING -> APPROVED / REJECTED (ReviewStatus).
+    review_status = Column(String(10), nullable=True, index=True)

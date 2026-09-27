@@ -25,7 +25,7 @@ from app.services.festival_service import FestivalService
 from app.services.gallery_service import GalleryService
 from app.services.member_service import MemberService
 from app.services.pooja_service import PoojaService
-from app.services.blessing_service import BlessingService
+from app.services.blessing_service import BlessingReviewService, BlessingService
 from app.services.occasion_greeting_service import OccasionGreetingService
 from app.services.otp_service import OtpService
 from app.services.seva_ticket_service import SevaTicketService
@@ -198,6 +198,12 @@ def get_gallery_service(db: Session = Depends(get_db)) -> GalleryService:
 
 def get_storage_service() -> StorageService:
     return StorageService()
+
+
+def get_blessing_review_service(
+    db: Session = Depends(get_db), storage: StorageService = Depends(get_storage_service),
+) -> BlessingReviewService:
+    return BlessingReviewService(db, storage)
 
 
 def get_seva_ticket_repository(db: Session = Depends(get_db)) -> SevaTicketRepository:
