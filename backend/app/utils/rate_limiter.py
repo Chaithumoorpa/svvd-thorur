@@ -67,8 +67,8 @@ visit_limiter = SimpleRateLimiter(max_requests=30, window_seconds=60)
 password_reset_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60 * 60)
 otp_request_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60 * 60)
 otp_verify_limiter = SimpleRateLimiter(max_requests=15, window_seconds=60 * 60)
-occasion_blessing_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60 * 60)
-occasion_upload_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60 * 60)
+abhishekam_booking_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60 * 60)
+abhishekam_upload_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60 * 60)
 
 
 def get_client_ip(request: Request, trusted_hops: Optional[int] = None) -> str:

@@ -10,7 +10,7 @@ const PETALS = Array.from({ length: 12 }, (_, i) => ({
 
 /** Purely decorative: a soft glow behind an Om symbol with marigold petals
  * drifting down - shown below a devotee's uploaded photo on their paid
- * Occasion Blessing page. */
+ * Abhishekam page. */
 export default function BlessingAnimation() {
   return (
     <div

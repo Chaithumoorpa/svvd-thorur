@@ -9,7 +9,8 @@ from app.models.user import User
 from app.schemas.contact import ContactCreate, ContactOut, ContactPublicAck, ContactUpdate
 from app.services.contact_service import ContactService
 from app.services.email_service import EmailService
-from app.utils.dependencies import AuditContext, get_audit, get_contact_service, require_permission
+from app.services.turnstile_service import TurnstileService
+from app.utils.dependencies import AuditContext, get_audit, get_contact_service, get_turnstile_service, require_permission
 from app.utils.rate_limiter import contact_limiter, get_client_ip
 
 router = APIRouter(prefix="/contacts", tags=["Contact Us"])
@@ -22,10 +23,13 @@ def submit_contact_message(
     payload: ContactCreate,
     request: Request,
     service: ContactService = Depends(get_contact_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
 ):
     """Public contact form. Rate limited per IP; honeypot field silently drops bot posts."""
     if not contact_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many messages. Please try again later.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
     if payload.website:  # honeypot tripped: pretend success without storing anything
         return ContactPublicAck(id=0, status=ContactStatus.PENDING)
     ack = service.submit_message(payload)

@@ -1,21 +1,25 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { isAxiosError } from 'axios';
-import { CheckCircle2, Mail, Upload } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Mail, Upload } from 'lucide-react';
 import Field from '@/components/ui/Field';
 import { Notice } from '@/components/ui/States';
+import TurnstileWidget from '@/components/ui/TurnstileWidget';
 import { btnGhost, btnPrimary, inputCls } from '@/components/ui/styles';
+import { useTurnstile } from '@/hooks/useTurnstile';
 import {
-  apiError, createOccasionBlessing, requestOccasionOtp, uploadOccasionPhoto, verifyOccasionOtp,
+  apiError, createAbhishekam, requestAbhishekamOtp, uploadAbhishekamPhoto, verifyAbhishekamOtp,
 } from '@/lib/api';
 import { todayISO } from '@/lib/format';
-import type { OccasionBlessing } from '@/lib/types';
+import type { Abhishekam, AbhishekamVisibility } from '@/lib/types';
 
 type Step = 'email' | 'otp' | 'details' | 'done';
 
-export default function OccasionBlessingsPage() {
+export default function AbhishekamPage() {
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -23,22 +27,24 @@ export default function OccasionBlessingsPage() {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [occasion, setOccasion] = useState('');
-  const [occasionDate, setOccasionDate] = useState(todayISO());
+  const [occasionDate, setOccasionDate] = useState(searchParams.get('date') || todayISO());
   const [relation, setRelation] = useState('');
   const [message, setMessage] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
+  const [visibility, setVisibility] = useState<AbhishekamVisibility>('PRIVATE');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<OccasionBlessing | null>(null);
+  const [result, setResult] = useState<Abhishekam | null>(null);
+  const turnstile = useTurnstile();
 
   async function sendCode(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      await requestOccasionOtp(email.trim());
+      await requestAbhishekamOtp(email.trim());
       setStep('otp');
     } catch (err) {
       setError(apiError(err, 'Could not send the verification code. Please try again.'));
@@ -52,7 +58,7 @@ export default function OccasionBlessingsPage() {
     setError('');
     setBusy(true);
     try {
-      const { booking_token } = await verifyOccasionOtp(email.trim(), code.trim());
+      const { booking_token } = await verifyAbhishekamOtp(email.trim(), code.trim());
       setBookingToken(booking_token);
       setStep('details');
     } catch (err) {
@@ -69,7 +75,7 @@ export default function OccasionBlessingsPage() {
     setUploadError('');
     setUploading(true);
     try {
-      setPhotoUrl(await uploadOccasionPhoto(file));
+      setPhotoUrl(await uploadAbhishekamPhoto(file));
     } catch (err) {
       setUploadError(
         isAxiosError(err) && err.response?.status === 503
@@ -86,15 +92,18 @@ export default function OccasionBlessingsPage() {
     setError('');
     setBusy(true);
     try {
-      const blessing = await createOccasionBlessing({
+      const abhishekam = await createAbhishekam({
         devotee_name: name.trim(), mobile_number: mobile.trim(), email: email.trim(),
         occasion: occasion.trim(), occasion_date: occasionDate, relation: relation.trim() || undefined,
-        message: message.trim() || undefined, photo_url: photoUrl, booking_token: bookingToken,
+        message: message.trim() || undefined, photo_url: photoUrl, visibility, booking_token: bookingToken,
+        turnstile_token: turnstile.token || undefined,
       });
-      setResult(blessing);
+      turnstile.reset();
+      setResult(abhishekam);
       setStep('done');
     } catch (err) {
-      setError(apiError(err, 'Could not submit your request. Please try again.'));
+      turnstile.reset();
+      setError(apiError(err, 'That date may be fully booked, or something else went wrong. Please try again.'));
     } finally {
       setBusy(false);
     }
@@ -104,11 +113,15 @@ export default function OccasionBlessingsPage() {
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-amber-50 to-templeWhite px-4 py-10">
       <div className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-8 shadow-lg">
         <div className="mb-6 text-center">
-          <h1 className="font-serif text-2xl font-bold text-red-900">Occasion Blessings</h1>
+          <h1 className="font-serif text-2xl font-bold text-red-900">Abhishekam</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Share a photo for your birthday, wedding anniversary, or any special occasion, and receive
-            the temple&apos;s blessings on your own page - Rs. 50, payable at the temple counter.
+            Book an Abhishekam for your birthday, wedding anniversary, or any special occasion, and
+            receive the temple&apos;s blessings on your own page - Rs. 50, payable at the temple
+            counter. Only 7 slots are available per day.
           </p>
+          <Link href="/abhishekam/calendar" className="mt-2 inline-flex items-center gap-1 text-sm text-red-900 hover:underline">
+            <CalendarDays className="h-4 w-4" aria-hidden="true" /> Check available dates
+          </Link>
         </div>
 
         {step === 'done' && result ? (
@@ -122,7 +135,7 @@ export default function OccasionBlessingsPage() {
               Please pay Rs. 50 in cash at the temple counter, quoting this reference number. Your
               page will be ready right after, and stays visible for 7 days.
             </Notice>
-            <Link href={`/blessings/${result.id}`} className={`${btnGhost} inline-flex`}>
+            <Link href={`/abhishekam/${result.id}`} className={`${btnGhost} inline-flex`}>
               View my page
             </Link>
           </div>
@@ -162,8 +175,8 @@ export default function OccasionBlessingsPage() {
             <Field label="Occasion" required hint="e.g. Birthday, Wedding Anniversary, House Warming">
               <input className={inputCls} maxLength={100} placeholder="e.g. Birthday" value={occasion} onChange={(e) => setOccasion(e.target.value)} />
             </Field>
-            <Field label="Occasion date" required>
-              <input className={inputCls} type="date" value={occasionDate} onChange={(e) => setOccasionDate(e.target.value)} />
+            <Field label="Abhishekam date" required hint="Only 7 slots per day - check the calendar if you're not sure.">
+              <input className={inputCls} type="date" min={todayISO()} value={occasionDate} onChange={(e) => setOccasionDate(e.target.value)} />
             </Field>
             <Field label="Who is this for?" hint="Optional - e.g. My son's birthday">
               <input className={inputCls} maxLength={200} value={relation} onChange={(e) => setRelation(e.target.value)} />
@@ -171,7 +184,7 @@ export default function OccasionBlessingsPage() {
             <Field label="A personal message or wish" hint="Optional - shown on your page">
               <textarea className={inputCls} rows={3} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} />
             </Field>
-            <Field label="Photo" required hint="Upload the photo to show on your blessing page.">
+            <Field label="Photo" required hint="Upload the photo to show on your Abhishekam page.">
               <div>
                 <label className={`${btnGhost} cursor-pointer`}>
                   <Upload className="h-4 w-4" aria-hidden="true" />
@@ -185,9 +198,24 @@ export default function OccasionBlessingsPage() {
                 )}
               </div>
             </Field>
+            <Field label="Show on the public calendar?" hint="Public: your name, occasion and photo appear when someone clicks this date. Private: nothing is shown publicly - only you receive it, by email and on your own page.">
+              <div className="flex gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="visibility" checked={visibility === 'PRIVATE'} onChange={() => setVisibility('PRIVATE')} />
+                  Private
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="visibility" checked={visibility === 'PUBLIC'} onChange={() => setVisibility('PUBLIC')} />
+                  Public
+                </label>
+              </div>
+            </Field>
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
               Fee: Rs. 50, payable in cash at the temple counter after you submit.
             </p>
+            <div className="flex justify-center">
+              <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+            </div>
             <button type="submit" className={`${btnPrimary} w-full`}
                     disabled={busy || !name.trim() || !mobile.trim() || !occasion.trim() || !photoUrl}>
               {busy ? 'Submitting…' : 'Submit request'}

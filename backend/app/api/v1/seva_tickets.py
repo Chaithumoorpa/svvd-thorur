@@ -8,12 +8,13 @@ from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.utils.dependencies import (
     AuditContext, get_audit, get_current_user, get_current_user_optional, get_otp_service,
-    get_seva_ticket_service, require_admin, require_permission,
+    get_seva_ticket_service, get_turnstile_service, require_admin, require_permission,
 )
 from app.utils.rate_limiter import booking_limiter, enforce, get_client_ip, otp_request_limiter, otp_verify_limiter
 from app.services.email_service import EmailService
 from app.services.otp_service import OtpService
 from app.services.seva_ticket_service import PaymentPendingError, SevaTicketService
+from app.services.turnstile_service import TurnstileService
 from app.schemas.otp import OtpRequest, OtpVerifyRequest, OtpVerifyResponse
 from app.schemas.seva_ticket import (
     SevaBookingOnline,
@@ -81,6 +82,7 @@ def book_seva_ticket(
     payload: SevaBookingOnline,
     request: Request,
     service: SevaTicketService = Depends(get_seva_ticket_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
     current_user: User | None = Depends(get_current_user_optional),
 ):
     """
@@ -92,6 +94,8 @@ def book_seva_ticket(
     """
     if not booking_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many bookings. Please try again later.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
     OtpService.check_booking_token(payload.booking_token, payload.email)
     ticket = service.book_ticket(payload, booked_by_user_id=current_user.id if current_user else None)
     EmailService().notify_admin(

@@ -6,13 +6,13 @@ import Link from 'next/link';
 import { Clock, HeartHandshake } from 'lucide-react';
 import BlessingAnimation from '@/components/public/BlessingAnimation';
 import { LoadingBlock, Notice } from '@/components/ui/States';
-import { getOccasionBlessingView } from '@/lib/api';
+import { getAbhishekamView } from '@/lib/api';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { useLoad } from '@/hooks/useLoad';
 
-export default function OccasionBlessingViewPage() {
+export default function AbhishekamViewPage() {
   const params = useParams<{ id: string }>();
-  const view = useLoad(() => getOccasionBlessingView(params.id), [params.id]);
+  const view = useLoad(() => getAbhishekamView(params.id), [params.id]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-amber-50 to-templeWhite px-4 py-10">
@@ -31,7 +31,7 @@ export default function OccasionBlessingViewPage() {
             <HeartHandshake className="mx-auto h-10 w-10 text-saffron" aria-hidden="true" />
             <h1 className="mt-3 font-serif text-xl font-bold text-maroon">Almost there</h1>
             <p className="mt-2 text-sm text-gray-600">
-              Your {view.data.occasion} Occasion Blessing page for{' '}
+              Your {view.data.occasion} Abhishekam page for{' '}
               {formatDate(view.data.occasion_date)} will be ready as soon as the temple collects
               your Rs. 50 payment at the counter.
             </p>
@@ -44,7 +44,7 @@ export default function OccasionBlessingViewPage() {
             <Clock className="mx-auto h-10 w-10 text-gray-400" aria-hidden="true" />
             <h1 className="mt-3 font-serif text-xl font-bold text-maroon">This page has expired</h1>
             <p className="mt-2 text-sm text-gray-600">
-              Occasion Blessing pages are visible for 7 days. This one - for {view.data.occasion} on{' '}
+              Abhishekam pages are visible for 7 days. This one - for {view.data.occasion} on{' '}
               {formatDate(view.data.occasion_date)} - is no longer available.
             </p>
           </>

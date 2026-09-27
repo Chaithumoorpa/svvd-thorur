@@ -40,6 +40,7 @@ class SevaBookingOnline(SevaBookingPublic):
     one issued by POST /seva-tickets/booking/verify-otp for this exact email."""
     email: EmailStr
     booking_token: str
+    turnstile_token: Optional[str] = None
 
 
 class SevaTicketCreate(SevaBookingPublic):

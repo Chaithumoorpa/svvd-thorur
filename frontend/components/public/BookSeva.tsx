@@ -5,7 +5,9 @@ import { CheckCircle2, Mail } from 'lucide-react';
 import Field from '@/components/ui/Field';
 import Modal from '@/components/ui/Modal';
 import { Notice } from '@/components/ui/States';
+import TurnstileWidget from '@/components/ui/TurnstileWidget';
 import { btnGhost, btnPrimary, inputCls } from '@/components/ui/styles';
+import { useTurnstile } from '@/hooks/useTurnstile';
 import { apiError, bookSeva, requestBookingOtp, verifyBookingOtp } from '@/lib/api';
 import { formatDate, formatMoney, todayISO } from '@/lib/format';
 import type { SevaTicket } from '@/lib/types';
@@ -39,6 +41,7 @@ export default function BookSeva({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [ticket, setTicket] = useState<SevaTicket | null>(null);
+  const turnstile = useTurnstile();
 
   function close() {
     setOpen(false);
@@ -51,6 +54,7 @@ export default function BookSeva({
     setOccasion('');
     setError('');
     setTicket(null);
+    turnstile.reset();
   }
 
   async function sendCode(e: React.FormEvent) {
@@ -90,10 +94,13 @@ export default function BookSeva({
       const booked = await bookSeva({
         seva_id: sevaId, devotee_name: name.trim(), mobile_number: mobile.trim(), seva_date: date,
         email: email.trim(), booking_token: bookingToken, occasion: occasion.trim() || undefined,
+        turnstile_token: turnstile.token || undefined,
       });
+      turnstile.reset();
       setTicket(booked);
       setStep('done');
     } catch (err) {
+      turnstile.reset();
       setError(apiError(err, 'Could not book the seva. Please try again.'));
     } finally {
       setBusy(false);
@@ -164,6 +171,9 @@ export default function BookSeva({
               <Field label="Booking for a special occasion?" hint="Optional - e.g. Birthday, Wedding Anniversary. We'll send a blessing once the seva is paid for.">
                 <input className={inputCls} maxLength={100} placeholder="e.g. Birthday" value={occasion} onChange={(e) => setOccasion(e.target.value)} />
               </Field>
+              <div className="flex justify-center">
+                <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+              </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" className={btnGhost} onClick={close}>Cancel</button>
                 <button type="submit" className={btnPrimary} disabled={busy || name.trim().length < 2 || mobile.replace(/\D/g, '').length < 10 || !date}>{busy ? 'Booking…' : 'Confirm booking'}</button>
