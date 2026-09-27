@@ -86,3 +86,23 @@ def test_forgot_password_requires_turnstile_when_configured(client, monkeypatch)
     r = client.post("/api/v1/auth/forgot-password", json={"email": "someone@example.com"})
     assert r.status_code == 400
     assert "Security check" in r.json()["detail"]
+
+
+def test_contact_form_requires_turnstile_when_configured(client, monkeypatch):
+    _configure_turnstile(monkeypatch, passes=False)
+    r = client.post("/api/v1/contacts", json={
+        "name": "Dev A", "email": "dev@example.com", "subject": "Timing query",
+        "message": "When is the evening pooja?",
+    })
+    assert r.status_code == 400
+    assert "Security check" in r.json()["detail"]
+
+
+def test_seva_booking_requires_turnstile_when_configured(client, monkeypatch):
+    _configure_turnstile(monkeypatch, passes=False)
+    r = client.post("/api/v1/seva-tickets", json={
+        "seva_id": 1, "devotee_name": "Ravi", "mobile_number": "9876543210",
+        "seva_date": "2027-01-01", "email": "ravi@example.com", "booking_token": "irrelevant",
+    })
+    assert r.status_code == 400
+    assert "Security check" in r.json()["detail"]

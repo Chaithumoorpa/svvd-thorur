@@ -17,8 +17,10 @@ from app.services.abhishekam_service import AbhishekamService
 from app.services.email_service import EmailService
 from app.services.otp_service import OtpService
 from app.services.storage_service import StorageService
+from app.services.turnstile_service import TurnstileService
 from app.utils.dependencies import (
-    AuditContext, get_abhishekam_service, get_audit, get_otp_service, get_storage_service, require_permission,
+    AuditContext, get_abhishekam_service, get_audit, get_otp_service, get_storage_service,
+    get_turnstile_service, require_permission,
 )
 from app.utils.rate_limiter import (
     abhishekam_booking_limiter, abhishekam_upload_limiter, enforce, get_client_ip, otp_request_limiter,
@@ -95,12 +97,15 @@ def create_abhishekam(
     request: Request,
     service: AbhishekamService = Depends(get_abhishekam_service),
     otp_service: OtpService = Depends(get_otp_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
 ):
     """Public: book an Abhishekam slot. Gated on a verified email (see
     request-otp/verify-otp above). Always PENDING at Rs {amount} until staff
     collect payment at the temple counter - see /collect-payment."""
     if not abhishekam_booking_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
     OtpService.check_abhishekam_token(payload.booking_token, payload.email)
     abhishekam = service.create(payload)
     EmailService().send(

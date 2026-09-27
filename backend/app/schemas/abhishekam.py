@@ -27,6 +27,7 @@ class AbhishekamCreate(BaseModel):
     photo_url: SafeUrl
     visibility: AbhishekamVisibility = AbhishekamVisibility.PRIVATE
     booking_token: str
+    turnstile_token: Optional[str] = None
 
     @field_validator("mobile_number")
     @classmethod
