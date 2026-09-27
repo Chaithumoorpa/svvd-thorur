@@ -19,4 +19,6 @@ class AuditLog(Base):
     __table_args__ = (
         Index("ix_audit_logs_entity", "entity_type", "entity_id"),
         Index("ix_audit_logs_created_at", "created_at"),
+        # AuditService's repeated-deletion alert, checked on every delete.
+        Index("ix_audit_logs_actor_id_created_at", "actor_id", "created_at"),
     )

@@ -13,14 +13,16 @@ from app.schemas.abhishekam import (
 )
 from app.schemas.otp import OtpRequest, OtpVerifyRequest, OtpVerifyResponse
 from app.schemas.upload import UploadUrlRequest, UploadUrlResponse
-from app.services.abhishekam_service import AbhishekamService
+from app.models.abhishekam import ABHISHEKAM_VISIBILITY_DAYS
+from app.services.abhishekam_service import MAX_CALENDAR_DAYS, AbhishekamService
 from app.services.email_service import EmailService
+from app.services.occasion_greeting_service import OccasionGreetingService
 from app.services.otp_service import OtpService
 from app.services.storage_service import StorageService
 from app.services.turnstile_service import TurnstileService
 from app.utils.dependencies import (
-    AuditContext, get_abhishekam_service, get_audit, get_otp_service, get_storage_service,
-    get_turnstile_service, require_permission,
+    AuditContext, get_abhishekam_service, get_audit, get_occasion_greeting_service, get_otp_service,
+    get_storage_service, get_turnstile_service, require_permission,
 )
 from app.utils.rate_limiter import (
     abhishekam_booking_limiter, abhishekam_upload_limiter, enforce, get_client_ip, otp_request_limiter,
@@ -71,23 +73,29 @@ def create_abhishekam_upload_url(
 @router.get("/calendar", response_model=List[AbhishekamCalendarDay])
 def get_abhishekam_calendar(
     response: Response,
-    year: int,
+    start: date,
+    end: date,
     service: AbhishekamService = Depends(get_abhishekam_service),
 ):
-    """Public: every day of `year` with how many of the DAILY_SLOT_CAP slots
-    are taken - the 365-day grid, replicating the temple's paper register."""
+    """Public: every day from `start` to `end` (inclusive) with how many of
+    the DAILY_SLOT_CAP slots are taken - the rolling contribution-style grid."""
+    if end < start or (end - start).days >= MAX_CALENDAR_DAYS:
+        raise HTTPException(status_code=400, detail=f"Choose a range of 1 to {MAX_CALENDAR_DAYS} days.")
     response.headers["Cache-Control"] = "public, max-age=60"
-    return service.calendar_year(year)
+    return service.calendar_range(start, end)
 
 
 @router.get("/calendar/{day}", response_model=AbhishekamDayFlyer)
 def get_abhishekam_day_flyer(
+    response: Response,
     day: date,
     service: AbhishekamService = Depends(get_abhishekam_service),
 ):
-    """Public: the flyer shown when a calendar day is clicked - PUBLIC+PAID
-    bookings only (name, occasion, photo). A PRIVATE or still-PENDING
-    booking still counts toward slots_used but never appears in `entries`."""
+    """Public: one day - the pop-up when a calendar square is clicked, and
+    the data behind that date's public blessings page. PUBLIC+PAID bookings
+    only; a PRIVATE or still-PENDING booking counts toward slots_used but
+    never appears in `entries`."""
+    response.headers["Cache-Control"] = "public, max-age=60"
     return service.day_flyer(day)
 
 
@@ -116,9 +124,9 @@ def create_abhishekam(
         "has been received.\n\n"
         f"Reference number: {abhishekam.reference_number}\n"
         f"Fee: Rs. {abhishekam.amount}, payable in cash at the temple counter.\n\n"
-        "Once the temple collects the fee, your page will be ready at:\n"
-        f"{settings.FRONTEND_BASE_URL}/abhishekam/{abhishekam.id}\n\n"
-        "It stays visible there for 7 days from the day payment is collected.\n\n"
+        f"Once the fee is paid, on {abhishekam.occasion_date} we'll email you your blessing, and your "
+        f"page will open at:\n{settings.FRONTEND_BASE_URL}/abhishekam/{abhishekam.id}\n\n"
+        f"It stays up for {ABHISHEKAM_VISIBILITY_DAYS} days from that date.\n\n"
         "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
     )
     return abhishekam
@@ -131,7 +139,8 @@ def view_abhishekam(
 ):
     """Public: the private link itself. Unguessable (a random UUID), but
     intentionally reveals nothing beyond the occasion/reference number until
-    payment is collected - see AbhishekamService.personal_page."""
+    the fee is paid and occasion_date has arrived - see
+    AbhishekamService.personal_page."""
     return service.personal_page(abhishekam_id)
 
 
@@ -162,23 +171,29 @@ def get_abhishekam(
 def collect_abhishekam_payment(
     abhishekam_id: UUID,
     service: AbhishekamService = Depends(get_abhishekam_service),
+    greetings: OccasionGreetingService = Depends(get_occasion_greeting_service),
     audit: AuditContext = Depends(get_audit),
     admin_user: User = Depends(_manage),
 ):
     """Marks a PENDING booking as PAID once the devotee pays at the temple
-    counter, and records the cash income."""
+    counter, and records the cash income. The blessing email itself goes out
+    on occasion_date - right now, if that day has already arrived."""
     abhishekam = service.collect_payment(abhishekam_id, admin_user)
     audit.log("COLLECT_PAYMENT", "abhishekam", str(abhishekam.id),
               f"Collected payment for Abhishekam {abhishekam.reference_number}",
               {"amount": abhishekam.amount})
-    EmailService().send(
-        abhishekam.email,
-        f"Your Abhishekam page is ready: {abhishekam.reference_number}",
-        f"Dear {abhishekam.devotee_name},\n\n"
-        f"Payment for your {abhishekam.occasion} Abhishekam has been received - your page is "
-        "now live:\n\n"
-        f"{settings.FRONTEND_BASE_URL}/abhishekam/{abhishekam.id}\n\n"
-        "It will be visible there for 7 days from today.\n\n"
-        "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
-    )
+    today = date.today()
+    if greetings.abhishekam_due(abhishekam, today):
+        greetings.send_abhishekam(abhishekam)
+    elif abhishekam.occasion_date > today:
+        EmailService().send(
+            abhishekam.email,
+            f"Payment received: {abhishekam.reference_number}",
+            f"Dear {abhishekam.devotee_name},\n\n"
+            f"We've received your Rs. {abhishekam.amount} payment for your {abhishekam.occasion} "
+            f"Abhishekam on {abhishekam.occasion_date}.\n\n"
+            "On that day we'll email you your blessing, and your page will open at:\n"
+            f"{settings.FRONTEND_BASE_URL}/abhishekam/{abhishekam.id}\n\n"
+            "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
+        )
     return abhishekam

@@ -1,16 +1,15 @@
 """POST /abhishekams (public, OTP-gated) through payment collection to the
-private view page, plus the public 365-day calendar. Payment is pay-at-
+private view page, plus the public rolling calendar. Payment is pay-at-
 counter, same PENDING/PAID pattern as a paid seva ticket - the personal view
-page reveals nothing beyond the occasion/reference number until staff
-collect the Rs 50 fee, and hides everything again once the 7-day
-visibility window has passed. Bookings are capped at DAILY_SLOT_CAP (7) per
-date; the public calendar's day flyer only ever shows PUBLIC + PAID
-entries, though every booking (PRIVATE or still PENDING included) counts
-toward that date's slot usage."""
+page reveals nothing beyond the occasion/reference number until the fee is
+paid AND occasion_date has arrived, then shows everything for 7 days.
+Bookings are capped at DAILY_SLOT_CAP (7) per date; the public calendar only
+ever shows PUBLIC + PAID entries (photos only during that 7-day window),
+though every booking (PRIVATE or still PENDING included) counts toward that
+date's slot usage."""
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from unittest.mock import MagicMock
-from uuid import UUID
 
 from app.models.abhishekam import Abhishekam, AbhishekamPaymentStatus, ABHISHEKAM_VISIBILITY_DAYS, DAILY_SLOT_CAP
 from app.models.finance import IncomeSourceType, IncomeTransaction
@@ -32,11 +31,12 @@ def _code_from(sent) -> str:
 
 def _seed(db, occasion_date, email, visibility="PRIVATE", payment_status=AbhishekamPaymentStatus.PENDING):
     """Inserts a booking directly, bypassing OTP/HTTP - for quickly filling a
-    date's slots in tests about capacity, without tripping the OTP request
-    rate limiter (5/hour) across many simulated devotees on one test client."""
+    date's slots without tripping the OTP request rate limiter (5/hour) across
+    many simulated devotees on one test client, or for a date in the past
+    (which the public booking form rightly refuses)."""
     row = Abhishekam(
         reference_number=f"ABHI-SEED-{email}", devotee_name="Lakshmi", mobile_number="9876543214",
-        email=email, occasion="Birthday", occasion_date=occasion_date,
+        email=email, occasion="Birthday", occasion_date=occasion_date, relation="My daughter",
         photo_url="https://example.com/photo.jpg", visibility=visibility,
         amount=50, payment_status=payment_status,
     )
@@ -89,23 +89,42 @@ def test_view_pending_booking_reveals_nothing_but_occasion(client, monkeypatch):
     assert body["devotee_name"] is None
 
 
-def test_collect_payment_activates_the_page(client, staff, monkeypatch):
+def test_payment_on_the_day_opens_the_page_and_sends_the_blessing(client, staff, monkeypatch):
     _, headers = staff
     sent = _capture_email(monkeypatch)
-    booking = _book(client, sent)
+    booking = _book(client, sent)  # for today
 
     r = client.post(f"/api/v1/abhishekams/{booking['id']}/collect-payment", headers=headers)
     assert r.status_code == 200, r.text
     assert r.json()["payment_status"] == "PAID"
+    assert r.json()["greeting_sent_at"] is not None
 
     view = client.get(f"/api/v1/abhishekams/{booking['id']}/view").json()
     assert view["status"] == "active"
     assert view["photo_url"] == "https://example.com/photo.jpg"
     assert view["devotee_name"] == "Lakshmi"
-    assert view["expires_at"] is not None
+    assert view["visible_until"] == (date.today() + timedelta(days=ABHISHEKAM_VISIBILITY_DAYS - 1)).isoformat()
 
-    ready_emails = [c for c in sent.call_args_list if "page is ready" in c.args[1]]
-    assert len(ready_emails) == 1
+    blessings = [c for c in sent.call_args_list if c.args[1] == "Blessings on your Birthday"]
+    assert len(blessings) == 1
+    assert f"/abhishekam/{booking['id']}" in blessings[0].args[2]
+
+
+def test_payment_before_the_date_schedules_the_page_and_blessing(client, staff, monkeypatch):
+    _, headers = staff
+    sent = _capture_email(monkeypatch)
+    booking = _book(client, sent, occasion_date=date.today() + timedelta(days=10))
+
+    paid = client.post(f"/api/v1/abhishekams/{booking['id']}/collect-payment", headers=headers).json()
+    assert paid["greeting_sent_at"] is None
+
+    view = client.get(f"/api/v1/abhishekams/{booking['id']}/view").json()
+    assert view["status"] == "scheduled"
+    assert view["photo_url"] is None
+
+    subjects = [c.args[1] for c in sent.call_args_list]
+    assert f"Payment received: {booking['reference_number']}" in subjects
+    assert not any(s.startswith("Blessings on your") for s in subjects)
 
 
 def test_collect_payment_posts_income_and_cannot_repeat(client, staff, db, monkeypatch):
@@ -132,19 +151,33 @@ def test_collect_payment_requires_permission(client, trustee, monkeypatch):
     assert r.status_code == 403
 
 
-def test_view_expires_after_seven_days(client, staff, db, monkeypatch):
-    _, headers = staff
-    sent = _capture_email(monkeypatch)
-    booking = _book(client, sent)
-    client.post(f"/api/v1/abhishekams/{booking['id']}/collect-payment", headers=headers)
+def test_view_stays_up_for_seven_days_from_the_occasion_date(client, db):
+    last_day = _seed(db, date.today() - timedelta(days=ABHISHEKAM_VISIBILITY_DAYS - 1), "last@example.com",
+                     payment_status=AbhishekamPaymentStatus.PAID)
+    gone = _seed(db, date.today() - timedelta(days=ABHISHEKAM_VISIBILITY_DAYS), "gone@example.com",
+                 payment_status=AbhishekamPaymentStatus.PAID)
 
-    row = db.query(Abhishekam).filter(Abhishekam.id == UUID(booking["id"])).one()
-    row.paid_at = datetime.now() - timedelta(days=ABHISHEKAM_VISIBILITY_DAYS, hours=1)
-    db.commit()
+    view = client.get(f"/api/v1/abhishekams/{last_day.id}/view").json()
+    assert view["status"] == "active"
+    assert view["visible_until"] == date.today().isoformat()
 
-    view = client.get(f"/api/v1/abhishekams/{booking['id']}/view").json()
+    view = client.get(f"/api/v1/abhishekams/{gone.id}/view").json()
     assert view["status"] == "expired"
     assert view["photo_url"] is None
+
+
+def test_booking_a_past_date_is_rejected(client, monkeypatch):
+    sent = _capture_email(monkeypatch)
+    client.post("/api/v1/abhishekams/request-otp", json={"email": "late@example.com"})
+    token = client.post("/api/v1/abhishekams/verify-otp",
+                        json={"email": "late@example.com", "code": _code_from(sent)}).json()["booking_token"]
+    r = client.post("/api/v1/abhishekams", json={
+        "devotee_name": "Late", "mobile_number": "9876543210", "email": "late@example.com",
+        "occasion": "Birthday", "occasion_date": (date.today() - timedelta(days=1)).isoformat(),
+        "photo_url": "https://example.com/photo.jpg", "booking_token": token,
+    })
+    assert r.status_code == 422
+    assert "past" in r.text
 
 
 def test_view_unknown_id_is_404(client):
@@ -219,17 +252,28 @@ def test_a_pending_booking_still_holds_its_slot(client, db, monkeypatch):
 
 
 # ----------------------------------------------------------------- public calendar
-def test_calendar_year_lists_every_day_with_slot_counts(client, monkeypatch):
+def test_calendar_lists_every_day_of_the_rolling_window_with_slot_counts(client, db, monkeypatch):
     sent = _capture_email(monkeypatch)
     target = date.today() + timedelta(days=10)
     _book(client, sent, occasion_date=target)
     _book(client, sent, email="second@example.com", occasion_date=target)
+    past = _seed(db, date.today() - timedelta(days=100), "past@example.com")
 
-    days = client.get(f"/api/v1/abhishekams/calendar?year={target.year}").json()
-    assert len(days) in (365, 366)
-    matching = next(d for d in days if d["date"] == target.isoformat())
-    assert matching["slots_used"] == 2
-    assert matching["slots_total"] == DAILY_SLOT_CAP
+    start, end = date.today() - timedelta(days=182), date.today() + timedelta(days=182)
+    days = client.get(f"/api/v1/abhishekams/calendar?start={start}&end={end}").json()
+    assert len(days) == 365
+    assert days[0]["date"] == start.isoformat() and days[-1]["date"] == end.isoformat()
+    by_date = {d["date"]: d for d in days}
+    assert by_date[target.isoformat()]["slots_used"] == 2
+    assert by_date[target.isoformat()]["slots_total"] == DAILY_SLOT_CAP
+    assert by_date[past.occasion_date.isoformat()]["slots_used"] == 1
+
+
+def test_calendar_rejects_backwards_or_oversized_ranges(client):
+    today = date.today()
+    assert client.get(f"/api/v1/abhishekams/calendar?start={today}&end={today - timedelta(days=1)}").status_code == 400
+    assert client.get(f"/api/v1/abhishekams/calendar?start={today}&end={today + timedelta(days=400)}").status_code == 400
+    assert client.get(f"/api/v1/abhishekams/calendar?start={today}&end={today}").status_code == 200
 
 
 def test_day_flyer_only_shows_public_paid_entries(client, staff, monkeypatch):
@@ -248,6 +292,30 @@ def test_day_flyer_only_shows_public_paid_entries(client, staff, monkeypatch):
     flyer = client.get(f"/api/v1/abhishekams/calendar/{target.isoformat()}").json()
     assert flyer["slots_used"] == 3  # all three still hold a slot
     assert flyer["slots_total"] == DAILY_SLOT_CAP
-    assert len(flyer["entries"]) == 1
-    assert flyer["entries"][0]["devotee_name"] == "Lakshmi"
-    assert flyer["entries"][0]["occasion"] == "Birthday"
+    assert flyer["blessing_status"] == "upcoming"
+    assert flyer["entries"] == [
+        # the permanent public timeline: name + occasion, no photo before the day
+        {"devotee_name": "Lakshmi", "occasion": "Birthday", "relation": None, "photo_url": None},
+    ]
+
+
+def test_day_photos_are_public_only_for_seven_days_from_the_date(client, db):
+    def seed_public_paid(day, email):
+        _seed(db, day, email, visibility="PUBLIC", payment_status=AbhishekamPaymentStatus.PAID)
+
+    today = date.today()
+    archived_day = today - timedelta(days=ABHISHEKAM_VISIBILITY_DAYS)
+    seed_public_paid(today, "today@example.com")
+    seed_public_paid(archived_day, "old@example.com")
+
+    active = client.get(f"/api/v1/abhishekams/calendar/{today}").json()
+    assert active["blessing_status"] == "active"
+    assert active["visible_until"] == (today + timedelta(days=ABHISHEKAM_VISIBILITY_DAYS - 1)).isoformat()
+    assert active["entries"][0]["photo_url"] == "https://example.com/photo.jpg"
+    assert active["entries"][0]["relation"] == "My daughter"
+
+    archived = client.get(f"/api/v1/abhishekams/calendar/{archived_day}").json()
+    assert archived["blessing_status"] == "archived"
+    assert archived["entries"] == [
+        {"devotee_name": "Lakshmi", "occasion": "Birthday", "relation": None, "photo_url": None},
+    ]

@@ -31,7 +31,9 @@ class IncomeTransaction(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     source_type = Column(Enum(IncomeSourceType), nullable=False, index=True)
-    reference_id = Column(String(255), nullable=True)  # Can store Seva ID, Donor ID, etc.
+    # "donation:<id>" / "seva_ticket:<id>" / ... - looked up whenever the linked
+    # record is edited or deleted, to keep the ledger in sync.
+    reference_id = Column(String(255), nullable=True, index=True)
     amount = Column(Numeric(MONEY_PRECISION, MONEY_SCALE), nullable=False)
     payment_mode = Column(Enum(PaymentMode), nullable=False, index=True)
     received_by = Column(Integer, ForeignKey("users.id"), nullable=False)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Time, ForeignKey, Numeric, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Date, DateTime, Time, ForeignKey, Index, Numeric, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 import enum
@@ -28,12 +28,13 @@ class TicketSource(str, enum.Enum):
 
 class SevaTicket(Base):
     __tablename__ = "seva_tickets"
+    __table_args__ = (Index("ix_seva_tickets_created_at", "created_at"),)  # the admin ticket list, newest first
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     ticket_number = Column(String, unique=True, nullable=False, index=True)
-    
+
     # Seva details
-    seva_id = Column(Integer, ForeignKey("poojas.id"), nullable=False)
+    seva_id = Column(Integer, ForeignKey("poojas.id"), nullable=False, index=True)
     seva_name = Column(String, nullable=False)  # Denormalized for easier access
     
     # Devotee details
@@ -64,6 +65,7 @@ class SevaTicket(Base):
     pdf_s3_key = Column(String, nullable=True)
 
     # Optional: what the devotee is booking this seva for (a birthday, a
-    # wedding anniversary, ...). Triggers a blessing email once paid - see
-    # book_seva_ticket/collect_payment in the router.
+    # wedding anniversary, ...). Triggers a blessing email on seva_date once
+    # the seva is paid for (or free) - see OccasionGreetingService.
     occasion = Column(String(100), nullable=True)
+    greeting_sent_at = Column(DateTime, nullable=True)
