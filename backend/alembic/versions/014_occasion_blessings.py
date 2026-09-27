@@ -20,8 +20,10 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.execute("ALTER TYPE incomesourcetype ADD VALUE IF NOT EXISTS 'OCCASION_BLESSING'")
 
+    # create_type=False: created once, explicitly, here - otherwise create_table
+    # below emits a second, unchecked CREATE TYPE for the column and fails.
     blessing_payment_status = postgresql.ENUM(
-        "PENDING", "PAID", name="blessingpaymentstatus", create_type=True,
+        "PENDING", "PAID", name="blessingpaymentstatus", create_type=False,
     )
     blessing_payment_status.create(op.get_bind(), checkfirst=True)
 
