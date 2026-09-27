@@ -1,6 +1,6 @@
 """Hide the monthly Vinayaka Chaturthi that duplicated Ganesh Chaturthi
 
-Revision ID: 021_hide_duplicate_vinayaka_chaturthi
+Revision ID: 021_hide_dup_vinayaka
 Revises: 020_festival_source_key
 Create Date: 2026-09-27
 
@@ -13,7 +13,7 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "021_hide_duplicate_vinayaka_chaturthi"
+revision: str = "021_hide_dup_vinayaka"
 down_revision: Union[str, None] = "020_festival_source_key"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
