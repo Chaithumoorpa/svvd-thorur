@@ -23,9 +23,21 @@ module.exports = {
           '0%': { opacity: '0', transform: 'translateX(20px)' },
           '100%': { opacity: '1', transform: 'translateX(0)' },
         },
+        petalFall: {
+          '0%': { transform: 'translateY(-10%) rotate(0deg)', opacity: '0' },
+          '10%': { opacity: '0.9' },
+          '90%': { opacity: '0.9' },
+          '100%': { transform: 'translateY(340%) rotate(200deg)', opacity: '0' },
+        },
+        glowPulse: {
+          '0%, 100%': { opacity: '0.55', transform: 'scale(1)' },
+          '50%': { opacity: '1', transform: 'scale(1.08)' },
+        },
       },
       animation: {
         slideIn: 'slideIn 0.6s ease-out',
+        petalFall: 'petalFall 6s linear infinite',
+        glowPulse: 'glowPulse 3.5s ease-in-out infinite',
       },
     },
   },
