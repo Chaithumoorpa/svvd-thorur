@@ -417,13 +417,20 @@ announcements.py`, alongside `backup-db.sh`:
 
 ## Occasion greetings
 
-Abhishekam bookings, and seva bookings with an occasion (birthday,
-anniversary, ...), get their blessing email **on the booked date** - not when
-payment is collected. A booking paid for on or after its date is greeted
-immediately; everything else is sent by `app/cli/send_occasion_greetings.py`
-on the day. Without this cron line, greetings for dates paid in advance are
-never sent. The job is idempotent - a booking is never greeted twice - so
-running it more than once a day is harmless.
+Seva bookings made for an occasion (birthday, anniversary, ...) - Abhishekam
+included, it's an ordinary seva - get their blessing email **on the seva
+date**, not when the fee is collected, and only once it's paid (or the seva
+is free). A booking paid for on or after its date is greeted immediately;
+everything else is sent by `app/cli/send_occasion_greetings.py` on the day.
+Without this cron line, greetings for bookings paid in advance are never
+sent. The job is idempotent - a booking is never greeted twice - so running it
+more than once a day is harmless.
+
+In the admin panel, **Poojas & Sevas → Edit** sets a seva's *Slots per day*
+(blank = no limit; Abhishekam: 7) and *Public blessings* (devotees booking it
+for an occasion may add one photo and show their blessing on the website -
+the first such seva is the one behind `/abhishekam`, its calendar and its
+blessings pages).
 
 ```bash
 # crontab -e (on the instance) - daily at 00:35 UTC = 06:05 IST (EC2's clock

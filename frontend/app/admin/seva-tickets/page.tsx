@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Banknote, Download, Plus, QrCode, Ticket, Trash2 } from 'lucide-react';
+import { Banknote, Download, Eye, Image as ImageIcon, Plus, QrCode, Ticket, Trash2 } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
 import QrCameraScanner from '@/components/admin/QrCameraScanner';
@@ -43,7 +43,10 @@ export default function SevaTicketsAdmin() {
   const [scanResult, setScanResult] = useState<{ ok: boolean; message: string; ticket: SevaTicket | null } | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ seva_id: '', devotee_name: '', mobile_number: '', seva_date: todayISO(), payment_status: 'FREE' as 'FREE' | 'PAID', amount: '' });
+  const [form, setForm] = useState({
+    seva_id: '', devotee_name: '', mobile_number: '', seva_date: todayISO(), payment_status: 'FREE' as 'FREE' | 'PAID',
+    amount: '', occasion: '', email: '',
+  });
 
   const [toDelete, setToDelete] = useState<SevaTicket | null>(null);
 
@@ -103,12 +106,14 @@ export default function SevaTicketsAdmin() {
           seva_date: form.seva_date,
           payment_status: form.payment_status,
           amount: form.payment_status === 'PAID' ? Number(form.amount || 0) : 0,
+          occasion: form.occasion.trim() || undefined,
+          email: (form.occasion.trim() && form.email.trim()) || undefined, // only used for the blessing email
         }),
       'Ticket created.',
     );
     if (ticket) {
       setCreateOpen(false);
-      setForm({ ...form, devotee_name: '', mobile_number: '', amount: '' });
+      setForm({ ...form, devotee_name: '', mobile_number: '', amount: '', occasion: '', email: '' });
       list.reload();
     }
   }
@@ -180,7 +185,20 @@ export default function SevaTicketsAdmin() {
                   <tr key={t.id}>
                     <td className="px-4 py-3 font-mono text-xs">{t.ticket_number}<div className="font-sans text-gray-400">{t.source === 'ONLINE' ? 'Online' : 'Counter'}</div></td>
                     <td className="px-4 py-3">{t.devotee_name}<div className="text-xs text-gray-400">{t.mobile_number}{t.email ? ` · ${t.email}` : ''}</div></td>
-                    <td className="px-4 py-3 text-gray-700">{t.seva_name}</td>
+                    <td className="px-4 py-3 text-gray-700">
+                      {t.seva_name}
+                      {t.occasion && (
+                        <div className="flex items-center gap-1 text-xs text-gray-400">
+                          {t.occasion}
+                          {t.show_publicly && <Eye className="h-3 w-3 text-saffron" aria-label="Shown publicly" />}
+                          {t.photo_url && (
+                            <a href={t.photo_url} target="_blank" rel="noopener noreferrer" aria-label={`Occasion photo for ticket ${t.ticket_number}`} className="text-saffron hover:text-maroon">
+                              <ImageIcon className="h-3 w-3" aria-hidden="true" />
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{formatDate(t.seva_date)}</td>
                     <td className="px-4 py-3 text-gray-600">
                       {t.payment_status === 'PAID' ? formatMoney(t.amount)
@@ -282,6 +300,14 @@ export default function SevaTicketsAdmin() {
               {form.payment_status === 'PAID' && (
                 <Field label="Amount received (₹)" required>
                   <input type="number" min="0" step="0.01" inputMode="decimal" className={inputCls} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+                </Field>
+              )}
+              <Field label="Occasion" hint="Optional - e.g. Birthday.">
+                <input className={inputCls} maxLength={100} value={form.occasion} onChange={(e) => setForm({ ...form, occasion: e.target.value })} />
+              </Field>
+              {form.occasion.trim() && (
+                <Field label="Devotee's email" hint="For their blessing email on the seva date.">
+                  <input type="email" className={inputCls} autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                 </Field>
               )}
             </div>

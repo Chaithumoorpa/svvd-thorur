@@ -1,5 +1,5 @@
-"""Sends the occasion blessing emails due today - Abhishekam bookings and seva
-bookings with an occasion, on their own date - and exits. Meant to run once a
+"""Sends the occasion blessing emails due today - seva bookings (Abhishekam
+included) made for an occasion, on their seva date - and exits. Meant to run once a
 day from cron on the EC2 host - see the "Occasion greetings" section of
 DEPLOY_AWS.md for the crontab line. Idempotent: an already-greeted booking is
 skipped, so re-running it (or re-running a failed day) never double-sends.
@@ -18,8 +18,8 @@ logger = setup_logging()
 def main() -> None:
     db = SessionLocal()
     try:
-        abhishekams, sevas = OccasionGreetingService(db).send_due(date.today())
-        logger.info("Occasion greetings sent: %d Abhishekam, %d seva.", abhishekams, sevas)
+        sent = OccasionGreetingService(db).send_due(date.today())
+        logger.info("Occasion greetings sent: %d.", sent)
     finally:
         db.close()
 

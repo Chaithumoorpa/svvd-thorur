@@ -59,15 +59,28 @@ class SevaTicketService:
         """Generates a secure random QR token"""
         return secrets.token_urlsafe(32)
 
-    def _create_with_unique_number(self, ticket_data: dict) -> SevaTicket:
-        """Ticket numbers are sequential; retry if two bookings race for the same number."""
+    def _create_booking(self, pooja, ticket_data: dict) -> SevaTicket:
+        """Ticket numbers are sequential; retry if two bookings race for the same
+        number. For a seva with a daily_slot_cap, every attempt locks the seva's
+        row and re-counts the date, so two devotees can't both take the last slot."""
+        db = self.ticket_repo.db
         for _ in range(5):
+            cap = pooja.daily_slot_cap
+            if cap:
+                self.pooja_repo.lock(pooja.id)
+                if self.ticket_repo.count_booked(pooja.id, ticket_data["seva_date"]) >= cap:
+                    db.rollback()  # release the lock
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"{pooja.name} is fully booked on {ticket_data['seva_date']:%d/%m/%Y} "
+                               f"({cap} of {cap} slots taken). Please choose another date.",
+                    )
             ticket = SevaTicket(**ticket_data, ticket_number=self._generate_ticket_number(),
                                 qr_token=self._generate_qr_token())
             try:
                 return self.ticket_repo.create(ticket)
             except IntegrityError:
-                self.ticket_repo.db.rollback()
+                db.rollback()
         raise HTTPException(status_code=503, detail="Could not allocate a ticket number, please retry")
 
     def book_ticket(self, data: SevaBookingOnline, booked_by_user_id: Optional[int] = None) -> SevaTicket:
@@ -81,6 +94,8 @@ class SevaTicketService:
                 status_code=400,
                 detail=f"A ticket for this Seva is already booked for this mobile number on {data.seva_date}",
             )
+        if (data.photo_url or data.show_publicly) and not pooja.public_blessings:
+            raise HTTPException(status_code=400, detail=f"{pooja.name} doesn't offer public blessings")
 
         # No online payment gateway yet: a paid seva still gets a ticket, but the fee
         # is collected in person at the temple counter (see collect_payment below) -
@@ -93,7 +108,7 @@ class SevaTicketService:
             payment_status = PaymentStatus.FREE
             amount = 0
 
-        return self._create_with_unique_number({
+        return self._create_booking(pooja, {
             "seva_id": pooja.id,
             "seva_name": pooja.name,          # from the database, not the client
             "devotee_name": data.devotee_name,
@@ -104,6 +119,8 @@ class SevaTicketService:
             "payment_status": payment_status,
             "amount": amount,
             "occasion": data.occasion,
+            "photo_url": data.photo_url,
+            "show_publicly": data.show_publicly,
             "status": TicketStatus.ACTIVE,
             "source": ModelTicketSource.ONLINE,
             "booked_by_user_id": booked_by_user_id,
@@ -115,15 +132,17 @@ class SevaTicketService:
         if not pooja:
             raise HTTPException(status_code=400, detail="Invalid Seva selected")
 
-        ticket = self._create_with_unique_number({
+        ticket = self._create_booking(pooja, {
             "seva_id": pooja.id,
             "seva_name": data.seva_name or pooja.name,
             "devotee_name": data.devotee_name,
             "mobile_number": data.mobile_number,
+            "email": data.email,
             "seva_date": data.seva_date,
             "seva_time": data.seva_time,
             "payment_status": data.payment_status,
             "amount": data.amount,
+            "occasion": data.occasion,
             "status": TicketStatus.ACTIVE,
             "source": ModelTicketSource.COUNTER,
             "created_by_admin_id": admin_user.id,

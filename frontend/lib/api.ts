@@ -1,11 +1,10 @@
 import axios, { AxiosError } from 'axios';
 import type {
-  Abhishekam, AbhishekamCalendarDay, AbhishekamCreateInput, AbhishekamDayFlyer,
-  AbhishekamPersonalPageView, ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog,
-  CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
+  ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
   Donation, DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
   GalleryInput, GalleryItem, HomePayload, IncomeInput, LedgerEntry, Me, Member, MemberInput,
-  Paged, Pooja, PoojaInput, SevaBookingOnlineInput, SevaTicket, Temple, TempleTiming,
+  Paged, PersonalBlessing, Pooja, PoojaInput, SevaBookingOnlineInput, SevaCalendarDay, SevaDay, SevaTicket,
+  Temple, TempleTiming,
   TempleTimingInput, TempleUpdate, TicketStatus, UploadUrlResponse, UserCreateInput,
   UserUpdateInput, VisitorStats,
 } from './types';
@@ -179,40 +178,29 @@ export const verifyBookingOtp = async (email: string, code: string) =>
   (await api.post<{ booking_token: string }>('/seva-tickets/booking/verify-otp', { email, code })).data;
 export const bookSeva = async (data: SevaBookingOnlineInput) => (await api.post<SevaTicket>('/seva-tickets/', data)).data;
 
-// ------------------------------------------------------------------------- abhishekam
-export const requestAbhishekamOtp = async (email: string) =>
-  (await api.post<{ message: string }>('/abhishekams/request-otp', { email })).data;
-export const verifyAbhishekamOtp = async (email: string, code: string) =>
-  (await api.post<{ booking_token: string }>('/abhishekams/verify-otp', { email, code })).data;
-export const createAbhishekam = async (data: AbhishekamCreateInput) =>
-  (await api.post<Abhishekam>('/abhishekams', data)).data;
-export const getAbhishekamView = async (id: string) =>
-  (await api.get<AbhishekamPersonalPageView>(`/abhishekams/${id}/view`)).data;
+// ------------------------------------------------------------ seva calendar & blessings
+/** Every day from `start` to `end` (YYYY-MM-DD, inclusive) with the seva's
+ * bookings - the rolling contribution-style grid. Public, briefly cached. */
+export const getSevaCalendar = async (poojaId: number, start: string, end: string) =>
+  (await api.get<SevaCalendarDay[]>(`/poojas/${poojaId}/calendar`, { params: { start, end } })).data;
+/** One day: the calendar pop-up, and that date's public blessings page. */
+export const getSevaDay = async (poojaId: number, date: string) =>
+  (await api.get<SevaDay>(`/poojas/${poojaId}/calendar/${date}`)).data;
+/** The devotee's own blessing page (linked from their greeting email). */
+export const getPersonalBlessing = async (ticketId: string) =>
+  (await api.get<PersonalBlessing>(`/seva-tickets/${ticketId}/blessing`)).data;
 
-/** Uploads the devotee's occasion photo straight to S3 (presigned POST, public
- * but rate limited - no admin auth at this point in the flow) and returns its
+/** Uploads a devotee's occasion photo straight to S3 (presigned POST, public
+ * but rate limited - nobody is signed in while booking) and returns its
  * public URL. Same pattern as uploadGalleryPhoto/uploadMemberPhoto. */
-export async function uploadAbhishekamPhoto(file: File): Promise<string> {
-  const { data } = await api.post<UploadUrlResponse>('/abhishekams/upload-url', { content_type: file.type });
+export async function uploadBlessingPhoto(file: File): Promise<string> {
+  const { data } = await api.post<UploadUrlResponse>('/seva-tickets/booking/upload-url', { content_type: file.type });
   const form = new FormData();
   Object.entries(data.fields).forEach(([key, value]) => form.append(key, value));
   form.append('file', file);
   await axios.post(data.upload_url, form);
   return data.public_url;
 }
-
-/** Every day from `start` to `end` (YYYY-MM-DD, inclusive), zero-filled - the
- * rolling contribution-style grid. Public, cached briefly server-side. */
-export const getAbhishekamCalendar = async (start: string, end: string) =>
-  (await api.get<AbhishekamCalendarDay[]>('/abhishekams/calendar', { params: { start, end } })).data;
-/** One day: the calendar pop-up, and that date's public blessings page. */
-export const getAbhishekamDayFlyer = async (date: string) =>
-  (await api.get<AbhishekamDayFlyer>(`/abhishekams/calendar/${date}`)).data;
-
-export const listAbhishekams = (p = 1, pendingOnly = false, pageSize = 50) =>
-  page<Abhishekam>('/abhishekams', { page: p, page_size: pageSize, pending_only: pendingOnly || undefined });
-export const collectAbhishekamPayment = async (id: string) =>
-  (await api.post<Abhishekam>(`/abhishekams/${id}/collect-payment`)).data;
 
 // -------------------------------------------------------------------- announcements
 export const getAnnouncements = async () => (await api.get<Announcement[]>('/announcements/')).data;

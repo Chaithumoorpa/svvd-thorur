@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Banknote, Calendar, Church, Clock, HandHeart, Heart, HeartHandshake, History,
+  Banknote, Calendar, Church, Clock, HandHeart, Heart, History,
   Image as ImageIcon, LayoutDashboard, LogOut, Mail, Megaphone, Menu, ShieldCheck, Sparkles,
   Ticket, Users, X,
 } from 'lucide-react';
@@ -31,7 +31,6 @@ const NAV: NavItem[] = [
   { name: 'Poojas & Sevas', href: '/admin/poojas', icon: Sparkles, permission: 'content:write', group: 'Website' },
   { name: 'Gallery', href: '/admin/gallery', icon: ImageIcon, permission: 'content:write', group: 'Website' },
   { name: 'Seva Tickets', href: '/admin/seva-tickets', icon: Ticket, permission: 'tickets:manage', group: 'Temple' },
-  { name: 'Abhishekam', href: '/admin/abhishekam', icon: HeartHandshake, permission: 'tickets:manage', group: 'Temple' },
   { name: 'Messages', href: '/admin/messages', icon: Mail, permission: 'messages:manage', group: 'Temple' },
   { name: 'Members', href: '/admin/members', icon: Users, permission: 'members:read', group: 'Temple' },
   { name: 'Donors', href: '/admin/donors', icon: Heart, permission: 'donors:read', group: 'Finance' },

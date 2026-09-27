@@ -32,10 +32,12 @@ interface FormState {
   suggested_amount: string;
   sort_order: string;
   is_active: boolean;
+  daily_slot_cap: string;
+  public_blessings: boolean;
 }
 const blank: FormState = {
   name: '', description: '', pooja_type: 'daily', start_time: '', end_time: '', is_paid: false,
-  suggested_amount: '', sort_order: '0', is_active: true,
+  suggested_amount: '', sort_order: '0', is_active: true, daily_slot_cap: '', public_blessings: false,
 };
 
 const hhmm = (t: string | null) => (t ? t.slice(0, 5) : '');
@@ -54,7 +56,8 @@ export default function PoojasAdmin() {
         name: p.name, description: p.description ?? '', pooja_type: p.pooja_type,
         start_time: hhmm(p.start_time), end_time: hhmm(p.end_time), is_paid: p.is_paid,
         suggested_amount: p.suggested_amount?.toString() ?? '', sort_order: String(p.sort_order),
-        is_active: p.is_active,
+        is_active: p.is_active, daily_slot_cap: p.daily_slot_cap?.toString() ?? '',
+        public_blessings: p.public_blessings,
       },
     });
 
@@ -67,6 +70,11 @@ export default function PoojasAdmin() {
       action.setError('A paid seva needs an amount.');
       return;
     }
+    const cap = form.daily_slot_cap.trim();
+    if (cap !== '' && !(Number.isInteger(Number(cap)) && Number(cap) >= 1 && Number(cap) <= 1000)) {
+      action.setError('Slots per day must be a whole number from 1 to 1000 - or blank for no limit.');
+      return;
+    }
     const payload = {
       name: form.name.trim(),
       description: emptyToNull(form.description),
@@ -77,6 +85,8 @@ export default function PoojasAdmin() {
       suggested_amount: amount === '' ? null : Number(amount),
       sort_order: Number(form.sort_order) || 0,
       is_active: form.is_active,
+      daily_slot_cap: cap === '' ? null : Number(cap), // null = no limit
+      public_blessings: form.public_blessings,
     };
     const ok = await action.run(
       () => (id === null ? createPooja(payload) : updatePooja(id, payload)),
@@ -103,7 +113,7 @@ export default function PoojasAdmin() {
   return (
     <AdminPage
       title="Poojas & Sevas"
-      description="Daily rituals and sevas devotees can see (and, for free ones, book) on the website."
+      description="Daily rituals and sevas devotees can see and book on the website."
       actions={
         <button type="button" className={btnPrimary} onClick={() => setEditing({ id: null, form: { ...blank } })}>
           <Plus className="h-4 w-4" aria-hidden="true" /> Add pooja
@@ -135,6 +145,8 @@ export default function PoojasAdmin() {
               </div>
               <p className="mt-2 text-sm text-gray-700">
                 {p.is_paid ? `Fee ${formatMoney(p.suggested_amount)}` : 'Free'}
+                {p.daily_slot_cap ? ` · ${p.daily_slot_cap} a day` : ''}
+                {p.public_blessings ? ' · Public blessings' : ''}
               </p>
               <div className="mt-3 flex gap-2">
                 <button type="button" className={btnGhost} onClick={() => openEdit(p)}>
@@ -182,9 +194,22 @@ export default function PoojasAdmin() {
                   <input type="number" min={0} step="0.01" inputMode="decimal" className={inputCls} value={editing.form.suggested_amount} onChange={(e) => set('suggested_amount', e.target.value)} />
                 </Field>
               )}
+              <Field label="Slots per day" hint="Bookings allowed per date, online and at the counter. Blank = no limit.">
+                <input type="number" min={1} max={1000} step={1} inputMode="numeric" className={inputCls} placeholder="No limit" value={editing.form.daily_slot_cap} onChange={(e) => set('daily_slot_cap', e.target.value)} />
+              </Field>
               <Field label="Description" className="sm:col-span-2">
                 <textarea className={inputCls} rows={3} maxLength={3000} value={editing.form.description} onChange={(e) => set('description', e.target.value)} />
               </Field>
+              <label className="flex items-start gap-2 text-sm text-gray-700 sm:col-span-2">
+                <input type="checkbox" className="mt-1" checked={editing.form.public_blessings} onChange={(e) => set('public_blessings', e.target.checked)} />
+                <span>
+                  Public blessings
+                  <span className="block text-xs text-gray-500">
+                    Devotees booking for an occasion can add a photo and choose to show their blessing on the
+                    website. The first such seva gets the public calendar at /abhishekam/calendar.
+                  </span>
+                </span>
+              </label>
             </div>
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={editing.form.is_active} onChange={(e) => set('is_active', e.target.checked)} />

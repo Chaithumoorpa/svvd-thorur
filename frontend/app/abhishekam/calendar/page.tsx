@@ -5,10 +5,12 @@ import Link from 'next/link';
 import Modal from '@/components/ui/Modal';
 import { ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
 import { btnGhost, btnPrimary } from '@/components/ui/styles';
+import { useBlessingSeva } from '@/hooks/useBlessingSeva';
 import { useLoad } from '@/hooks/useLoad';
-import { getAbhishekamCalendar, getAbhishekamDayFlyer } from '@/lib/api';
+import { getSevaCalendar, getSevaDay } from '@/lib/api';
 import { buildWeeks, rollingWindow, slotLevel } from '@/lib/contribution-grid';
 import { formatDate, formatLongDate as longDate, todayISO } from '@/lib/format';
+import type { Pooja } from '@/lib/types';
 
 const LEVEL_CLASSES = [
   'bg-amber-50 border border-amber-200',
@@ -20,8 +22,10 @@ const LEVEL_CLASSES = [
 const LEVEL_LABELS = ['No bookings', 'A few slots booked', 'About half booked', 'Nearly full', 'Fully booked'];
 const WEEKDAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
 const CELL = 13; // px - GitHub's contribution squares are about this size
+const SHADING_SCALE = 7; // for a seva with no daily limit: shade as if it had the paper register's 7
 
 const dayMonth = (day: string) => formatDate(day, { day: '2-digit', month: '2-digit' }); // 01/06
+const bookedText = (used: number, total: number | null) => (total ? `${used} of ${total} slots booked` : `${used} booked`);
 
 function SlotDots({ used, total }: { used: number; total: number }) {
   return (
@@ -33,11 +37,11 @@ function SlotDots({ used, total }: { used: number; total: number }) {
   );
 }
 
-function DayModal({ day, today, onClose }: { day: string; today: string; onClose: () => void }) {
-  const flyer = useLoad(() => getAbhishekamDayFlyer(day), [day]);
+function DayModal({ seva, day, today, onClose }: { seva: Pooja; day: string; today: string; onClose: () => void }) {
+  const flyer = useLoad(() => getSevaDay(seva.id, day), [seva.id, day]);
   const data = flyer.data;
   const upcomingOrToday = day >= today;
-  const bookable = upcomingOrToday && !!data && data.slots_used < data.slots_total;
+  const bookable = upcomingOrToday && !!data && (data.slots_total === null || data.slots_used < data.slots_total);
 
   return (
     <Modal title={longDate(day)} onClose={onClose}>
@@ -49,9 +53,9 @@ function DayModal({ day, today, onClose }: { day: string; today: string; onClose
         <div className="space-y-4">
           <div className="space-y-2">
             <p className="text-sm text-gray-700">
-              <strong className="text-maroon-dark">{data.slots_used}</strong> of {data.slots_total} slots booked
+              <strong className="text-maroon-dark">{bookedText(data.slots_used, data.slots_total)}</strong>
             </p>
-            <SlotDots used={data.slots_used} total={data.slots_total} />
+            {data.slots_total && <SlotDots used={data.slots_used} total={data.slots_total} />}
           </div>
 
           {data.entries.length > 0 ? (
@@ -67,14 +71,14 @@ function DayModal({ day, today, onClose }: { day: string; today: string; onClose
             <p className="text-sm text-gray-500">
               {data.slots_used > 0
                 ? 'Bookings for this day are private or awaiting payment.'
-                : upcomingOrToday ? 'No bookings yet for this day.' : 'No Abhishekam was booked for this day.'}
+                : upcomingOrToday ? 'No bookings yet for this day.' : `No ${seva.name} was booked for this day.`}
             </p>
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row">
             {bookable && (
               <Link href={`/abhishekam?date=${day}`} className={`${btnPrimary} justify-center`}>
-                Book Abhishekam for {dayMonth(day)}
+                Book {seva.name} for {dayMonth(day)}
               </Link>
             )}
             {day <= today && data.entries.length > 0 && (
@@ -94,12 +98,18 @@ export default function AbhishekamCalendarPage() {
   const [today] = useState(todayISO);
   const { start, end } = useMemo(() => rollingWindow(today), [today]);
   const weeks = useMemo(() => buildWeeks(start, end), [start, end]);
-  const calendar = useLoad(() => getAbhishekamCalendar(start, end), [start, end]);
+  const seva = useBlessingSeva();
+  const sevaId = seva.data?.id;
+  const calendar = useLoad(
+    () => (sevaId ? getSevaCalendar(sevaId, start, end) : Promise.resolve([])),
+    [sevaId, start, end],
+  );
   const [selected, setSelected] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayRef = useRef<HTMLButtonElement>(null);
 
   const byDate = useMemo(() => new Map((calendar.data ?? []).map((d) => [d.date, d])), [calendar.data]);
+  const cap = seva.data?.daily_slot_cap;
 
   // On a narrow screen the grid scrolls sideways - start with today in view.
   useEffect(() => {
@@ -108,22 +118,35 @@ export default function AbhishekamCalendarPage() {
     if (box && cell) box.scrollLeft = cell.offsetLeft - box.clientWidth / 2;
   }, [calendar.data]);
 
+  if (!seva.loading && !seva.error && !seva.data) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-amber-50 to-templeWhite px-4">
+        <div className="text-center">
+          <h1 className="font-serif text-2xl font-bold text-red-900">Abhishekam Calendar</h1>
+          <p className="mt-2 text-sm text-gray-600">Online Abhishekam booking isn&apos;t open yet.</p>
+          <Link href="/poojas" className={`${btnGhost} mt-4 inline-flex`}>See all sevas</Link>
+        </div>
+      </main>
+    );
+  }
+
+  const name = seva.data?.name ?? 'Abhishekam';
   return (
     <main className="min-h-screen bg-gradient-to-b from-amber-50 to-templeWhite px-4 py-10">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 text-center">
-          <h1 className="font-serif text-2xl font-bold text-red-900">Abhishekam Calendar</h1>
+          <h1 className="font-serif text-2xl font-bold text-red-900">{name} Calendar</h1>
           <p className="mx-auto mt-1 max-w-xl text-sm text-gray-600">
             The past six months and the next six. Each square is a day - the darker it is, the more of
-            its 7 Abhishekam slots are booked. Tap a day to see who was blessed, or to book it.
+            its {cap ? `${cap} ` : ''}{name} slots are booked. Tap a day to see who was blessed, or to book it.
           </p>
-          <Link href="/abhishekam" className={`${btnPrimary} mt-4 inline-flex`}>Book an Abhishekam</Link>
+          <Link href="/abhishekam" className={`${btnPrimary} mt-4 inline-flex`}>Book {name}</Link>
         </div>
 
-        {calendar.loading ? (
+        {seva.loading || calendar.loading ? (
           <LoadingBlock />
-        ) : calendar.error ? (
-          <ErrorBlock message={calendar.error} onRetry={calendar.reload} />
+        ) : seva.error || calendar.error ? (
+          <ErrorBlock message={(seva.error ?? calendar.error) as string} onRetry={seva.error ? seva.reload : calendar.reload} />
         ) : (
           <div className="mx-auto w-fit max-w-full rounded-2xl border border-amber-200 bg-white p-4 shadow-sm">
             <div className="flex gap-2">
@@ -147,7 +170,7 @@ export default function AbhishekamCalendarPage() {
                   </div>
                   <div
                     role="group"
-                    aria-label={`Abhishekam bookings from ${longDate(start)} to ${longDate(end)}`}
+                    aria-label={`${name} bookings from ${longDate(start)} to ${longDate(end)}`}
                     className="grid grid-flow-col gap-[3px]"
                     style={{ gridTemplateRows: `repeat(7, ${CELL}px)`, gridAutoColumns: `${CELL}px` }}
                   >
@@ -156,7 +179,7 @@ export default function AbhishekamCalendarPage() {
                         if (!day) return <span key={`${w}-${d}`} aria-hidden="true" />;
                         const info = byDate.get(day);
                         const used = info?.slots_used ?? 0;
-                        const total = info?.slots_total ?? 7;
+                        const total = info?.slots_total ?? null;
                         const isToday = day === today;
                         return (
                           <button
@@ -164,9 +187,9 @@ export default function AbhishekamCalendarPage() {
                             ref={isToday ? todayRef : undefined}
                             type="button"
                             onClick={() => setSelected(day)}
-                            aria-label={`${longDate(day)}${isToday ? ' (today)' : ''}: ${used} of ${total} slots booked`}
-                            title={`${formatDate(day)}: ${used}/${total} booked`}
-                            className={`rounded-[3px] transition hover:ring-2 hover:ring-saffron focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon ${LEVEL_CLASSES[slotLevel(used, total)]} ${isToday ? 'ring-2 ring-maroon-dark ring-offset-1' : ''}`}
+                            aria-label={`${longDate(day)}${isToday ? ' (today)' : ''}: ${bookedText(used, total)}`}
+                            title={`${formatDate(day)}: ${bookedText(used, total)}`}
+                            className={`rounded-[3px] transition hover:ring-2 hover:ring-saffron focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-maroon ${LEVEL_CLASSES[slotLevel(used, total ?? SHADING_SCALE)]} ${isToday ? 'ring-2 ring-maroon-dark ring-offset-1' : ''}`}
                           />
                         );
                       }),
@@ -197,7 +220,9 @@ export default function AbhishekamCalendarPage() {
         </p>
       </div>
 
-      {selected && <DayModal day={selected} today={today} onClose={() => setSelected(null)} />}
+      {selected && seva.data && (
+        <DayModal seva={seva.data} day={selected} today={today} onClose={() => setSelected(null)} />
+      )}
     </main>
   );
 }

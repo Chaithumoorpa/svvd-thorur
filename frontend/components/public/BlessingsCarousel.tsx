@@ -3,14 +3,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import BlessingAnimation from '@/components/public/BlessingAnimation';
-import type { AbhishekamDayEntry } from '@/lib/types';
+import type { BlessingEntry } from '@/lib/types';
 
 const AUTO_ADVANCE_MS = 6000;
 
-/** One devotee's blessing at a time - their photo with the blessing
- * animation beneath it. Auto-advances unless hovered, focused, or the
+/** One devotee's blessing at a time - their photo (or, if they added none,
+ * a decorative card) with the blessing animation beneath it. Auto-advances unless hovered, focused, or the
  * visitor prefers reduced motion; arrows, dots, keys and swipes all work. */
-export default function BlessingsCarousel({ entries }: { entries: AbhishekamDayEntry[] }) {
+export default function BlessingsCarousel({ entries }: { entries: BlessingEntry[] }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const touchX = useRef<number | null>(null);
@@ -53,13 +53,23 @@ export default function BlessingsCarousel({ entries }: { entries: AbhishekamDayE
         aria-live={paused ? 'polite' : 'off'}
         className="relative"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          key={entry.photo_url}
-          src={entry.photo_url ?? undefined}
-          alt={`${entry.devotee_name}'s ${entry.occasion} photo`}
-          className="mx-auto max-h-80 animate-slideIn rounded-2xl border border-amber-200 object-contain"
-        />
+        {entry.photo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={`${index}-${entry.photo_url}`}
+            src={entry.photo_url}
+            alt={`${entry.devotee_name}'s ${entry.occasion} photo`}
+            className="mx-auto max-h-80 animate-slideIn rounded-2xl border border-amber-200 object-contain"
+          />
+        ) : (
+          <div
+            key={`${index}-none`}
+            aria-hidden="true"
+            className="mx-auto flex h-56 max-w-sm animate-slideIn items-center justify-center rounded-2xl border border-amber-200 bg-gradient-to-br from-saffron-light to-saffron font-serif text-6xl text-white"
+          >
+            ॐ
+          </div>
+        )}
         {count > 1 && (
           <>
             <button type="button" onClick={() => go(index - 1)} aria-label="Previous blessing"
@@ -78,10 +88,7 @@ export default function BlessingsCarousel({ entries }: { entries: AbhishekamDayE
 
       <div className="text-center">
         <p className="font-serif text-xl text-maroon-dark">{entry.devotee_name}</p>
-        <p className="text-sm text-gray-600">
-          {entry.occasion}
-          {entry.relation && <> &middot; {entry.relation}</>}
-        </p>
+        <p className="text-sm text-gray-600">{entry.occasion}</p>
       </div>
 
       {count > 1 && (

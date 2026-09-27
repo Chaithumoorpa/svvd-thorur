@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { useTranslations } from 'next-intl';
-import { Clock, Sparkles } from 'lucide-react';
+import NextLink from 'next/link';
+import { CalendarDays, Clock, Sparkles } from 'lucide-react';
 import BookSeva from '@/components/public/BookSeva';
 import { PageShell } from '@/components/public/SectionHeading';
 import { Link } from '@/i18n/navigation';
@@ -34,8 +35,14 @@ function PoojaCard({ p }: { p: Pooja }) {
       </div>
       {time && <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{time}</p>}
       {p.description && <p className="mt-3 text-sm leading-relaxed text-gray-700">{p.description}</p>}
-      <div className="mt-auto pt-4">
-        <BookSeva sevaId={p.id} sevaName={p.name} isPaid={p.is_paid} amount={p.suggested_amount ?? 0} />
+      <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-4">
+        <BookSeva seva={p} />
+        {p.public_blessings && (
+          // plain next/link: /abhishekam/* isn't locale-prefixed (see middleware.ts)
+          <NextLink href="/abhishekam/calendar" className="inline-flex items-center gap-1 text-sm font-medium text-maroon hover:underline">
+            <CalendarDays className="h-4 w-4" aria-hidden="true" /> {t('calendarLink')}
+          </NextLink>
+        )}
       </div>
     </li>
   );

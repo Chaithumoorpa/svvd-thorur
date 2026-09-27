@@ -24,6 +24,11 @@ class PoojaRepository(BaseRepository):
     def get_by_id(self, pooja_id: int):
         return self.db.query(Pooja).filter(Pooja.id == pooja_id).first()
 
+    def lock(self, pooja_id: int) -> None:
+        """Row lock until the transaction ends (SELECT ... FOR UPDATE; a no-op
+        on SQLite) - serializes bookings of one seva while its slots are counted."""
+        self.db.query(Pooja.id).filter(Pooja.id == pooja_id).with_for_update().one()
+
     def get_by_name(self, name: str):
         return self.db.query(Pooja).filter(Pooja.name == name).first()
 
