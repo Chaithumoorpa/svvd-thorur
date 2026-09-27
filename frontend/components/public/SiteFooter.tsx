@@ -1,11 +1,14 @@
 import { getTranslations } from 'next-intl/server';
 import TempleTime from '@/components/public/TempleTime';
 import NextLink from 'next/link';
-import { Facebook, Instagram, Mail, MapPin, Phone, Youtube } from 'lucide-react';
+import { Facebook, Github, Instagram, Mail, MapPin, Phone, Youtube } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { fetchTemple, fetchTimings } from '@/lib/server-api';
 import { isEmbeddableMap, NAV_LINKS, templeAddress, templeName } from '@/lib/site';
 import VisitorCount from './VisitorCount';
+
+/** Credited in the footer, so people wanting a site like this know who to contact. */
+const DEVELOPER = { name: 'Chaithumoorpa', url: 'https://github.com/Chaithumoorpa' };
 
 export default async function SiteFooter() {
   const [temple, timings] = await Promise.all([fetchTemple(), fetchTimings()]);
@@ -108,6 +111,14 @@ export default async function SiteFooter() {
             <NextLink href="/login" className="hover:text-white">{t('staffLogin')}</NextLink>
           </nav>
         </div>
+        <p className="pb-5 text-center text-xs text-amber-100/60">
+          {t('developedBy')}{' '}
+          <a href={DEVELOPER.url} target="_blank" rel="noopener noreferrer"
+             className="inline-flex items-center gap-1 font-medium text-amber-100/90 hover:text-white">
+            <Github className="h-3.5 w-3.5" aria-hidden="true" />
+            {DEVELOPER.name}
+          </a>
+        </p>
       </div>
     </footer>
   );
