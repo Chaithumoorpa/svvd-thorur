@@ -1,16 +1,23 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, LogIn, Mail } from 'lucide-react';
-import { apiError, getMe, login, setStoredToken, verifyLoginOtp } from '@/lib/api';
-import { Notice } from '@/components/ui/States';
+import { apiError, getMe, getStoredToken, login, setStoredToken, verifyLoginOtp } from '@/lib/api';
+import type { Me } from '@/lib/types';
+import { LoadingBlock, Notice } from '@/components/ui/States';
 import TurnstileWidget from '@/components/ui/TurnstileWidget';
 import { btnGhost, btnPrimary, inputCls } from '@/components/ui/styles';
 import { useTurnstile } from '@/hooks/useTurnstile';
 
 type Step = 'credentials' | 'otp';
+
+/** Same login for everyone; where it lands depends on the account's roles. */
+function landingPath(me: Me): string {
+  if (me.must_change_password) return '/admin/change-password';
+  return me.is_admin || me.is_trustee || me.permissions.length > 0 ? '/admin' : '/my-bookings';
+}
 
 export default function LoginPage() {
   const [step, setStep] = useState<Step>('credentials');
@@ -20,7 +27,30 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const turnstile = useTurnstile();
+
+  // Already signed in - e.g. "Staff login" clicked from the public site mid-
+  // session: go where a fresh sign-in would, instead of asking again. replace()
+  // keeps this page out of history, so Back doesn't bounce through it. An
+  // expired token 401s here, which clears it (see lib/api.ts), and the form shows.
+  useEffect(() => {
+    if (!getStoredToken()) {
+      setCheckingSession(false);
+      return;
+    }
+    let cancelled = false;
+    getMe()
+      .then((me) => {
+        if (!cancelled) window.location.replace(landingPath(me));
+      })
+      .catch(() => {
+        if (!cancelled) setCheckingSession(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function finishLogin(data: { access_token: string; must_change_password: boolean }) {
     setStoredToken(data.access_token);
@@ -28,10 +58,8 @@ export default function LoginPage() {
       window.location.href = '/admin/change-password';
       return;
     }
-    // Same login for everyone; where it lands depends on the account's roles.
-    const me = await getMe();
     // full navigation so the admin layout starts from a clean auth state
-    window.location.href = me.is_admin || me.is_trustee || me.permissions.length > 0 ? '/admin' : '/my-bookings';
+    window.location.href = landingPath(await getMe());
   }
 
   async function onSubmitCredentials(event: React.FormEvent) {
@@ -79,6 +107,14 @@ export default function LoginPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (checkingSession) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-amber-50 to-templeWhite px-4">
+        <LoadingBlock label="Checking your session…" />
+      </main>
+    );
   }
 
   return (
