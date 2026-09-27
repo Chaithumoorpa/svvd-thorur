@@ -11,6 +11,7 @@ class IncomeSourceType(str, enum.Enum):
     DONATION = "DONATION"
     HUNDI = "HUNDI"
     MANUAL = "MANUAL"
+    OCCASION_BLESSING = "OCCASION_BLESSING"
 
 class PaymentMode(str, enum.Enum):
     CASH = "CASH"
