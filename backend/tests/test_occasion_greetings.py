@@ -160,7 +160,7 @@ def test_failed_send_is_retried_on_the_next_run(client, db, monkeypatch):
 # -------------------------------------------------------------- email content
 
 
-def test_blessing_email_links_the_devotees_page_and_the_public_page_if_chosen(client, db, monkeypatch):
+def test_blessing_email_links_the_devotees_page_but_not_an_unreviewed_public_page(client, db, monkeypatch):
     sent = _capture_email(monkeypatch)
     pooja = _pooja(db)
     pooja.public_blessings = True
@@ -170,10 +170,12 @@ def test_blessing_email_links_the_devotees_page_and_the_public_page_if_chosen(cl
     assert f"/blessing/{ticket['id']}" in body
     assert "/abhishekam/blessings/" not in body  # private by default
 
+    # Asked to be shown, but staff haven't approved it yet (see test_seva_blessings
+    # for the approved case): the email mustn't point at a page it isn't on.
     _book(client, sent, pooja.id, seva_date=TODAY, email="public@example.com", mobile_number="9876543215",
-          show_publicly=True, photo_url="https://example.com/p.jpg")
+          occasion="Birthday", show_publicly=True)
     public_body = _blessing_calls(sent)[-1].args[2]
-    assert f"/abhishekam/blessings/{TODAY.isoformat()}" in public_body
+    assert "/abhishekam/blessings/" not in public_body
 
 
 def test_cron_entry_point_runs_send_due(client, db, monkeypatch):

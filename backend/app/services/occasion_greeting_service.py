@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.seva_ticket import PaymentStatus, SevaTicket, TicketStatus
-from app.services.blessing_service import BLESSING_VISIBLE_DAYS
+from app.services.blessing_service import BLESSING_VISIBLE_DAYS, approved
 from app.services.email_service import EmailService
 
 # A greeting may still go out up to this many days into the occasion - covering
@@ -41,7 +41,7 @@ class OccasionGreetingService:
 
     def send_seva(self, ticket: SevaTicket) -> bool:
         public_page = ""
-        if ticket.show_publicly:
+        if ticket.show_publicly and approved(ticket):
             public_page = (
                 "As you chose, it is also shown on the day's public blessings page:\n"
                 f"{settings.FRONTEND_BASE_URL}/abhishekam/blessings/{ticket.seva_date.isoformat()}\n\n"

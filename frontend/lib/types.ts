@@ -285,6 +285,8 @@ export interface SevaTicket {
   occasion?: string | null;
   photo_url?: string | null;
   show_publicly?: boolean;
+  /** Staff review of the photo / public blessing; null = nothing to review. */
+  review_status?: ReviewStatus | null;
   status: TicketStatus;
   source: 'ONLINE' | 'COUNTER';
   qr_token: string;
@@ -306,7 +308,8 @@ export interface SevaBookingOnlineInput extends SevaBookingInput {
   email: string;
   booking_token: string;
   turnstile_token?: string;
-  photo_url?: string;
+  /** From uploadBlessingPhoto - a private upload, published only if staff approve it. */
+  photo_key?: string;
   show_publicly?: boolean;
 }
 
@@ -480,4 +483,21 @@ export interface PersonalBlessing {
   devotee_name: string | null;
   photo_url: string | null;
   visible_until: string | null;
+}
+
+export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+/** A booking whose photo / public blessing waits for staff approval.
+ * photo_preview_url is a short-lived private link. */
+export interface BlessingReview {
+  id: string;
+  ticket_number: string;
+  seva_name: string;
+  devotee_name: string;
+  occasion: string | null;
+  seva_date: string;
+  show_publicly: boolean;
+  payment_status: PaymentStatus;
+  review_status: ReviewStatus;
+  photo_preview_url: string | null;
 }

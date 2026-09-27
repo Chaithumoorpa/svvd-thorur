@@ -45,7 +45,8 @@ export default function BookSeva({
   const [mobile, setMobile] = useState('');
   const [date, setDate] = useState(initialDate && initialDate >= todayISO() ? initialDate : todayISO());
   const [occasion, setOccasion] = useState('');
-  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoKey, setPhotoKey] = useState('');
+  const [photoPreview, setPhotoPreview] = useState(''); // local object URL - the upload itself is private
   const [showPublicly, setShowPublicly] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -83,7 +84,8 @@ export default function BookSeva({
     setName('');
     setMobile('');
     setOccasion('');
-    setPhotoUrl('');
+    setPhotoKey('');
+    setPhotoPreview('');
     setShowPublicly(false);
     setUploadError('');
     setAvailability(null);
@@ -128,7 +130,8 @@ export default function BookSeva({
     setUploadError('');
     setUploading(true);
     try {
-      setPhotoUrl(await uploadBlessingPhoto(file));
+      setPhotoKey(await uploadBlessingPhoto(file));
+      setPhotoPreview(URL.createObjectURL(file));
     } catch (err) {
       setUploadError(
         isAxiosError(err) && err.response?.status === 503
@@ -148,7 +151,7 @@ export default function BookSeva({
       const booked = await bookSeva({
         seva_id: seva.id, devotee_name: name.trim(), mobile_number: mobile.trim(), seva_date: date,
         email: email.trim(), booking_token: bookingToken, occasion: occasion.trim() || undefined,
-        photo_url: offersBlessing && photoUrl ? photoUrl : undefined,
+        photo_key: offersBlessing && photoKey ? photoKey : undefined,
         show_publicly: offersBlessing ? showPublicly : undefined,
         turnstile_token: turnstile.token || undefined,
       });
@@ -182,8 +185,8 @@ export default function BookSeva({
               )}
               {ticket.occasion && (
                 <p className="text-sm text-gray-600">
-                  On {formatDate(ticket.seva_date)} we&apos;ll email you a blessing for your {ticket.occasion}
-                  {ticket.show_publicly ? ', and it will appear on the temple website once the fee is paid.' : '.'}
+                  On {formatDate(ticket.seva_date)} we&apos;ll email you a blessing for your {ticket.occasion}.
+                  {ticket.review_status && ' The temple reviews photos and public blessings before they appear on the website.'}
                 </p>
               )}
               <button type="button" className={btnGhost} onClick={close}>Close</button>
@@ -250,14 +253,14 @@ export default function BookSeva({
                   <div>
                     <label className={`${btnGhost} cursor-pointer`}>
                       <ImagePlus className="h-4 w-4" aria-hidden="true" />
-                      {uploading ? 'Uploading…' : photoUrl ? 'Replace photo' : 'Add one photo'}
+                      {uploading ? 'Uploading…' : photoKey ? 'Replace photo' : 'Add one photo'}
                       <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading} onChange={handlePhoto} />
                     </label>
-                    <p className="mt-1 text-xs text-gray-500">Shown with your blessing on the seva date.</p>
+                    <p className="mt-1 text-xs text-gray-500">Shown with your blessing on the seva date, once the temple has reviewed it.</p>
                     {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
-                    {photoUrl && (
+                    {photoKey && photoPreview && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={photoUrl} alt="Your occasion photo" className="mt-2 max-h-32 rounded-lg border border-amber-200 object-contain" />
+                      <img src={photoPreview} alt="Your occasion photo" className="mt-2 max-h-32 rounded-lg border border-amber-200 object-contain" />
                     )}
                   </div>
                   <label className="flex items-start gap-2 text-sm text-gray-700">
@@ -266,8 +269,8 @@ export default function BookSeva({
                       Show my blessing publicly
                       <span className="block text-xs text-gray-500">
                         Your name and occasion on the {seva.name} calendar, and your photo on that day&apos;s
-                        blessings page for 7 days. Leave unticked to keep it private - you still get your
-                        blessing by email.
+                        blessings page for 7 days, after the temple approves it. Leave unticked to keep it
+                        private - you still get your blessing by email.
                       </span>
                     </span>
                   </label>

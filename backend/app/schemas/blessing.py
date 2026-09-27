@@ -3,6 +3,7 @@ calendar (slots per day), a day's public blessings, and each devotee's own
 blessing page."""
 from datetime import date
 from typing import List, Literal, Optional
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -49,3 +50,23 @@ class PersonalBlessingOut(BaseModel):
     devotee_name: Optional[str] = None
     photo_url: Optional[str] = None
     visible_until: Optional[date] = None
+
+
+class BlessingReviewOut(BaseModel):
+    """A booking waiting for staff to approve or reject its photo and/or public
+    blessing. photo_preview_url is a short-lived private link (the photo isn't
+    public until approved)."""
+    id: UUID
+    ticket_number: str
+    seva_name: str
+    devotee_name: str
+    occasion: Optional[str] = None
+    seva_date: date
+    show_publicly: bool
+    payment_status: str
+    review_status: str
+    photo_preview_url: Optional[str] = None
+
+
+class BlessingReviewIn(BaseModel):
+    approve: bool

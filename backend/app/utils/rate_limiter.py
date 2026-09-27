@@ -15,8 +15,9 @@ class SimpleRateLimiter:
     - Thread-safe: FastAPI runs sync endpoints in a thread pool.
     - Bounded memory: keys whose window has expired are dropped, so a flood of
       distinct keys cannot grow the dict forever.
-    - State is per process. Run a single uvicorn worker (or move to Redis) if
-      you need one global limit.
+    - State is per process, so production runs a single uvicorn worker
+      (docker-compose.prod.yml) - with N workers every limit would be N times
+      looser. Move to a shared store (e.g. Redis) before scaling out.
     """
 
     _SWEEP_EVERY = 500  # full sweep of stale keys every N calls

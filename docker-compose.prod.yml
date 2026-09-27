@@ -41,7 +41,11 @@ services:
       ADMIN_NOTIFICATION_EMAIL: ${ADMIN_NOTIFICATION_EMAIL:-}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
     # No volume mounts in production - use built image
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --log-level warning  # rate limits are per worker; keep this small
+    # ONE worker: the login/OTP/booking rate limits and the content cache live in
+    # process memory, so each extra worker would multiply every limit (and serve
+    # stale cache). One async worker with its thread pool is ample for this site;
+    # scale out only after moving the limiters to a shared store (e.g. Redis).
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --log-level warning
     restart: always
 
   frontend:

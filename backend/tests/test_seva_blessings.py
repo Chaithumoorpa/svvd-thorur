@@ -12,9 +12,14 @@ from uuid import UUID
 
 import pytest
 
+from app.main import app
 from app.models.pooja import Pooja
 from app.models.seva_ticket import PaymentStatus, SevaTicket, TicketStatus
 from app.services.blessing_service import BLESSING_VISIBLE_DAYS
+from app.utils.dependencies import get_storage_service
+
+PHOTO_KEY = "blessings-pending/" + "a" * 32 + ".jpg"
+APPROVED = {"review_status": "APPROVED"}
 
 TODAY = date.today()
 SOON = TODAY + timedelta(days=10)
@@ -119,12 +124,32 @@ def test_a_seva_without_a_cap_takes_any_number(client, db, sent):
 # ---------------------------------------------------------------- public blessing
 
 
-def test_blessing_photo_and_public_choice_are_saved(client, db, sent):
+def test_blessing_photo_and_public_choice_wait_for_review(client, db, sent):
     seva = _seva(db)
-    r = _book_online(client, sent, seva, occasion="Birthday", photo_url="https://example.com/p.jpg",
-                     show_publicly=True)
+    r = _book_online(client, sent, seva, occasion="Birthday", photo_key=PHOTO_KEY, show_publicly=True)
     assert r.status_code == 200, r.text
-    assert (r.json()["photo_url"], r.json()["show_publicly"]) == ("https://example.com/p.jpg", True)
+    body = r.json()
+    assert (body["photo_url"], body["show_publicly"], body["review_status"]) == (None, True, "PENDING")
+    ticket = db.query(SevaTicket).filter(SevaTicket.id == UUID(body["id"])).one()
+    assert ticket.photo_key == PHOTO_KEY
+    admin_mail = [c for c in sent.call_args_list if c.args[1].startswith("New seva booking")]
+    assert all("To review" in c.args[2] for c in admin_mail)
+
+
+@pytest.mark.parametrize("photo_key", [
+    "https://evil.example.com/p.jpg",                  # arbitrary external URL
+    "gallery/" + "a" * 32 + ".jpg",                     # someone else's public prefix
+    "blessings-pending/../gallery/x.jpg",
+    "blessings-pending/" + "a" * 32 + ".svg",
+])
+def test_booking_only_accepts_a_photo_key_from_the_private_upload(client, db, sent, photo_key):
+    r = _book_online(client, sent, _seva(db), occasion="Birthday", photo_key=photo_key)
+    assert r.status_code == 422
+
+
+def test_a_private_booking_without_a_photo_needs_no_review(client, db, sent):
+    r = _book_online(client, sent, _seva(db), occasion="Birthday")
+    assert r.json()["review_status"] is None
 
 
 def test_public_blessing_needs_a_seva_that_offers_it(client, db, sent):
@@ -166,16 +191,18 @@ def test_calendar_rejects_bad_ranges_and_unknown_sevas(client, db):
     assert client.get(f"/api/v1/poojas/9999/calendar?start={TODAY}&end={TODAY}").status_code == 404
 
 
-def test_day_shows_only_public_settled_bookings_with_photos_while_active(client, db):
+def test_day_shows_only_approved_public_settled_bookings_with_photos_while_active(client, db):
     seva = _seva(db)
     public = {"occasion": "Birthday", "show_publicly": True, "photo_url": "https://example.com/p.jpg"}
-    _ticket(db, seva, TODAY, **public)
-    _ticket(db, seva, TODAY, payment=PaymentStatus.PENDING, **public)       # not paid yet
-    _ticket(db, seva, TODAY, occasion="Birthday", photo_url="https://example.com/q.jpg")  # private
-    _ticket(db, seva, TODAY, status=TicketStatus.CANCELLED, **public)
+    _ticket(db, seva, TODAY, **public, **APPROVED)
+    _ticket(db, seva, TODAY, payment=PaymentStatus.PENDING, **public, **APPROVED)  # not paid yet
+    _ticket(db, seva, TODAY, **public, review_status="PENDING")                    # not reviewed yet
+    _ticket(db, seva, TODAY, **public, review_status="REJECTED")
+    _ticket(db, seva, TODAY, occasion="Birthday", photo_url="https://example.com/q.jpg", **APPROVED)  # private
+    _ticket(db, seva, TODAY, status=TicketStatus.CANCELLED, **public, **APPROVED)
 
     day = client.get(f"/api/v1/poojas/{seva.id}/calendar/{TODAY}").json()
-    assert day["slots_used"] == 3
+    assert day["slots_used"] == 5
     assert day["blessing_status"] == "active"
     assert day["entries"] == [{"devotee_name": "Lakshmi", "occasion": "Birthday",
                                "photo_url": "https://example.com/p.jpg"}]
@@ -185,7 +212,7 @@ def test_day_shows_only_public_settled_bookings_with_photos_while_active(client,
 def test_day_keeps_names_but_not_photos_outside_the_window(client, db, days_from_today, status):
     seva = _seva(db)
     day = TODAY + timedelta(days=days_from_today)
-    _ticket(db, seva, day, occasion="Birthday", show_publicly=True, photo_url="https://example.com/p.jpg")
+    _ticket(db, seva, day, occasion="Birthday", show_publicly=True, photo_url="https://example.com/p.jpg", **APPROVED)
     body = client.get(f"/api/v1/poojas/{seva.id}/calendar/{day}").json()
     assert body["blessing_status"] == status
     assert body["entries"] == [{"devotee_name": "Lakshmi", "occasion": "Birthday", "photo_url": None}]
@@ -203,12 +230,19 @@ def test_day_keeps_names_but_not_photos_outside_the_window(client, db, days_from
 ])
 def test_personal_blessing_page_states(client, db, days_from_today, payment, status):
     ticket = _ticket(db, _seva(db), TODAY + timedelta(days=days_from_today), payment=payment,
-                     occasion="Birthday", photo_url="https://example.com/p.jpg")
+                     occasion="Birthday", photo_url="https://example.com/p.jpg", **APPROVED)
     body = client.get(f"/api/v1/seva-tickets/{ticket.id}/blessing").json()
     assert body["status"] == status
     assert body["occasion"] == "Birthday"
     shown = status == "active"
     assert (body["devotee_name"] is not None, body["photo_url"] is not None) == (shown, shown)
+
+
+def test_personal_page_hides_an_unapproved_photo(client, db):
+    ticket = _ticket(db, _seva(db), TODAY, occasion="Birthday", photo_url="https://example.com/p.jpg",
+                     review_status="PENDING")
+    body = client.get(f"/api/v1/seva-tickets/{ticket.id}/blessing").json()
+    assert (body["status"], body["devotee_name"], body["photo_url"]) == ("active", "Lakshmi", None)
 
 
 def test_no_blessing_page_without_an_occasion(client, db):
@@ -237,3 +271,121 @@ def test_counter_ticket_keeps_occasion_and_email_and_greets_on_the_day(client, d
 def test_blessing_photo_upload_is_public_but_inert_without_s3(client):
     r = client.post("/api/v1/seva-tickets/booking/upload-url", json={"content_type": "image/jpeg"})
     assert r.status_code == 503  # S3 not configured in tests
+
+
+# ------------------------------------------------------------------- staff review
+
+
+class FakeStorage:
+    """Stands in for S3: records what review did to which key."""
+    enabled = True
+    base = "https://bucket.s3.ap-south-1.amazonaws.com/"
+
+    def __init__(self):
+        self.published, self.deleted = [], []
+
+    def public_url(self, key):
+        return self.base + key
+
+    def key_from_public_url(self, url):
+        return url[len(self.base):] if url.startswith(self.base) else None
+
+    def presigned_get(self, key, expires_in=900):
+        return f"https://signed.example/{key}"
+
+    def publish(self, key, public_prefix):
+        self.published.append(key)
+        return self.public_url(f"{public_prefix}/{key.rsplit('/', 1)[-1]}")
+
+    def delete(self, key):
+        self.deleted.append(key)
+
+
+@pytest.fixture()
+def storage():
+    fake = FakeStorage()
+    app.dependency_overrides[get_storage_service] = lambda: fake
+    yield fake
+    app.dependency_overrides.pop(get_storage_service, None)
+
+
+def _pending(db, day=TODAY, **fields):
+    return _ticket(db, _seva(db), day, occasion="Birthday", show_publicly=True, photo_key=PHOTO_KEY,
+                   review_status="PENDING", **fields)
+
+
+def test_staff_see_pending_blessings_with_private_previews(client, db, staff, storage):
+    _, headers = staff
+    ticket = _pending(db)
+    r = client.get("/api/v1/seva-tickets/blessing-reviews", headers=headers)
+    assert r.status_code == 200
+    [item] = r.json()
+    assert (item["id"], item["review_status"]) == (str(ticket.id), "PENDING")
+    assert item["photo_preview_url"] == f"https://signed.example/{PHOTO_KEY}"
+
+
+def test_reviews_need_the_tickets_permission(client, db, storage):
+    ticket = _pending(db)
+    assert client.get("/api/v1/seva-tickets/blessing-reviews").status_code == 401
+    assert client.post(f"/api/v1/seva-tickets/{ticket.id}/blessing-review", json={"approve": True}).status_code == 401
+
+
+def test_approving_publishes_the_photo_and_shows_the_blessing(client, db, staff, storage):
+    _, headers = staff
+    ticket = _pending(db)
+    r = client.post(f"/api/v1/seva-tickets/{ticket.id}/blessing-review", headers=headers, json={"approve": True})
+    assert r.status_code == 200, r.text
+    assert storage.published == [PHOTO_KEY]
+    public = storage.base + "gallery/blessings/" + "a" * 32 + ".jpg"
+    assert (r.json()["review_status"], r.json()["photo_url"]) == ("APPROVED", public)
+    day = client.get(f"/api/v1/poojas/{ticket.seva_id}/calendar/{TODAY}").json()
+    assert day["entries"] == [{"devotee_name": "Lakshmi", "occasion": "Birthday", "photo_url": public}]
+    assert client.get("/api/v1/seva-tickets/blessing-reviews", headers=headers).json() == []
+
+
+def test_rejecting_deletes_the_photo_and_keeps_the_booking_private(client, db, staff, storage):
+    _, headers = staff
+    ticket = _pending(db)
+    r = client.post(f"/api/v1/seva-tickets/{ticket.id}/blessing-review", headers=headers, json={"approve": False})
+    assert r.status_code == 200
+    assert storage.deleted == [PHOTO_KEY]
+    assert (r.json()["review_status"], r.json()["photo_url"], r.json()["show_publicly"]) == ("REJECTED", None, False)
+    assert client.get(f"/api/v1/poojas/{ticket.seva_id}/calendar/{TODAY}").json()["entries"] == []
+
+
+def test_an_approved_photo_can_be_taken_down(client, db, staff, storage):
+    _, headers = staff
+    public = storage.base + "gallery/blessings/p.jpg"
+    ticket = _ticket(db, _seva(db), TODAY, occasion="Birthday", show_publicly=True, photo_url=public, **APPROVED)
+    r = client.post(f"/api/v1/seva-tickets/{ticket.id}/blessing-review", headers=headers, json={"approve": False})
+    assert r.json()["photo_url"] is None
+    assert storage.deleted == ["gallery/blessings/p.jpg"]
+
+
+def test_a_booking_with_nothing_to_review_is_refused(client, db, staff, storage):
+    _, headers = staff
+    ticket = _ticket(db, _seva(db), TODAY, occasion="Birthday")
+    r = client.post(f"/api/v1/seva-tickets/{ticket.id}/blessing-review", headers=headers, json={"approve": True})
+    assert r.status_code == 400
+
+
+def test_the_greeting_links_the_public_page_only_once_approved(client, db, sent):
+    from app.services.occasion_greeting_service import OccasionGreetingService
+    seva = _seva(db)
+    pending = _ticket(db, seva, TODAY, occasion="Birthday", show_publicly=True, email="a@example.com",
+                      review_status="PENDING")
+    approved = _ticket(db, seva, TODAY, occasion="Birthday", show_publicly=True, email="b@example.com", **APPROVED)
+    OccasionGreetingService(db).send_due(TODAY)
+    bodies = {c.args[0]: c.args[2] for c in sent.call_args_list}
+    assert "/abhishekam/blessings/" not in bodies["a@example.com"]
+    assert "/abhishekam/blessings/" in bodies["b@example.com"]
+    assert pending.id != approved.id
+
+
+def test_rejecting_still_works_when_photo_storage_is_down(client, db, staff, storage):
+    _, headers = staff
+    storage.delete = MagicMock(side_effect=TypeError("boom"))
+    ticket = _pending(db)
+    r = client.post(f"/api/v1/seva-tickets/{ticket.id}/blessing-review", headers=headers, json={"approve": False})
+    assert r.status_code == 200
+    assert r.json()["review_status"] == "REJECTED"

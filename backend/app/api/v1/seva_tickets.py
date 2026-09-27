@@ -7,24 +7,26 @@ from datetime import date, datetime
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.utils.dependencies import (
-    AuditContext, get_audit, get_blessing_service, get_current_user, get_current_user_optional,
+    AuditContext, get_audit, get_blessing_review_service, get_blessing_service, get_current_user,
+    get_current_user_optional,
     get_occasion_greeting_service, get_otp_service, get_seva_ticket_service, get_storage_service,
     get_turnstile_service, require_admin, require_permission,
 )
 from app.utils.rate_limiter import (
     blessing_photo_upload_limiter, booking_limiter, enforce, get_client_ip, otp_request_limiter, otp_verify_limiter,
 )
-from app.services.blessing_service import BlessingService
+from app.services.blessing_service import BlessingReviewService, BlessingService
 from app.services.email_service import EmailService
 from app.services.occasion_greeting_service import OccasionGreetingService
 from app.services.otp_service import OtpService
 from app.services.seva_ticket_service import PaymentPendingError, SevaTicketService
 from app.services.storage_service import StorageService
 from app.services.turnstile_service import TurnstileService
-from app.schemas.blessing import PersonalBlessingOut
+from app.schemas.blessing import BlessingReviewIn, BlessingReviewOut, PersonalBlessingOut
 from app.schemas.otp import OtpRequest, OtpVerifyRequest, OtpVerifyResponse
 from app.schemas.upload import UploadUrlRequest, UploadUrlResponse
 from app.schemas.seva_ticket import (
+    BLESSING_PHOTO_PREFIX,
     SevaBookingOnline,
     SevaTicketCreate,
     SevaTicketOut,
@@ -74,10 +76,12 @@ def create_blessing_photo_upload_url(
 ):
     """Presigned S3 upload for the one occasion photo a devotee may add when
     booking a seva with public blessings - public (nobody is signed in at this
-    point in the flow), but rate limited. Stored under the public-read
-    gallery/ prefix, like gallery and member photos."""
+    point in the flow), but rate limited. Stored under a PRIVATE prefix: it
+    only reaches the website once staff approve it (see blessing-review)."""
     enforce(blessing_photo_upload_limiter, get_client_ip(request), "Too many upload attempts. Please try again later.")
-    return storage.create_upload(payload.content_type, key_prefix="gallery/blessings")
+    upload = storage.create_upload(payload.content_type, key_prefix=BLESSING_PHOTO_PREFIX)
+    upload["public_url"] = ""  # not public until approved - the booking sends `key`
+    return upload
 
 
 @router.post("", response_model=SevaTicketOut)
@@ -102,10 +106,16 @@ def book_seva_ticket(
         raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
     OtpService.check_booking_token(payload.booking_token, payload.email)
     ticket = service.book_ticket(payload, booked_by_user_id=current_user.id if current_user else None)
+    review_note = (
+        "\n\nTo review: the devotee added a photo and/or asked to show their blessing publicly. "
+        "Nothing appears on the website until you approve it - Admin > Seva Tickets > Blessings to review."
+        if ticket.review_status else ""
+    )
     EmailService().notify_admin(
         f"New seva booking: {ticket.seva_name} ({ticket.ticket_number})",
         f"Devotee: {ticket.devotee_name}\nMobile: {ticket.mobile_number}\nEmail: {ticket.email}\n"
-        f"Seva: {ticket.seva_name}\nDate: {ticket.seva_date}\nTicket: {ticket.ticket_number}",
+        f"Seva: {ticket.seva_name}\nDate: {ticket.seva_date}\nTicket: {ticket.ticket_number}"
+        f"{review_note}",
     )
     payment_note = (
         f"This seva has a fee of Rs. {ticket.amount}, payable in cash at the temple counter "
@@ -213,6 +223,33 @@ def delete_seva_ticket(
               {"seva": ticket.seva_name, "amount": ticket.amount, "payment": ticket.payment_status})
     service.delete_ticket(ticket_id)
     return {"message": "Ticket deleted"}
+
+
+@router.get("/blessing-reviews", response_model=List[BlessingReviewOut])
+def list_blessing_reviews(
+    service: BlessingReviewService = Depends(get_blessing_review_service),
+    _: User = Depends(_manage),
+):
+    """Staff: bookings whose photo / public blessing awaits approval, soonest
+    seva date first. Photos come with short-lived private preview links."""
+    return service.pending()
+
+
+@router.post("/{ticket_id}/blessing-review", response_model=SevaTicketOut)
+def review_blessing(
+    ticket_id: UUID,
+    payload: BlessingReviewIn,
+    service: BlessingReviewService = Depends(get_blessing_review_service),
+    audit: AuditContext = Depends(get_audit),
+    _: User = Depends(_manage),
+):
+    """Staff: approve (publish the photo, show the blessing if the devotee
+    chose to) or reject (delete the photo, keep the booking private). Either
+    can be applied again later, e.g. to take down an approved photo."""
+    ticket = service.review(ticket_id, payload.approve)
+    audit.log("UPDATE", "seva_ticket", ticket.id,
+              f"{'Approved' if payload.approve else 'Rejected'} blessing for ticket {ticket.ticket_number}")
+    return ticket
 
 
 @router.get("/{ticket_id}/blessing", response_model=PersonalBlessingOut)

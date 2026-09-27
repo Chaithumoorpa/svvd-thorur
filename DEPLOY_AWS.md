@@ -236,7 +236,8 @@ automatically). Create one:
            "arn:aws:s3:::svvd-thorur-gallery/gallery/*",
            "arn:aws:s3:::svvd-thorur-gallery/tickets/*",
            "arn:aws:s3:::svvd-thorur-gallery/receipts/*",
-           "arn:aws:s3:::svvd-thorur-gallery/backups/*"
+           "arn:aws:s3:::svvd-thorur-gallery/backups/*",
+           "arn:aws:s3:::svvd-thorur-gallery/blessings-pending/*"
          ]
        },
        {
@@ -245,12 +246,28 @@ automatically). Create one:
          "Resource": [
            "arn:aws:s3:::svvd-thorur-gallery/tickets/*",
            "arn:aws:s3:::svvd-thorur-gallery/receipts/*",
-           "arn:aws:s3:::svvd-thorur-gallery/backups/*"
+           "arn:aws:s3:::svvd-thorur-gallery/backups/*",
+           "arn:aws:s3:::svvd-thorur-gallery/blessings-pending/*"
+         ]
+       },
+       {
+         "Effect": "Allow",
+         "Action": "s3:DeleteObject",
+         "Resource": [
+           "arn:aws:s3:::svvd-thorur-gallery/blessings-pending/*",
+           "arn:aws:s3:::svvd-thorur-gallery/gallery/blessings/*"
          ]
        }
      ]
    }
    ```
+
+   `blessings-pending/` holds devotees' occasion photos until staff review
+   them (Admin → Seva Tickets → *Blessings to review*) - private, like
+   `tickets/`. Approving copies the photo to the public `gallery/blessings/`
+   and deletes the private copy; rejecting deletes it. Without these three
+   `blessings-pending/*` entries the photo upload on the booking form fails
+   (booking itself still works) and approving a photo returns an error.
 
    `tickets/` and `receipts/` are where the backend archives generated seva
    ticket PDFs and donation receipts (private - not covered by the public
@@ -428,9 +445,11 @@ more than once a day is harmless.
 
 In the admin panel, **Poojas & Sevas → Edit** sets a seva's *Slots per day*
 (blank = no limit; Abhishekam: 7) and *Public blessings* (devotees booking it
-for an occasion may add one photo and show their blessing on the website -
-the first such seva is the one behind `/abhishekam`, its calendar and its
-blessings pages).
+for an occasion may add one photo and ask to show their blessing on the
+website - the first such seva is the one behind `/abhishekam`, its calendar
+and its blessings pages). Nothing a devotee submits goes on the website until
+staff approve it under **Seva Tickets → Blessings to review**; the admin
+notification email for such a booking says so.
 
 ```bash
 # crontab -e (on the instance) - daily at 00:35 UTC = 06:05 IST (EC2's clock

@@ -5,7 +5,12 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator, model_validator
 
 from app.models.seva_ticket import PaymentStatus, TicketSource, TicketStatus
-from app.schemas.common import MoneyInOrZero, MoneyOut, SafeUrl, blank_to_none, normalize_mobile
+from app.schemas.common import MoneyInOrZero, MoneyOut, blank_to_none, normalize_mobile
+
+# What POST /seva-tickets/booking/upload-url hands out - never an arbitrary URL,
+# so a booking can only ever point at a photo uploaded to the private review prefix.
+BLESSING_PHOTO_PREFIX = "blessings-pending"
+PhotoKey = Annotated[str, StringConstraints(pattern=rf"^{BLESSING_PHOTO_PREFIX}/[0-9a-f]{{32}}\.(jpg|png|webp|gif)$")]
 
 DevoteeName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=100)]
 
@@ -38,16 +43,17 @@ class SevaBookingPublic(BaseModel):
 class SevaBookingOnline(SevaBookingPublic):
     """Public online booking, gated on a verified email: `booking_token` is the
     one issued by POST /seva-tickets/booking/verify-otp for this exact email.
-    `photo_url`/`show_publicly` only for a seva with public_blessings."""
+    `photo_key`/`show_publicly` only for a seva with public_blessings; both
+    wait for staff review before anything appears on the website."""
     email: EmailStr
     booking_token: str
     turnstile_token: Optional[str] = None
-    photo_url: Optional[SafeUrl] = None
+    photo_key: Optional[PhotoKey] = None
     show_publicly: bool = False
 
     @model_validator(mode="after")
     def _blessing_needs_occasion(self):
-        if (self.photo_url or self.show_publicly) and not self.occasion:
+        if (self.photo_key or self.show_publicly) and not self.occasion:
             raise ValueError("Add the occasion to share a blessing photo or show it publicly")
         return self
 
@@ -80,6 +86,7 @@ class SevaTicketOut(BaseModel):
     amount: MoneyOut
     occasion: Optional[str] = None
     photo_url: Optional[str] = None
+    review_status: Optional[str] = None
     show_publicly: bool = False
     status: TicketStatus
     source: TicketSource

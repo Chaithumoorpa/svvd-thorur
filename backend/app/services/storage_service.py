@@ -86,3 +86,30 @@ class StorageService:
         client = self._client()
         client.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
         return key
+
+    # ---- blessing photos: uploaded privately, published only after staff review ----
+    def public_url(self, key: str) -> str:
+        return f"https://{self.bucket}.s3.{self.region}.amazonaws.com/{key}"
+
+    def key_from_public_url(self, url: str) -> str | None:
+        """The key of one of this bucket's own public objects, else None."""
+        prefix = self.public_url("")
+        return url[len(prefix):] if self.enabled and url.startswith(prefix) else None
+
+    def presigned_get(self, key: str, expires_in: int = 900) -> str:
+        """Short-lived link for staff to view a private object (a photo awaiting review)."""
+        return self._client().generate_presigned_url(
+            "get_object", Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=expires_in,
+        )
+
+    def publish(self, key: str, public_prefix: str) -> str:
+        """Copies a private object under a public-read prefix (gallery/...), deletes
+        the private copy and returns the new public URL."""
+        client = self._client()
+        public_key = f"{public_prefix}/{key.rsplit('/', 1)[-1]}"
+        client.copy_object(Bucket=self.bucket, Key=public_key, CopySource={"Bucket": self.bucket, "Key": key})
+        client.delete_object(Bucket=self.bucket, Key=key)
+        return self.public_url(public_key)
+
+    def delete(self, key: str) -> None:
+        self._client().delete_object(Bucket=self.bucket, Key=key)

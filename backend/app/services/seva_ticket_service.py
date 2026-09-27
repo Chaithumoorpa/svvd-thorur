@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.repositories.seva_ticket_repo import SevaTicketRepository
 from app.repositories.pooja_repo import PoojaRepository
 from app.schemas.seva_ticket import SevaBookingOnline, SevaTicketCreate, SevaTicketOut, SevaTicketFilter, TicketStatus, PaymentStatus, TicketSource
-from app.models.seva_ticket import SevaTicket, TicketSource as ModelTicketSource
+from app.models.seva_ticket import ReviewStatus, SevaTicket, TicketSource as ModelTicketSource
 from app.models.finance import IncomeSourceType, IncomeTransaction, PaymentMode
 from app.models.temple import Temple
 
@@ -94,7 +94,7 @@ class SevaTicketService:
                 status_code=400,
                 detail=f"A ticket for this Seva is already booked for this mobile number on {data.seva_date}",
             )
-        if (data.photo_url or data.show_publicly) and not pooja.public_blessings:
+        if (data.photo_key or data.show_publicly) and not pooja.public_blessings:
             raise HTTPException(status_code=400, detail=f"{pooja.name} doesn't offer public blessings")
 
         # No online payment gateway yet: a paid seva still gets a ticket, but the fee
@@ -119,8 +119,11 @@ class SevaTicketService:
             "payment_status": payment_status,
             "amount": amount,
             "occasion": data.occasion,
-            "photo_url": data.photo_url,
+            "photo_key": data.photo_key,
             "show_publicly": data.show_publicly,
+            # Anyone with an email can book: a photo or a public blessing waits
+            # for staff review before anything of it reaches the website.
+            "review_status": ReviewStatus.PENDING.value if (data.photo_key or data.show_publicly) else None,
             "status": TicketStatus.ACTIVE,
             "source": ModelTicketSource.ONLINE,
             "booked_by_user_id": booked_by_user_id,
