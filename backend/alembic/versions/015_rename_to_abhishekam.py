@@ -32,7 +32,7 @@ def upgrade() -> None:
     op.execute("ALTER INDEX ix_occasion_blessings_reference_number RENAME TO ix_abhishekams_reference_number")
     op.execute("ALTER INDEX ix_occasion_blessings_mobile_number RENAME TO ix_abhishekams_mobile_number")
 
-    abhishekam_visibility = postgresql.ENUM("PUBLIC", "PRIVATE", name="abhishekamvisibility", create_type=True)
+    abhishekam_visibility = postgresql.ENUM("PUBLIC", "PRIVATE", name="abhishekamvisibility", create_type=False)
     abhishekam_visibility.create(op.get_bind(), checkfirst=True)
     op.add_column(
         "abhishekams",
