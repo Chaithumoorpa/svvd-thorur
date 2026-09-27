@@ -28,6 +28,7 @@ from app.services.pooja_service import PoojaService
 from app.services.otp_service import OtpService
 from app.services.seva_ticket_service import SevaTicketService
 from app.services.storage_service import StorageService
+from app.services.turnstile_service import TurnstileService
 
 security = HTTPBearer(auto_error=False)
 logger = logging.getLogger(__name__)
@@ -207,6 +208,10 @@ def get_seva_ticket_service(db: Session = Depends(get_db)) -> SevaTicketService:
 
 def get_otp_service(db: Session = Depends(get_db)) -> OtpService:
     return OtpService(db)
+
+
+def get_turnstile_service() -> TurnstileService:
+    return TurnstileService()
 
 
 def get_announcement_repository(db: Session = Depends(get_db)) -> AnnouncementRepository:

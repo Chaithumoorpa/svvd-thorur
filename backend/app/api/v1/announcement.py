@@ -1,8 +1,9 @@
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
+from app.core.cache import cached, invalidate
 from app.core.config import settings
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
@@ -20,10 +21,15 @@ _can_write = require_permission(Permission.CONTENT_WRITE)
 # ---- public: only published announcements (active and inside their date window) ----------
 @router.get("", response_model=List[AnnouncementOut])
 def list_announcements(
-    limit: Optional[int] = Query(None, ge=1, le=50),
+    response: Response,
+    limit: int = Query(50, ge=1, le=50, description="Capped even when omitted"),
     service: AnnouncementService = Depends(get_announcement_service),
 ):
-    return service.list_published(limit=limit)
+    response.headers["Cache-Control"] = "public, max-age=60"
+    return cached(
+        f"announcements:list:{limit}",
+        lambda: [AnnouncementOut.model_validate(a) for a in service.list_published(limit=limit)],
+    )
 
 
 # ---- admin: everything incl. inactive/expired (declared before /{id}) ---------------------
@@ -57,6 +63,7 @@ def create_announcement(
 ):
     result = service.create_announcement(payload, current_user.id)
     audit.log("CREATE", "announcement", result.id, f"Created announcement '{result.title}'")
+    invalidate("announcements:")
     notify_devotees(
         db,
         f"New announcement: {result.title}",
@@ -79,6 +86,7 @@ def update_announcement(
     changes = payload.model_dump(exclude_unset=True)
     result = service.update_announcement(announcement_id, changes)
     audit.log("UPDATE", "announcement", announcement_id, f"Updated announcement '{result.title}'", changes)
+    invalidate("announcements:")
     return result
 
 
@@ -92,4 +100,5 @@ def delete_announcement(
     """Soft delete (unpublishes). The row is kept for history."""
     result = service.delete_announcement(announcement_id)
     audit.log("DELETE", "announcement", announcement_id, f"Unpublished announcement '{result.title}'")
+    invalidate("announcements:")
     return result

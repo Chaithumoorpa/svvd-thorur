@@ -6,7 +6,9 @@ import Image from 'next/image';
 import { Eye, EyeOff, LogIn, Mail } from 'lucide-react';
 import { apiError, getMe, login, setStoredToken, verifyLoginOtp } from '@/lib/api';
 import { Notice } from '@/components/ui/States';
+import TurnstileWidget from '@/components/ui/TurnstileWidget';
 import { btnGhost, btnPrimary, inputCls } from '@/components/ui/styles';
+import { useTurnstile } from '@/hooks/useTurnstile';
 
 type Step = 'credentials' | 'otp';
 
@@ -18,6 +20,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const turnstile = useTurnstile();
 
   async function finishLogin(data: { access_token: string; must_change_password: boolean }) {
     setStoredToken(data.access_token);
@@ -36,7 +39,8 @@ export default function LoginPage() {
     setError('');
     setBusy(true);
     try {
-      const data = await login(username.trim(), password);
+      const data = await login(username.trim(), password, turnstile.token || undefined);
+      turnstile.reset();
       if (data.otp_required) {
         setStep('otp');
         setBusy(false);
@@ -44,6 +48,7 @@ export default function LoginPage() {
       }
       await finishLogin({ access_token: data.access_token!, must_change_password: !!data.must_change_password });
     } catch (err) {
+      turnstile.reset();
       setError(apiError(err, 'Sign in failed. Please try again.'));
       setBusy(false);
     }
@@ -66,8 +71,10 @@ export default function LoginPage() {
     setError('');
     setBusy(true);
     try {
-      await login(username.trim(), password);
+      await login(username.trim(), password, turnstile.token || undefined);
+      turnstile.reset();
     } catch (err) {
+      turnstile.reset();
       setError(apiError(err, 'Could not resend the code. Please try again.'));
     } finally {
       setBusy(false);
@@ -164,6 +171,10 @@ export default function LoginPage() {
             </div>
           </form>
         )}
+
+        <div className="mt-4 flex justify-center">
+          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+        </div>
 
         {step === 'credentials' && (
           <>

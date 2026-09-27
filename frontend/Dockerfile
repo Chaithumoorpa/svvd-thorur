@@ -17,6 +17,13 @@ ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 ARG NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 
+# Cloudflare Turnstile site key (public by design - the secret key stays
+# backend-only, see TURNSTILE_SECRET_KEY). Same "must be a build ARG" rule -
+# baked into the client bundle at build time, not read at runtime. Empty by
+# default, which renders no widget and matches the backend's no-op fallback.
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
+
 # Read at build time by next.config.mjs's rewrites(), which Next.js resolves
 # once into .next/standalone's routing manifest - NOT re-read from the
 # runtime environment. Must be passed as a build arg, not just a container

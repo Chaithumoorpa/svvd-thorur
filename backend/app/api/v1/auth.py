@@ -17,8 +17,10 @@ from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
 from app.services.otp_service import OtpService
+from app.services.turnstile_service import TurnstileService
 from app.utils.dependencies import (
-    AuditContext, get_audit, get_current_user, get_db, get_otp_service, require_permission,
+    AuditContext, get_audit, get_current_user, get_db, get_otp_service, get_turnstile_service,
+    require_permission,
 )
 from app.utils.rate_limiter import enforce, get_client_ip, login_limiter, password_reset_limiter, register_limiter
 
@@ -36,9 +38,11 @@ def login(
     request: Request,
     service: AuthService = Depends(get_auth_service),
     otp_service: OtpService = Depends(get_otp_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
     db: Session = Depends(get_db),
 ):
-    """Step 1 of login: username and password. Rate limited per client IP.
+    """Step 1 of login: username and password. Rate limited per client IP,
+    plus a Turnstile challenge (see TurnstileService) when one is configured.
 
     An account with an email on file doesn't get a session yet - a sign-in
     code is emailed, and POST /auth/login/verify-otp completes it. An
@@ -48,6 +52,8 @@ def login(
     to log them in at all would lock real staff out of their own site."""
     if not login_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many login attempts. Please try again in a minute.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
 
     user = service.authenticate_user(payload)
 
@@ -97,12 +103,15 @@ def register(
     payload: PublicRegister,
     request: Request,
     service: AuthService = Depends(get_auth_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
 ):
     """Public self-registration. Always creates a GENERAL_USER (no admin access)."""
     if not settings.ALLOW_PUBLIC_REGISTRATION:
         raise HTTPException(status_code=403, detail="Registration is disabled")
     if not register_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many registration attempts. Please try again in a minute.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
     return service.create_general_user(payload)
 
 
@@ -111,10 +120,13 @@ def forgot_password(
     payload: PasswordResetRequest,
     request: Request,
     service: AuthService = Depends(get_auth_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
 ):
     """Always returns the same generic message, whether or not the email exists,
     so the response itself never reveals which accounts are registered."""
     enforce(password_reset_limiter, get_client_ip(request), "Too many reset requests. Please try again later.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
     result = service.request_password_reset(payload.email)
     if result:
         user, raw_token = result

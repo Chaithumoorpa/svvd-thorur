@@ -311,6 +311,32 @@ branch.
 - Log in as SUPER_ADMIN and fill in **Temple Info**/**Timings** — see the
   "Upgrading to SVVD 2.0" section of `DEPLOYMENT.md`
 
+## 8. Bot/brute-force protection (Cloudflare Turnstile)
+
+Login, registration, and forgot-password all verify a [Cloudflare
+Turnstile](https://developers.cloudflare.com/turnstile/) challenge when one
+is configured - a free, no-signup-hassle CAPTCHA alternative. Inert (skipped
+entirely, both frontend widget and backend check) until you set it up:
+
+1. Create a widget at https://dash.cloudflare.com/?to=/:account/turnstile for
+   `svvdthorur.org` - it gives you a **Site key** (public) and a **Secret
+   key** (keep private).
+2. Add both to the server's `.env` (same file as step 4 above):
+   ```bash
+   echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=<site key>" >> .env
+   echo "TURNSTILE_SECRET_KEY=<secret key>" >> .env
+   ```
+3. Rebuild - the site key is baked into the frontend bundle at build time,
+   so a plain restart isn't enough:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+   ```
+
+The backend fails a login/register/reset attempt closed if Turnstile is
+configured but verification errors out (Cloudflare unreachable, timeout) -
+see `TurnstileService`'s docstring for why that's the right default here,
+unlike the SES/S3 integrations above which always fail open.
+
 ## Updating the deployed site
 
 Normally automatic: every push to `development` triggers CI/CD (see below),

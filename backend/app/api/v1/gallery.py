@@ -2,6 +2,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Response
 
+from app.core.cache import cached, invalidate
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.models.user import User
@@ -42,7 +43,11 @@ def list_gallery(
     params: PageParams = Depends(page_params),
 ):
     """Public gallery (active items only). Paginated; total in `X-Total-Count`."""
-    items, total = paginate(service.query(active_only=True, category=category), params)
+    def compute():
+        items, total = paginate(service.query(active_only=True, category=category), params)
+        return [GalleryOut.model_validate(i) for i in items], total
+
+    items, total = cached(f"gallery:list:{category}:{params.page}:{params.page_size}", compute)
     set_total(response, total)
     response.headers["Cache-Control"] = "public, max-age=60"
     return items
@@ -69,6 +74,7 @@ def create_gallery_item(
 ):
     item = service.create_gallery(payload, user_id=user.id)
     audit.log("CREATE", "gallery", item.id, f"Added gallery item '{item.title}'")
+    invalidate("gallery:")
     return item
 
 
@@ -83,6 +89,7 @@ def update_gallery_item(
     item = service.update_gallery(gallery_id, payload)
     audit.log("UPDATE", "gallery", gallery_id, f"Updated gallery item '{item.title}'",
               payload.model_dump(exclude_unset=True))
+    invalidate("gallery:")
     return item
 
 
@@ -95,4 +102,5 @@ def delete_gallery_item(
 ):
     item = service.delete_gallery(gallery_id)
     audit.log("DELETE", "gallery", gallery_id, f"Deleted gallery item '{item.title}'")
+    invalidate("gallery:")
     return item

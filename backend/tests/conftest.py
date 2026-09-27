@@ -13,6 +13,7 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
+from app.core import cache as content_cache  # noqa: E402
 from app.core.database import get_db  # noqa: E402
 from app.core.security import create_access_token, hash_password  # noqa: E402
 from app.main import app  # noqa: E402
@@ -49,6 +50,10 @@ def client(db):
                     rate_limiter.password_reset_limiter, rate_limiter.otp_request_limiter,
                     rate_limiter.otp_verify_limiter):
         limiter.requests.clear()
+    # The content cache (app/core/cache.py) is also process-global - each test
+    # gets a fresh in-memory database above, so a cached response from a
+    # previous test would otherwise leak into this one.
+    content_cache._cache.clear()
     # No `with`: skips the lifespan (which validates Alembic against a real database).
     yield TestClient(app)
     app.dependency_overrides.clear()
