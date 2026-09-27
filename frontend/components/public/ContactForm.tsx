@@ -4,7 +4,9 @@ import React, { useState } from 'react';
 import { CheckCircle2, Send } from 'lucide-react';
 import Field from '@/components/ui/Field';
 import { Notice } from '@/components/ui/States';
+import TurnstileWidget from '@/components/ui/TurnstileWidget';
 import { btnPrimary, inputCls } from '@/components/ui/styles';
+import { useTurnstile } from '@/hooks/useTurnstile';
 import { apiError, submitContact } from '@/lib/api';
 
 export default function ContactForm() {
@@ -12,15 +14,21 @@ export default function ContactForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
+  const turnstile = useTurnstile();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      await submitContact({ ...form, name: form.name.trim(), subject: form.subject.trim(), message: form.message.trim() });
+      await submitContact({
+        ...form, name: form.name.trim(), subject: form.subject.trim(), message: form.message.trim(),
+        turnstile_token: turnstile.token || undefined,
+      });
+      turnstile.reset();
       setSent(true);
     } catch (err) {
+      turnstile.reset();
       setError(apiError(err, 'Your message could not be sent. Please try again.'));
     } finally {
       setBusy(false);
@@ -52,6 +60,7 @@ export default function ContactForm() {
       <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
         <label>Website<input tabIndex={-1} autoComplete="off" value={form.website} onChange={set('website')} /></label>
       </div>
+      <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
       <button type="submit" className={`${btnPrimary} w-full sm:w-auto`} disabled={busy || form.name.trim().length < 2 || !form.email || form.subject.trim().length < 3 || form.message.trim().length < 5}>
         <Send className="h-4 w-4" aria-hidden="true" /> {busy ? 'Sending…' : 'Send message'}
       </button>

@@ -255,6 +255,7 @@ export interface ContactInput {
   subject: string;
   message: string;
   website?: string;
+  turnstile_token?: string;
 }
 
 export type TicketStatus = 'ACTIVE' | 'USED' | 'CANCELLED';
@@ -296,6 +297,7 @@ export interface SevaBookingInput {
 export interface SevaBookingOnlineInput extends SevaBookingInput {
   email: string;
   booking_token: string;
+  turnstile_token?: string;
 }
 
 export interface CounterTicketInput extends SevaBookingInput {
@@ -427,10 +429,11 @@ export interface VisitorStats {
   today_visitors: number;
 }
 
-// ------------------------------------------------------------------- occasion blessings
-export type BlessingPaymentStatus = 'PENDING' | 'PAID';
+// ------------------------------------------------------------------------ abhishekam
+export type AbhishekamPaymentStatus = 'PENDING' | 'PAID';
+export type AbhishekamVisibility = 'PUBLIC' | 'PRIVATE';
 
-export interface OccasionBlessing {
+export interface Abhishekam {
   id: string;
   reference_number: string;
   devotee_name: string;
@@ -441,14 +444,15 @@ export interface OccasionBlessing {
   relation: string | null;
   message: string | null;
   photo_url: string;
+  visibility: AbhishekamVisibility;
   amount: number;
-  payment_status: BlessingPaymentStatus;
+  payment_status: AbhishekamPaymentStatus;
   paid_at: string | null;
   collected_by_admin_id: number | null;
   created_at: string;
 }
 
-export interface OccasionBlessingInput {
+export interface AbhishekamCreateInput {
   devotee_name: string;
   mobile_number: string;
   email: string;
@@ -457,10 +461,12 @@ export interface OccasionBlessingInput {
   relation?: string;
   message?: string;
   photo_url: string;
+  visibility: AbhishekamVisibility;
   booking_token: string;
+  turnstile_token?: string;
 }
 
-export interface OccasionBlessingView {
+export interface AbhishekamPersonalPageView {
   status: 'pending' | 'active' | 'expired';
   reference_number: string;
   occasion: string;
@@ -470,4 +476,26 @@ export interface OccasionBlessingView {
   message: string | null;
   photo_url: string | null;
   expires_at: string | null;
+}
+
+/** One day's slot usage for the public 365-day calendar grid - every day of
+ * the year, zero-filled, same shape whether or not anyone booked that day. */
+export interface AbhishekamCalendarDay {
+  date: string;
+  slots_used: number;
+  slots_total: number;
+}
+
+/** One PUBLIC, PAID booking shown on a clicked day's flyer. */
+export interface AbhishekamDayEntry {
+  devotee_name: string;
+  occasion: string;
+  photo_url: string;
+}
+
+export interface AbhishekamDayFlyer {
+  date: string;
+  slots_used: number;
+  slots_total: number;
+  entries: AbhishekamDayEntry[];
 }

@@ -1,12 +1,13 @@
 import axios, { AxiosError } from 'axios';
 import type {
-  ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog, CommitteeMember,
-  ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats, Donation,
-  DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
+  Abhishekam, AbhishekamCalendarDay, AbhishekamCreateInput, AbhishekamDayFlyer,
+  AbhishekamPersonalPageView, ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog,
+  CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
+  Donation, DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
   GalleryInput, GalleryItem, HomePayload, IncomeInput, LedgerEntry, Me, Member, MemberInput,
-  OccasionBlessing, OccasionBlessingInput, OccasionBlessingView, Paged, Pooja, PoojaInput,
-  SevaBookingOnlineInput, SevaTicket, Temple, TempleTiming, TempleTimingInput, TempleUpdate,
-  TicketStatus, UploadUrlResponse, UserCreateInput, UserUpdateInput, VisitorStats,
+  Paged, Pooja, PoojaInput, SevaBookingOnlineInput, SevaTicket, Temple, TempleTiming,
+  TempleTimingInput, TempleUpdate, TicketStatus, UploadUrlResponse, UserCreateInput,
+  UserUpdateInput, VisitorStats,
 } from './types';
 
 export * from './types';
@@ -178,21 +179,21 @@ export const verifyBookingOtp = async (email: string, code: string) =>
   (await api.post<{ booking_token: string }>('/seva-tickets/booking/verify-otp', { email, code })).data;
 export const bookSeva = async (data: SevaBookingOnlineInput) => (await api.post<SevaTicket>('/seva-tickets/', data)).data;
 
-// --------------------------------------------------------------- occasion blessings
-export const requestOccasionOtp = async (email: string) =>
-  (await api.post<{ message: string }>('/occasion-blessings/request-otp', { email })).data;
-export const verifyOccasionOtp = async (email: string, code: string) =>
-  (await api.post<{ booking_token: string }>('/occasion-blessings/verify-otp', { email, code })).data;
-export const createOccasionBlessing = async (data: OccasionBlessingInput) =>
-  (await api.post<OccasionBlessing>('/occasion-blessings', data)).data;
-export const getOccasionBlessingView = async (id: string) =>
-  (await api.get<OccasionBlessingView>(`/occasion-blessings/${id}/view`)).data;
+// ------------------------------------------------------------------------- abhishekam
+export const requestAbhishekamOtp = async (email: string) =>
+  (await api.post<{ message: string }>('/abhishekams/request-otp', { email })).data;
+export const verifyAbhishekamOtp = async (email: string, code: string) =>
+  (await api.post<{ booking_token: string }>('/abhishekams/verify-otp', { email, code })).data;
+export const createAbhishekam = async (data: AbhishekamCreateInput) =>
+  (await api.post<Abhishekam>('/abhishekams', data)).data;
+export const getAbhishekamView = async (id: string) =>
+  (await api.get<AbhishekamPersonalPageView>(`/abhishekams/${id}/view`)).data;
 
 /** Uploads the devotee's occasion photo straight to S3 (presigned POST, public
  * but rate limited - no admin auth at this point in the flow) and returns its
  * public URL. Same pattern as uploadGalleryPhoto/uploadMemberPhoto. */
-export async function uploadOccasionPhoto(file: File): Promise<string> {
-  const { data } = await api.post<UploadUrlResponse>('/occasion-blessings/upload-url', { content_type: file.type });
+export async function uploadAbhishekamPhoto(file: File): Promise<string> {
+  const { data } = await api.post<UploadUrlResponse>('/abhishekams/upload-url', { content_type: file.type });
   const form = new FormData();
   Object.entries(data.fields).forEach(([key, value]) => form.append(key, value));
   form.append('file', file);
@@ -200,10 +201,18 @@ export async function uploadOccasionPhoto(file: File): Promise<string> {
   return data.public_url;
 }
 
-export const listOccasionBlessings = (p = 1, pendingOnly = false, pageSize = 50) =>
-  page<OccasionBlessing>('/occasion-blessings', { page: p, page_size: pageSize, pending_only: pendingOnly || undefined });
-export const collectOccasionBlessingPayment = async (id: string) =>
-  (await api.post<OccasionBlessing>(`/occasion-blessings/${id}/collect-payment`)).data;
+/** Every day of `year`, zero-filled - the 365-day grid, replicating the
+ * temple's paper Abhishekam register. Public, cached briefly server-side. */
+export const getAbhishekamCalendar = async (year: number) =>
+  (await api.get<AbhishekamCalendarDay[]>('/abhishekams/calendar', { params: { year } })).data;
+/** The flyer for one clicked day - PUBLIC+PAID entries only. */
+export const getAbhishekamDayFlyer = async (date: string) =>
+  (await api.get<AbhishekamDayFlyer>(`/abhishekams/calendar/${date}`)).data;
+
+export const listAbhishekams = (p = 1, pendingOnly = false, pageSize = 50) =>
+  page<Abhishekam>('/abhishekams', { page: p, page_size: pageSize, pending_only: pendingOnly || undefined });
+export const collectAbhishekamPayment = async (id: string) =>
+  (await api.post<Abhishekam>(`/abhishekams/${id}/collect-payment`)).data;
 
 // -------------------------------------------------------------------- announcements
 export const getAnnouncements = async () => (await api.get<Announcement[]>('/announcements/')).data;

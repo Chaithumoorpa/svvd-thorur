@@ -6,29 +6,29 @@ import { Banknote, ExternalLink, HeartHandshake } from 'lucide-react';
 import AdminPage, { StatusPill } from '@/components/admin/AdminPage';
 import Pager from '@/components/ui/Pager';
 import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
-import { btnGhost, cardCls, inputCls } from '@/components/ui/styles';
+import { btnGhost, cardCls } from '@/components/ui/styles';
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
-import { collectOccasionBlessingPayment, listOccasionBlessings } from '@/lib/api';
+import { collectAbhishekamPayment, listAbhishekams } from '@/lib/api';
 import { formatDate, formatMoney } from '@/lib/format';
 
 const PAGE_SIZE = 25;
 
-export default function OccasionBlessingsAdmin() {
+export default function AbhishekamAdmin() {
   const [page, setPage] = useState(1);
   const [pendingOnly, setPendingOnly] = useState(true);
-  const list = useLoad(() => listOccasionBlessings(page, pendingOnly, PAGE_SIZE), [page, pendingOnly]);
+  const list = useLoad(() => listAbhishekams(page, pendingOnly, PAGE_SIZE), [page, pendingOnly]);
   const action = useAction();
 
   async function collect(id: string) {
-    const ok = await action.run(() => collectOccasionBlessingPayment(id), 'Payment collected - the page is now live for 7 days.');
+    const ok = await action.run(() => collectAbhishekamPayment(id), 'Payment collected - the page is now live for 7 days.');
     if (ok) list.reload();
   }
 
   return (
     <AdminPage
-      title="Occasion Blessings"
-      description="Devotees' paid photo + occasion pages (Rs. 50, pay-at-counter). Collect payment here to make a page go live for 7 days."
+      title="Abhishekam"
+      description="Devotees' paid photo + occasion pages (Rs. 50, pay-at-counter, 7 slots/day). Collect payment here to make a page go live for 7 days."
     >
       <div className="mb-4 flex items-center gap-2">
         <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -49,17 +49,18 @@ export default function OccasionBlessingsAdmin() {
       ) : list.error ? (
         <ErrorBlock message={list.error} onRetry={list.reload} />
       ) : !list.data?.items.length ? (
-        <EmptyBlock icon={<HeartHandshake className="h-10 w-10" />} title="No requests" hint={pendingOnly ? 'Nothing waiting on payment right now.' : 'No Occasion Blessing requests yet.'} />
+        <EmptyBlock icon={<HeartHandshake className="h-10 w-10" />} title="No requests" hint={pendingOnly ? 'Nothing waiting on payment right now.' : 'No Abhishekam requests yet.'} />
       ) : (
         <>
           <div className={`${cardCls} overflow-x-auto`}>
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th scope="col" className="px-4 py-3">Reference</th>
                   <th scope="col" className="px-4 py-3">Devotee</th>
                   <th scope="col" className="px-4 py-3">Occasion</th>
                   <th scope="col" className="px-4 py-3">Date</th>
+                  <th scope="col" className="px-4 py-3">Visibility</th>
                   <th scope="col" className="px-4 py-3 text-right">Fee</th>
                   <th scope="col" className="px-4 py-3">Status</th>
                   <th scope="col" className="px-4 py-3"><span className="sr-only">Actions</span></th>
@@ -78,6 +79,9 @@ export default function OccasionBlessingsAdmin() {
                       {b.relation && <div className="text-xs text-gray-400">{b.relation}</div>}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{formatDate(b.occasion_date)}</td>
+                    <td className="px-4 py-3">
+                      <StatusPill on={b.visibility === 'PUBLIC'} onLabel="Public" offLabel="Private" />
+                    </td>
                     <td className="px-4 py-3 text-right font-medium">{formatMoney(b.amount)}</td>
                     <td className="px-4 py-3">
                       <StatusPill on={b.payment_status === 'PAID'} onLabel="Paid" offLabel="Pending" />
@@ -89,7 +93,7 @@ export default function OccasionBlessingsAdmin() {
                             <Banknote className="h-4 w-4" aria-hidden="true" /> Collect payment
                           </button>
                         ) : (
-                          <Link href={`/blessings/${b.id}`} target="_blank" className={btnGhost}>
+                          <Link href={`/abhishekam/${b.id}`} target="_blank" className={btnGhost}>
                             <ExternalLink className="h-4 w-4" aria-hidden="true" /> View page
                           </Link>
                         )}
