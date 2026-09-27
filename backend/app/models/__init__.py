@@ -15,3 +15,4 @@ from app.models.audit_log import AuditLog
 from app.models.temple_timing import TempleTiming
 from app.models.password_reset import PasswordResetToken
 from app.models.email_otp import EmailOtp
+from app.models.occasion_blessing import OccasionBlessing

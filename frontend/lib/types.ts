@@ -426,3 +426,48 @@ export interface VisitorStats {
   total_visitors: number;
   today_visitors: number;
 }
+
+// ------------------------------------------------------------------- occasion blessings
+export type BlessingPaymentStatus = 'PENDING' | 'PAID';
+
+export interface OccasionBlessing {
+  id: string;
+  reference_number: string;
+  devotee_name: string;
+  mobile_number: string;
+  email: string;
+  occasion: string;
+  occasion_date: string;
+  relation: string | null;
+  message: string | null;
+  photo_url: string;
+  amount: number;
+  payment_status: BlessingPaymentStatus;
+  paid_at: string | null;
+  collected_by_admin_id: number | null;
+  created_at: string;
+}
+
+export interface OccasionBlessingInput {
+  devotee_name: string;
+  mobile_number: string;
+  email: string;
+  occasion: string;
+  occasion_date: string;
+  relation?: string;
+  message?: string;
+  photo_url: string;
+  booking_token: string;
+}
+
+export interface OccasionBlessingView {
+  status: 'pending' | 'active' | 'expired';
+  reference_number: string;
+  occasion: string;
+  occasion_date: string;
+  devotee_name: string | null;
+  relation: string | null;
+  message: string | null;
+  photo_url: string | null;
+  expires_at: string | null;
+}

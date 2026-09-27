@@ -25,6 +25,7 @@ from app.services.festival_service import FestivalService
 from app.services.gallery_service import GalleryService
 from app.services.member_service import MemberService
 from app.services.pooja_service import PoojaService
+from app.services.occasion_blessing_service import OccasionBlessingService
 from app.services.otp_service import OtpService
 from app.services.seva_ticket_service import SevaTicketService
 from app.services.storage_service import StorageService
@@ -212,6 +213,10 @@ def get_otp_service(db: Session = Depends(get_db)) -> OtpService:
 
 def get_turnstile_service() -> TurnstileService:
     return TurnstileService()
+
+
+def get_occasion_blessing_service(db: Session = Depends(get_db)) -> OccasionBlessingService:
+    return OccasionBlessingService(db)
 
 
 def get_announcement_repository(db: Session = Depends(get_db)) -> AnnouncementRepository:

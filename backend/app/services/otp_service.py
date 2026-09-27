@@ -14,17 +14,23 @@ MAX_ATTEMPTS = 5
 BOOKING_TOKEN_TTL = timedelta(minutes=30)
 BOOKING_PURPOSE = "seva_booking"
 LOGIN_PURPOSE = "login"
+OCCASION_PURPOSE = "occasion_blessing"
 
 
 class OtpService:
-    """Email one-time-code verification. Two purposes share this table/logic,
-    kept apart by `purpose` so a booking code and a sign-in code for the same
-    address never collide or get cross-verified:
+    """Email one-time-code verification. Three purposes share this table/
+    logic, kept apart by `purpose` so a code for one never collides with or
+    gets cross-verified against another:
     - seva_booking: gates public online booking on a real, reachable email,
       without a full account/login (see request_otp/verify_otp).
     - login: the second factor on top of password for any account with an
       email on file (see request_login_otp/verify_login_otp) - accounts with
-      no email skip this, since there'd be nowhere to send the code."""
+      no email skip this, since there'd be nowhere to send the code.
+    - occasion_blessing: same shape as seva_booking, gating the public
+      Occasion Blessing purchase form (see request_occasion_otp/
+      verify_occasion_otp) - kept separate rather than reusing
+      seva_booking's purpose since the two are otherwise-unrelated
+      resources that happen to share this verification pattern."""
 
     def __init__(self, db: Session):
         self.db = db
@@ -126,3 +132,34 @@ class OtpService:
 
     def verify_login_otp(self, email: str, code: str) -> None:
         self._consume_code(email.strip().lower(), LOGIN_PURPOSE, code)
+
+    # ---- occasion blessing (public, no account required) -------------------------------
+    def request_occasion_otp(self, email: str) -> str:
+        email = email.strip().lower()
+        code = self._create_code(email, OCCASION_PURPOSE)
+        sent = EmailService().send(
+            email,
+            "Your SVVD Thorur verification code",
+            f"Your verification code is: {code}\n\n"
+            "It is valid for 10 minutes - enter it to continue with your Occasion Blessing request.\n\n"
+            "If you didn't request this, you can safely ignore this email.\n\n"
+            "Thank you,\nSVVD Thorur",
+        )
+        if not sent:
+            raise HTTPException(
+                status_code=502,
+                detail="Could not send the verification email. Please check the address and try again.",
+            )
+        return code
+
+    def verify_occasion_otp(self, email: str, code: str) -> str:
+        email = email.strip().lower()
+        self._consume_code(email, OCCASION_PURPOSE, code)
+        return create_access_token({"purpose": OCCASION_PURPOSE, "email": email}, expires_delta=BOOKING_TOKEN_TTL)
+
+    @staticmethod
+    def check_occasion_token(token: str, email: str) -> None:
+        payload = decode_access_token(token)
+        if not payload or payload.get("purpose") != OCCASION_PURPOSE \
+                or payload.get("email") != email.strip().lower():
+            raise HTTPException(status_code=400, detail="Please verify your email again")
