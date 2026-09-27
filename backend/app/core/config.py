@@ -84,6 +84,12 @@ class Settings(BaseSettings):
     # Public site origin, used to build links inside outgoing emails (password reset, etc).
     FRONTEND_BASE_URL: str = "https://svvdthorur.org"
 
+    # Where the temple is - festival dates are computed for local sunrise,
+    # moonrise etc. (app/services/panchang.py). Thorrur, Mahabubabad district.
+    TEMPLE_LATITUDE: float = 17.5857
+    TEMPLE_LONGITUDE: float = 79.6578
+    TEMPLE_ELEVATION: float = 250.0
+
     # Cloudflare Turnstile (bot/brute-force challenge on login, register, forgot-password).
     # Unset = verification is skipped rather than failing closed - matches SES/S3 above,
     # so local dev and any environment without keys configured still works.

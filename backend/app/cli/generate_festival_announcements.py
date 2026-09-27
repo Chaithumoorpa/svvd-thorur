@@ -1,5 +1,7 @@
-"""Creates the day's due festival announcements (Sankashti Chaturthi and any
-other festival/occasion with auto_announce on) and exits. Meant to run once a
+"""Keeps the festival calendar a year ahead (computed dates - Sankashti
+Chaturthi, Ganesh Chaturthi, Ugadi, ...: app/services/festival_calendar.py),
+then creates the day's due festival announcements (any festival with
+auto_announce on) and exits. Meant to run once a
 day from cron on the EC2 host, the same way as deploy/aws/backup-db.sh - see
 the "Festival announcements" section of DEPLOY_AWS.md for the crontab line.
 Idempotent: a festival already linked to an announcement is skipped, so
@@ -14,6 +16,7 @@ from app.core.logging_config import setup_logging
 from app.repositories.announcement_repo import AnnouncementRepository
 from app.repositories.festival_repo import FestivalRepository
 from app.services.festival_announcement_service import FestivalAnnouncementService
+from app.services.festival_calendar import FestivalCalendarService
 
 logger = setup_logging()
 
@@ -21,6 +24,8 @@ logger = setup_logging()
 def main() -> None:
     db = SessionLocal()
     try:
+        added = FestivalCalendarService(FestivalRepository(db)).fill()
+        logger.info("Festival calendar: added %d upcoming festival(s).", len(added))
         service = FestivalAnnouncementService(FestivalRepository(db), AnnouncementRepository(db))
         created = service.generate_due_announcements()
         if created:

@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
+import TempleTime from '@/components/public/TempleTime';
 import { CalendarDays, Clock, HandHeart, MapPin, Megaphone, Sparkles } from 'lucide-react';
 import DeityCarousel from '@/components/DeityCarousel';
 import JsonLd from '@/components/public/JsonLd';
 import SectionHeading from '@/components/public/SectionHeading';
 import { Link } from '@/i18n/navigation';
-import { formatDate, formatTime, formatTimeRange, parseDate } from '@/lib/format';
+import { formatDate, parseDate } from '@/lib/format';
 import { fetchHome } from '@/lib/server-api';
 import { SITE_URL, localizedAlternates, templeAddress, templeName } from '@/lib/site';
 
@@ -68,7 +69,7 @@ export default async function HomePage() {
               {timings.map((timing) => (
                 <li key={timing.id} className="text-sm">
                   <span className="text-gray-500">{timing.label}</span>
-                  <span className="ml-2 font-semibold text-gray-900">{formatTimeRange(timing.start_time, timing.end_time)}</span>
+                  <span className="ml-2 font-semibold text-gray-900"><TempleTime start={timing.start_time} end={timing.end_time} yourTimeLabel={tCommon('yourTime')} /></span>
                 </li>
               ))}
             </ul>
@@ -144,7 +145,7 @@ export default async function HomePage() {
                 <li key={p.id} className="rounded-xl bg-white/10 p-6 backdrop-blur-sm">
                   <Sparkles className="mx-auto mb-3 h-7 w-7 text-saffron-light" aria-hidden="true" />
                   <h3 className="font-serif text-lg font-bold">{p.name}</h3>
-                  <p className="mt-1 text-sm text-saffron-light">{p.start_time ? formatTime(p.start_time) : t('anytime')}</p>
+                  <p className="mt-1 text-sm text-saffron-light">{p.start_time ? <TempleTime start={p.start_time} yourTimeLabel={tCommon('yourTime')} stacked localClassName="text-xs text-amber-100/80" /> : t('anytime')}</p>
                 </li>
               ))}
             </ul>

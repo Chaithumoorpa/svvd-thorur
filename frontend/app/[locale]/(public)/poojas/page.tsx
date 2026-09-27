@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import NextLink from 'next/link';
 import { CalendarDays, Clock, Sparkles } from 'lucide-react';
 import BookSeva from '@/components/public/BookSeva';
+import TempleTime from '@/components/public/TempleTime';
 import { PageShell } from '@/components/public/SectionHeading';
 import { Link } from '@/i18n/navigation';
 import { formatMoney, formatTimeRange } from '@/lib/format';
@@ -24,6 +25,7 @@ const GROUPS: Array<{ id: string; titleKey: string; types: string[] }> = [
 
 function PoojaCard({ p }: { p: Pooja }) {
   const t = useTranslations('poojas');
+  const tCommon = useTranslations('common');
   const time = formatTimeRange(p.start_time, p.end_time);
   return (
     <li className="flex flex-col rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
@@ -33,7 +35,7 @@ function PoojaCard({ p }: { p: Pooja }) {
           {p.is_paid ? formatMoney(p.suggested_amount) : t('free')}
         </span>
       </div>
-      {time && <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500"><Clock className="h-3.5 w-3.5" aria-hidden="true" />{time}</p>}
+      {time && <p className="mt-1 flex items-start gap-1.5 text-sm text-gray-500"><Clock className="mt-0.5 h-3.5 w-3.5 flex-none" aria-hidden="true" /><span><TempleTime start={p.start_time} end={p.end_time} yourTimeLabel={tCommon('yourTime')} stacked /></span></p>}
       {p.description && <p className="mt-3 text-sm leading-relaxed text-gray-700">{p.description}</p>}
       <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-4">
         <BookSeva seva={p} />

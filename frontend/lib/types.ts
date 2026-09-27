@@ -92,6 +92,8 @@ export interface Festival {
   is_active: boolean;
   auto_announce: boolean;
   announce_days_before: number;
+  /** Set when the festival calendar computed this date (e.g. "sankashti-chaturthi:2026-10-29"). */
+  source_key?: string | null;
 }
 
 export interface FestivalInput {

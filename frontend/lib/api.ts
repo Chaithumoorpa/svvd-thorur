@@ -217,6 +217,8 @@ export const getFestivals = async (upcoming = false) =>
   (await api.get<Festival[]>('/festivals/', { params: { upcoming } })).data;
 export const listAllFestivals = (p = 1, pageSize = 50) => page<Festival>('/festivals/admin/all', { page: p, page_size: pageSize });
 export const createFestival = async (data: FestivalInput) => (await api.post<Festival>('/festivals/', data)).data;
+/** Adds the computed festivals for the next 12 months that aren't there yet (the daily cron job does the same). */
+export const fillFestivalCalendar = async () => (await api.post<{ added: number }>('/festivals/calendar/fill')).data;
 export const updateFestival = async (id: number, data: Partial<FestivalInput>) =>
   (await api.put<Festival>(`/festivals/${id}`, data)).data;
 export const deleteFestival = async (id: number) => (await api.delete<Festival>(`/festivals/${id}`)).data;

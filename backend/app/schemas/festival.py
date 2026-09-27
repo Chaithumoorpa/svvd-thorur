@@ -61,6 +61,7 @@ class FestivalOut(BaseModel):
     is_active: bool
     auto_announce: bool
     announce_days_before: int
+    source_key: Optional[str] = None  # set when computed by the festival calendar
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)

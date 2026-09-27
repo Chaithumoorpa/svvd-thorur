@@ -16,6 +16,19 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const ended = (f: Festival, today: string) => !!f.festival_date && (f.end_date ?? f.festival_date) < today;
 
+/** A year of festivals (the computed calendar adds every Sankashti etc.) reads
+ * better month by month; undated ones go last. */
+function byMonth(list: Festival[]): Array<{ label: string | null; items: Festival[] }> {
+  const groups: Array<{ label: string | null; items: Festival[] }> = [];
+  for (const f of list) {
+    const label = f.festival_date ? parseDate(f.festival_date).toLocaleString('en-IN', { month: 'long', year: 'numeric' }) : null;
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(f);
+    else groups.push({ label, items: [f] });
+  }
+  return groups;
+}
+
 function FestivalCard({ f, muted }: { f: Festival; muted?: boolean }) {
   const t = useTranslations('festivals');
   const d = f.festival_date ? parseDate(f.festival_date) : null;
@@ -63,7 +76,14 @@ export default async function FestivalsPage() {
       <section aria-labelledby="up-heading">
         <h2 id="up-heading" className="mb-4 font-serif text-2xl font-bold text-maroon">{t('upcomingHeading')}</h2>
         {upcoming.length ? (
-          <div className="space-y-4">{upcoming.map((f) => <FestivalCard key={f.id} f={f} />)}</div>
+          <div className="space-y-8">
+            {byMonth(upcoming).map((g) => (
+              <div key={g.label ?? 'tba'}>
+                {g.label && <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-amber-800">{g.label}</h3>}
+                <div className="space-y-4">{g.items.map((f) => <FestivalCard key={f.id} f={f} />)}</div>
+              </div>
+            ))}
+          </div>
         ) : (
           <p className="rounded-xl border border-dashed border-amber-300 bg-white p-8 text-center text-gray-500">{t('noUpcoming')}</p>
         )}

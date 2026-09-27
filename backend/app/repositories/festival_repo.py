@@ -52,6 +52,12 @@ class FestivalRepository(BaseRepository):
             .all()
         )
 
+    def existing_source_keys(self, keys):
+        if not keys:
+            return set()
+        rows = self.db.query(Festival.source_key).filter(Festival.source_key.in_(list(keys))).all()
+        return {key for (key,) in rows}
+
     def get_by_id(self, festival_id: int):
         return self.db.query(Festival).filter(Festival.id == festival_id).first()
 

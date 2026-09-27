@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { CalendarDays, Clock } from 'lucide-react';
 import BookSeva from '@/components/public/BookSeva';
+import TempleTime from '@/components/public/TempleTime';
 import { ErrorBlock, LoadingBlock } from '@/components/ui/States';
 import { btnGhost } from '@/components/ui/styles';
 import { useBlessingSeva } from '@/hooks/useBlessingSeva';
@@ -40,7 +41,7 @@ export default function AbhishekamPage() {
             {formatTimeRange(seva.data.start_time, seva.data.end_time) && (
               <p className="mt-1 inline-flex items-center gap-1 text-sm text-gray-500">
                 <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                {formatTimeRange(seva.data.start_time, seva.data.end_time)}
+                <span><TempleTime start={seva.data.start_time} end={seva.data.end_time} stacked /></span>
               </p>
             )}
             {seva.data.description && <p className="mt-3 text-sm text-gray-700">{seva.data.description}</p>}

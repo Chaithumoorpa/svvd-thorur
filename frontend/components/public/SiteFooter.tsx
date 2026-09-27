@@ -1,8 +1,8 @@
 import { getTranslations } from 'next-intl/server';
+import TempleTime from '@/components/public/TempleTime';
 import NextLink from 'next/link';
 import { Facebook, Instagram, Mail, MapPin, Phone, Youtube } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
-import { formatTimeRange } from '@/lib/format';
 import { fetchTemple, fetchTimings } from '@/lib/server-api';
 import { isEmbeddableMap, NAV_LINKS, templeAddress, templeName } from '@/lib/site';
 import VisitorCount from './VisitorCount';
@@ -45,7 +45,7 @@ export default async function SiteFooter() {
               {timings.map((timing) => (
                 <li key={timing.id}>
                   <span className="block text-amber-100/70">{timing.label}{timing.days !== 'Daily' ? ` (${timing.days})` : ''}</span>
-                  <span className="font-medium">{formatTimeRange(timing.start_time, timing.end_time)}</span>
+                  <span className="font-medium"><TempleTime start={timing.start_time} end={timing.end_time} yourTimeLabel={tCommon('yourTime')} stacked localClassName="text-xs font-normal text-amber-100/70" /></span>
                 </li>
               ))}
             </ul>
