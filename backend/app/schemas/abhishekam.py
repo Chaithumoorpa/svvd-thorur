@@ -39,6 +39,13 @@ class AbhishekamCreate(BaseModel):
     def _blank(cls, v):
         return blank_to_none(v)
 
+    @field_validator("occasion_date")
+    @classmethod
+    def _not_past(cls, v: date) -> date:
+        if v < date.today():
+            raise ValueError("The Abhishekam date can't be in the past")
+        return v
+
 
 class AbhishekamOut(BaseModel):
     """Admin/staff view - every field, for the counter-collection list."""
@@ -57,16 +64,21 @@ class AbhishekamOut(BaseModel):
     payment_status: AbhishekamPaymentStatus
     paid_at: Optional[datetime] = None
     collected_by_admin_id: Optional[int] = None
+    greeting_sent_at: Optional[datetime] = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+BlessingStatus = Literal["upcoming", "active", "archived"]
 
 
 class AbhishekamPersonalPageOut(BaseModel):
     """The devotee's own dedicated link - shape depends on `status`:
     - pending: occasion/reference only, nothing paid-for yet.
-    - active: everything, plus `expires_at` so the page can show a countdown.
+    - scheduled: paid, but occasion_date hasn't arrived yet.
+    - active: everything, from occasion_date through `visible_until`.
     - expired: same as pending - the 7-day window has passed."""
-    status: Literal["pending", "active", "expired"]
+    status: Literal["pending", "scheduled", "active", "expired"]
     reference_number: str
     occasion: str
     occasion_date: date
@@ -74,7 +86,7 @@ class AbhishekamPersonalPageOut(BaseModel):
     relation: Optional[str] = None
     message: Optional[str] = None
     photo_url: Optional[str] = None
-    expires_at: Optional[datetime] = None
+    visible_until: Optional[date] = None
 
 
 class AbhishekamCalendarDay(BaseModel):
@@ -85,15 +97,21 @@ class AbhishekamCalendarDay(BaseModel):
 
 
 class AbhishekamDayEntry(BaseModel):
-    """One PUBLIC, PAID booking shown on a day's flyer - never a PENDING or
-    PRIVATE one, see AbhishekamService.day_flyer."""
+    """One PUBLIC, PAID booking on a day - never a PENDING or PRIVATE one, see
+    AbhishekamService.day_flyer. Name + occasion always (the permanent public
+    timeline); relation + photo only while that day's blessings are active."""
     devotee_name: str
     occasion: str
-    photo_url: str
+    relation: Optional[str] = None
+    photo_url: Optional[str] = None
 
 
 class AbhishekamDayFlyer(BaseModel):
+    """A day on the public calendar: the pop-up when its square is clicked,
+    and the data for that date's public blessings page."""
     date: date
     slots_used: int
     slots_total: int
+    blessing_status: BlessingStatus
+    visible_until: date
     entries: List[AbhishekamDayEntry]

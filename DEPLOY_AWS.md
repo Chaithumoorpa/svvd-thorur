@@ -415,6 +415,23 @@ announcements.py`, alongside `backup-db.sh`:
   exec -T backend python -m app.cli.generate_festival_announcements >> /home/ubuntu/backups/festival-announce.log 2>&1
 ```
 
+## Occasion greetings
+
+Abhishekam bookings, and seva bookings with an occasion (birthday,
+anniversary, ...), get their blessing email **on the booked date** - not when
+payment is collected. A booking paid for on or after its date is greeted
+immediately; everything else is sent by `app/cli/send_occasion_greetings.py`
+on the day. Without this cron line, greetings for dates paid in advance are
+never sent. The job is idempotent - a booking is never greeted twice - so
+running it more than once a day is harmless.
+
+```bash
+# crontab -e (on the instance) - daily at 00:35 UTC = 06:05 IST (EC2's clock
+# is UTC; the job itself works out "today" in the container's IST timezone)
+35 0 * * * cd /home/ubuntu/svvd-thorur && docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  exec -T backend python -m app.cli.send_occasion_greetings >> /home/ubuntu/backups/occasion-greetings.log 2>&1
+```
+
 ## CI/CD: auto-deploy on push to `development`
 
 `.github/workflows/deploy.yml` SSHes into the instance on every push to

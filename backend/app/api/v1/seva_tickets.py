@@ -7,11 +7,12 @@ from datetime import date, datetime
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.utils.dependencies import (
-    AuditContext, get_audit, get_current_user, get_current_user_optional, get_otp_service,
-    get_seva_ticket_service, get_turnstile_service, require_admin, require_permission,
+    AuditContext, get_audit, get_current_user, get_current_user_optional, get_occasion_greeting_service,
+    get_otp_service, get_seva_ticket_service, get_turnstile_service, require_admin, require_permission,
 )
 from app.utils.rate_limiter import booking_limiter, enforce, get_client_ip, otp_request_limiter, otp_verify_limiter
 from app.services.email_service import EmailService
+from app.services.occasion_greeting_service import OccasionGreetingService
 from app.services.otp_service import OtpService
 from app.services.seva_ticket_service import PaymentPendingError, SevaTicketService
 from app.services.turnstile_service import TurnstileService
@@ -30,25 +31,6 @@ from app.models.user import User
 router = APIRouter(prefix="/seva-tickets", tags=["Seva Tickets"])
 
 _manage = require_permission(Permission.TICKETS_MANAGE)
-
-
-def _send_occasion_blessing(ticket) -> None:
-    """A devotee who said what their booking is for (a birthday, a wedding
-    anniversary, ...) gets a personal blessing once the seva is actually paid
-    for - immediately for a FREE seva, or once the fee is collected at the
-    counter for a paid one. Never sent for a ticket with no occasion set."""
-    if not ticket.occasion or not ticket.email:
-        return
-    EmailService().send(
-        ticket.email,
-        f"Blessings on your {ticket.occasion}",
-        f"Dear {ticket.devotee_name},\n\n"
-        f"On the occasion of your {ticket.occasion}, Sri Varasidhi Vinayaka Swamy Devasthanam "
-        f"sends you and your family warm greetings and blessings.\n\n"
-        f"Your {ticket.seva_name} seva (ticket {ticket.ticket_number}) has been received with "
-        "your intentions for this occasion.\n\n"
-        "Thank you,\nSVVD Thorur",
-    )
 
 
 @router.post("/booking/request-otp", response_model=dict)
@@ -83,6 +65,7 @@ def book_seva_ticket(
     request: Request,
     service: SevaTicketService = Depends(get_seva_ticket_service),
     turnstile: TurnstileService = Depends(get_turnstile_service),
+    greetings: OccasionGreetingService = Depends(get_occasion_greeting_service),
     current_user: User | None = Depends(get_current_user_optional),
 ):
     """
@@ -120,11 +103,11 @@ def book_seva_ticket(
         "Please show this ticket number at the temple counter.\n\n"
         "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
     )
-    if ticket.payment_status.value != "PENDING":
-        # FREE - nothing left to pay, so the occasion is "settled" right away.
-        # A PENDING (pay-at-counter) ticket gets its blessing once the fee is
-        # actually collected - see collect_ticket_payment below.
-        _send_occasion_blessing(ticket)
+    # A FREE seva booked for today gets its occasion blessing now; one booked
+    # for a later date gets it on that date (cron), and a PENDING one once
+    # its fee is collected - see collect_ticket_payment below.
+    if greetings.seva_due(ticket, date.today()):
+        greetings.send_seva(ticket)
     return ticket
 
 
@@ -174,6 +157,7 @@ def list_my_tickets(
 def collect_ticket_payment(
     ticket_id: UUID,
     service: SevaTicketService = Depends(get_seva_ticket_service),
+    greetings: OccasionGreetingService = Depends(get_occasion_greeting_service),
     audit: AuditContext = Depends(get_audit),
     admin_user: User = Depends(_manage),
 ):
@@ -182,7 +166,10 @@ def collect_ticket_payment(
     ticket = service.collect_payment(ticket_id, admin_user)
     audit.log("COLLECT_PAYMENT", "seva_ticket", ticket.id, f"Collected payment for ticket {ticket.ticket_number}",
               {"amount": ticket.amount})
-    _send_occasion_blessing(ticket)
+    # Paid on (or just after) the seva date: the cron run for that day has
+    # already skipped this ticket, so greet now. Paid earlier: cron does it.
+    if greetings.seva_due(ticket, date.today()):
+        greetings.send_seva(ticket)
     return ticket
 
 

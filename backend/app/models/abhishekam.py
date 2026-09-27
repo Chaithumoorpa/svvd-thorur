@@ -2,7 +2,7 @@ import enum
 import uuid
 
 from sqlalchemy import (
-    Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, Enum as SQLEnum,
+    Column, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, Enum as SQLEnum,
 )
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -10,7 +10,7 @@ from app.models.base import Base
 from app.models.types import MONEY_PRECISION, MONEY_SCALE
 
 ABHISHEKAM_FEE = 50  # fixed price in INR - never client-supplied, see the schema/service
-ABHISHEKAM_VISIBILITY_DAYS = 7  # how long the devotee's own dedicated page stays up
+ABHISHEKAM_VISIBILITY_DAYS = 7  # pages/photos stay up this many days, starting on occasion_date
 DAILY_SLOT_CAP = 7  # only this many Abhishekam bookings per calendar date
 
 
@@ -20,9 +20,10 @@ class AbhishekamPaymentStatus(str, enum.Enum):
 
 
 class AbhishekamVisibility(str, enum.Enum):
-    """The devotee's choice at booking time. PUBLIC entries appear (name,
-    occasion, photo) on the public yearly calendar's day flyer; PRIVATE ones
-    never do - but every booking still counts toward that date's
+    """The devotee's choice at booking time. PUBLIC entries show their name +
+    occasion on the public calendar (permanently), and their photo on that
+    date's public blessings page for ABHISHEKAM_VISIBILITY_DAYS; PRIVATE ones
+    never appear publicly - but every booking still counts toward that date's
     DAILY_SLOT_CAP and still gets its own dedicated page + greeting email,
     regardless of visibility."""
     PUBLIC = "PUBLIC"
@@ -34,10 +35,12 @@ class Abhishekam(Base):
     DAILY_SLOT_CAP per date, like the temple's paper register (see the photo
     that prompted this feature). Optionally tied to a personal occasion
     (birthday, wedding anniversary, ...) with an uploaded photo, shown at a
-    private link for ABHISHEKAM_VISIBILITY_DAYS once the temple has collected
-    the fee. Payment is pay-at-counter, the same PENDING/PAID pattern as a
-    paid seva ticket booked online - see collect_payment in the service."""
+    private link for ABHISHEKAM_VISIBILITY_DAYS from occasion_date - the day
+    the greeting email goes out - once the temple has collected the fee.
+    Payment is pay-at-counter, the same PENDING/PAID pattern as a paid seva
+    ticket booked online - see collect_payment in the service."""
     __tablename__ = "abhishekams"
+    __table_args__ = (Index("ix_abhishekams_created_at", "created_at"),)  # the admin list, newest first
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     reference_number = Column(String, unique=True, nullable=False, index=True)
@@ -63,4 +66,5 @@ class Abhishekam(Base):
     )
     paid_at = Column(DateTime, nullable=True)
     collected_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    greeting_sent_at = Column(DateTime, nullable=True)  # the blessing email, sent on occasion_date
     # created_at/updated_at are inherited from Base.

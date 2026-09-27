@@ -14,12 +14,26 @@ from app.models.abhishekam import (
 from app.models.finance import IncomeSourceType, IncomeTransaction, PaymentMode
 from app.schemas.abhishekam import (
     AbhishekamCalendarDay, AbhishekamCreate, AbhishekamDayEntry, AbhishekamDayFlyer, AbhishekamPersonalPageOut,
+    BlessingStatus,
 )
 
 # A booking counts toward the day's cap as soon as it's submitted (PENDING) -
 # not just once paid - otherwise more than DAILY_SLOT_CAP people could all be
 # told "you're in" for the same date before any of them actually pays.
 _HOLDS_A_SLOT = (AbhishekamPaymentStatus.PENDING, AbhishekamPaymentStatus.PAID)
+
+MAX_CALENDAR_DAYS = 400  # one request covers the public grid's 365-day window, not arbitrary history
+
+
+def visible_until(occasion_date: date_) -> date_:
+    """Last day (inclusive) a day's blessing pages and photos stay up."""
+    return occasion_date + timedelta(days=ABHISHEKAM_VISIBILITY_DAYS - 1)
+
+
+def blessing_status(occasion_date: date_, today: date_) -> BlessingStatus:
+    if today < occasion_date:
+        return "upcoming"
+    return "active" if today <= visible_until(occasion_date) else "archived"
 
 
 class AbhishekamService:
@@ -89,8 +103,8 @@ class AbhishekamService:
 
     def collect_payment(self, abhishekam_id: UUID, admin_user) -> Abhishekam:
         """Marks a PENDING booking as PAID once the devotee pays Rs {ABHISHEKAM_FEE}
-        at the temple counter, and records the cash income - the private page
-        becomes visible for ABHISHEKAM_VISIBILITY_DAYS starting now."""
+        at the temple counter, and records the cash income. The private page
+        opens on occasion_date - see personal_page."""
         row = self.get(abhishekam_id)
         if row.payment_status != AbhishekamPaymentStatus.PENDING:
             raise HTTPException(status_code=400, detail="This booking has no pending payment to collect")
@@ -120,7 +134,10 @@ class AbhishekamService:
     def query_all(self):
         return self.db.query(Abhishekam).order_by(Abhishekam.created_at.desc())
 
-    def personal_page(self, abhishekam_id: UUID) -> AbhishekamPersonalPageOut:
+    def personal_page(self, abhishekam_id: UUID, today: date_ | None = None) -> AbhishekamPersonalPageOut:
+        """Opens on occasion_date - the same day the greeting email goes out -
+        for ABHISHEKAM_VISIBILITY_DAYS, however far ahead the fee was paid."""
+        today = today or date_.today()
         row = self.get(abhishekam_id)
         base = {
             "reference_number": row.reference_number,
@@ -130,48 +147,46 @@ class AbhishekamService:
         if row.payment_status == AbhishekamPaymentStatus.PENDING:
             return AbhishekamPersonalPageOut(status="pending", **base)
 
-        expires_at = row.paid_at + timedelta(days=ABHISHEKAM_VISIBILITY_DAYS)
-        if datetime.now() > expires_at:
+        status = blessing_status(row.occasion_date, today)
+        if status == "upcoming":
+            return AbhishekamPersonalPageOut(status="scheduled", **base)
+        if status == "archived":
             return AbhishekamPersonalPageOut(status="expired", **base)
-
         return AbhishekamPersonalPageOut(
             status="active",
             devotee_name=row.devotee_name,
             relation=row.relation,
             message=row.message,
             photo_url=row.photo_url,
-            expires_at=expires_at,
+            visible_until=visible_until(row.occasion_date),
             **base,
         )
 
-    def calendar_year(self, year: int) -> List[AbhishekamCalendarDay]:
-        """Every day of `year`, with how many slots are taken - the public
-        365-day grid. A single grouped query for the whole year, then filled
-        in with zeroes for the days with no bookings at all."""
+    def calendar_range(self, start: date_, end: date_) -> List[AbhishekamCalendarDay]:
+        """Every day from `start` to `end` inclusive, with how many slots are
+        taken - the public contribution-style grid. One grouped query for the
+        whole range, filled in with zeroes for days nobody booked."""
         rows = (
             self.db.query(Abhishekam.occasion_date, func.count(Abhishekam.id))
             .filter(
-                func.extract("year", Abhishekam.occasion_date) == year,
+                Abhishekam.occasion_date.between(start, end),
                 Abhishekam.payment_status.in_(_HOLDS_A_SLOT),
             )
             .group_by(Abhishekam.occasion_date)
             .all()
         )
-        counts = {d: c for d, c in rows}
+        counts = dict(rows)
+        return [
+            AbhishekamCalendarDay(date=day, slots_used=counts.get(day, 0), slots_total=DAILY_SLOT_CAP)
+            for day in (start + timedelta(days=i) for i in range((end - start).days + 1))
+        ]
 
-        days: List[AbhishekamCalendarDay] = []
-        current = date_(year, 1, 1)
-        while current.year == year:
-            days.append(AbhishekamCalendarDay(
-                date=current, slots_used=counts.get(current, 0), slots_total=DAILY_SLOT_CAP,
-            ))
-            current += timedelta(days=1)
-        return days
-
-    def day_flyer(self, occasion_date: date_) -> AbhishekamDayFlyer:
+    def day_flyer(self, occasion_date: date_, today: date_ | None = None) -> AbhishekamDayFlyer:
         """PUBLIC + PAID bookings only - a PRIVATE or still-PENDING booking
         never appears here, even though it still holds a slot (see slots_used
-        above, which counts both)."""
+        above, which counts both). Photos only while the day is active."""
+        today = today or date_.today()
+        status = blessing_status(occasion_date, today)
         public_paid = (
             self.db.query(Abhishekam)
             .filter(
@@ -182,12 +197,20 @@ class AbhishekamService:
             .order_by(Abhishekam.created_at.asc())
             .all()
         )
+        active = status == "active"
         return AbhishekamDayFlyer(
             date=occasion_date,
             slots_used=self.slots_used(occasion_date),
             slots_total=DAILY_SLOT_CAP,
+            blessing_status=status,
+            visible_until=visible_until(occasion_date),
             entries=[
-                AbhishekamDayEntry(devotee_name=r.devotee_name, occasion=r.occasion, photo_url=r.photo_url)
+                AbhishekamDayEntry(
+                    devotee_name=r.devotee_name,
+                    occasion=r.occasion,
+                    relation=r.relation if active else None,
+                    photo_url=r.photo_url if active else None,
+                )
                 for r in public_paid
             ],
         )
