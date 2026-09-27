@@ -39,6 +39,7 @@ services:
       AWS_REGION: ${AWS_REGION:-us-east-1}
       SES_FROM_EMAIL: ${SES_FROM_EMAIL:-}
       ADMIN_NOTIFICATION_EMAIL: ${ADMIN_NOTIFICATION_EMAIL:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
     # No volume mounts in production - use built image
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --log-level warning  # rate limits are per worker; keep this small
     restart: always
@@ -52,6 +53,7 @@ services:
         - NEXT_PUBLIC_ENV=production
         - INTERNAL_API_BASE_URL=http://backend:8000/api/v1
         - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://svvdthorur.org}
+        - NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
     environment:
       - NEXT_PUBLIC_API_BASE_URL=/api/v1
       - INTERNAL_API_BASE_URL=http://backend:8000/api/v1

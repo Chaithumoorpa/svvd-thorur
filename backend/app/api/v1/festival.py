@@ -1,7 +1,8 @@
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, Query, Response
 
+from app.core.cache import cached, invalidate
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.models.user import User
@@ -16,11 +17,16 @@ _can_write = require_permission(Permission.CONTENT_WRITE)
 
 @router.get("", response_model=List[FestivalOut])
 def list_festivals(
+    response: Response,
     upcoming: bool = Query(False, description="Only festivals that have not ended yet"),
-    limit: Optional[int] = Query(None, ge=1, le=100),
+    limit: int = Query(100, ge=1, le=100, description="Capped even when omitted - festivals is admin-curated, not paginated"),
     service: FestivalService = Depends(get_festival_service),
 ):
-    return service.list_active_festivals(upcoming_only=upcoming, limit=limit)
+    response.headers["Cache-Control"] = "public, max-age=60"
+    return cached(
+        f"festivals:list:{upcoming}:{limit}",
+        lambda: [FestivalOut.model_validate(f) for f in service.list_active_festivals(upcoming_only=upcoming, limit=limit)],
+    )
 
 
 @router.get("/admin/all", response_model=List[FestivalOut])
@@ -49,6 +55,7 @@ def create_festival(
 ):
     festival = service.create_festival(payload)
     audit.log("CREATE", "festival", festival.id, f"Created festival '{festival.name}'")
+    invalidate("festivals:")
     return festival
 
 
@@ -63,6 +70,7 @@ def update_festival(
     festival = service.update_festival(festival_id, payload)
     audit.log("UPDATE", "festival", festival_id, f"Updated festival '{festival.name}'",
               payload.model_dump(exclude_unset=True))
+    invalidate("festivals:")
     return festival
 
 
@@ -75,4 +83,5 @@ def delete_festival(
 ):
     festival = service.delete_festival(festival_id)
     audit.log("DELETE", "festival", festival_id, f"Removed festival '{festival.name}'")
+    invalidate("festivals:")
     return festival

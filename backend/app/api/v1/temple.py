@@ -3,6 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
+from app.core.cache import cached, invalidate
 from app.core.config import settings
 from app.core.rbac import Permission
 from app.models.user import User
@@ -26,16 +27,20 @@ def _cache(response: Response, seconds: int = 60) -> None:
 # ---- public ---------------------------------------------------------------------------
 @router.get("", response_model=TempleOut)
 def get_temple(response: Response, service: TempleService = Depends(get_temple_service)):
-    """Public temple profile."""
+    """Public temple profile - server-side cached in addition to the browser
+    Cache-Control below, since a change of temple info/timings is rare."""
     _cache(response)
-    return service.get_profile()
+    return cached("temple:profile", lambda: TempleOut.model_validate(service.get_profile()))
 
 
 @router.get("/timings", response_model=List[TimingOut])
 def list_timings(response: Response, service: TempleService = Depends(get_temple_service)):
     """Public darshan schedule (active rows only)."""
     _cache(response)
-    return service.list_timings(active_only=True)
+    return cached(
+        "temple:timings",
+        lambda: [TimingOut.model_validate(t) for t in service.list_timings(active_only=True)],
+    )
 
 
 # ---- admin ----------------------------------------------------------------------------
@@ -49,6 +54,7 @@ def update_temple(
     temple = service.update_profile(payload)
     audit.log("UPDATE", "temple", temple.id, "Updated temple profile",
               payload.model_dump(exclude_unset=True, exclude={"history"}))
+    invalidate("temple:profile")
     return temple
 
 
@@ -80,6 +86,7 @@ def create_timing(
 ):
     timing = service.create_timing(payload)
     audit.log("CREATE", "temple_timing", timing.id, f"Added timing '{timing.label}'")
+    invalidate("temple:timings")
     notify_devotees(db, "Darshan timings updated", _timing_notice("added", timing))
     return timing
 
@@ -96,6 +103,7 @@ def update_timing(
     timing = service.update_timing(timing_id, payload)
     audit.log("UPDATE", "temple_timing", timing.id, f"Updated timing '{timing.label}'",
               payload.model_dump(exclude_unset=True))
+    invalidate("temple:timings")
     notify_devotees(db, "Darshan timings updated", _timing_notice("changed", timing))
     return timing
 
@@ -110,5 +118,6 @@ def delete_timing(
 ):
     timing = service.delete_timing(timing_id)
     audit.log("DELETE", "temple_timing", timing_id, f"Deleted timing '{timing.label}'")
+    invalidate("temple:timings")
     notify_devotees(db, "Darshan timings updated", _timing_notice("removed", timing))
     return timing

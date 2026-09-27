@@ -6,7 +6,9 @@ import Image from 'next/image';
 import { Eye, EyeOff, Mail, UserPlus } from 'lucide-react';
 import { apiError, login, register, setStoredToken, verifyLoginOtp } from '@/lib/api';
 import { Notice } from '@/components/ui/States';
+import TurnstileWidget from '@/components/ui/TurnstileWidget';
 import { btnGhost, btnPrimary, inputCls } from '@/components/ui/styles';
+import { useTurnstile } from '@/hooks/useTurnstile';
 
 type Step = 'details' | 'otp';
 
@@ -20,6 +22,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const turnstile = useTurnstile();
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -31,11 +34,15 @@ export default function RegisterPage() {
         password,
         email: email.trim(),
         phone: phone.trim(),
+        turnstile_token: turnstile.token || undefined,
       });
       // Sign the devotee in right away rather than making them re-enter their
       // credentials on a separate page - a registered account always has an
       // email, so this always needs the sign-in code as its second step.
-      const data = await login(username.trim(), password);
+      // Turnstile tokens are single-use, so this second call needs its own
+      // freshly-solved one - see useTurnstile.next().
+      const freshToken = await turnstile.next();
+      const data = await login(username.trim(), password, freshToken);
       if (data.otp_required) {
         setStep('otp');
         setBusy(false);
@@ -44,6 +51,7 @@ export default function RegisterPage() {
       setStoredToken(data.access_token!);
       window.location.href = '/my-bookings';
     } catch (err) {
+      turnstile.reset();
       setError(apiError(err, 'Could not create your account. Please try again.'));
       setBusy(false);
     }
@@ -109,8 +117,10 @@ export default function RegisterPage() {
                   setBusy(true);
                   setError('');
                   try {
-                    await login(username.trim(), password);
+                    await login(username.trim(), password, turnstile.token || undefined);
+                    turnstile.reset();
                   } catch (err) {
+                    turnstile.reset();
                     setError(apiError(err, 'Could not resend the code. Please try again.'));
                   } finally {
                     setBusy(false);
@@ -202,6 +212,10 @@ export default function RegisterPage() {
           </button>
         </form>
         )}
+
+        <div className="mt-4 flex justify-center">
+          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+        </div>
 
         {step === 'details' && (
           <p className="mt-4 text-center text-sm">

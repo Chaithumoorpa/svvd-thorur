@@ -2,6 +2,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, Response
 
+from app.core.cache import cached, invalidate
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.models.user import User
@@ -15,9 +16,11 @@ _can_write = require_permission(Permission.CONTENT_WRITE)
 
 
 @router.get("", response_model=List[PoojaOut])
-def list_poojas(service: PoojaService = Depends(get_pooja_service)):
-    """Public list of active poojas / sevas."""
-    return service.list_active_poojas()
+def list_poojas(response: Response, service: PoojaService = Depends(get_pooja_service)):
+    """Public list of active poojas / sevas - admin-curated and small, but
+    capped rather than truly unbounded, and server-side cached."""
+    response.headers["Cache-Control"] = "public, max-age=60"
+    return cached("poojas:list", lambda: [PoojaOut.model_validate(p) for p in service.list_active_poojas()])
 
 
 @router.get("/admin/all", response_model=List[PoojaOut])
@@ -46,6 +49,7 @@ def create_pooja(
 ):
     pooja = service.create_pooja(payload)
     audit.log("CREATE", "pooja", pooja.id, f"Created pooja '{pooja.name}'")
+    invalidate("poojas:")
     return pooja
 
 
@@ -60,6 +64,7 @@ def update_pooja(
     pooja = service.update_pooja(pooja_id, payload)
     audit.log("UPDATE", "pooja", pooja_id, f"Updated pooja '{pooja.name}'",
               payload.model_dump(exclude_unset=True))
+    invalidate("poojas:")
     return pooja
 
 
@@ -73,4 +78,5 @@ def delete_pooja(
     """Soft delete (hides the pooja). Existing seva tickets keep referencing it."""
     pooja = service.delete_pooja(pooja_id)
     audit.log("DELETE", "pooja", pooja_id, f"Removed pooja '{pooja.name}'")
+    invalidate("poojas:")
     return pooja

@@ -120,23 +120,23 @@ async function page<T>(url: string, params?: Record<string, unknown>): Promise<P
  * otp_required: true (a sign-in code was just emailed) instead of a session -
  * call verifyLoginOtp next. An account with no email gets a session directly,
  * same as login always worked before two-factor existed. */
-export const login = async (username: string, password: string) =>
+export const login = async (username: string, password: string, turnstile_token?: string) =>
   (await api.post<{
     otp_required: boolean;
     access_token?: string;
     token_type?: string;
     must_change_password?: boolean;
-  }>('/auth/login', { username, password })).data;
+  }>('/auth/login', { username, password, turnstile_token })).data;
 /** Step 2, only when login() returned otp_required: true. */
 export const verifyLoginOtp = async (username: string, code: string) =>
   (await api.post<{ access_token: string; token_type: string; must_change_password: boolean }>(
     '/auth/login/verify-otp', { username, code },
   )).data;
-export const forgotPassword = async (email: string) =>
-  (await api.post<{ message: string }>('/auth/forgot-password', { email })).data;
+export const forgotPassword = async (email: string, turnstile_token?: string) =>
+  (await api.post<{ message: string }>('/auth/forgot-password', { email, turnstile_token })).data;
 export const resetPassword = async (token: string, new_password: string) =>
   (await api.post<{ message: string }>('/auth/reset-password', { token, new_password })).data;
-export const register = async (data: { username: string; password: string; email: string; phone: string }) =>
+export const register = async (data: { username: string; password: string; email: string; phone: string; turnstile_token?: string }) =>
   (await api.post<AppUser>('/auth/register', data)).data;
 export const getMe = async () => (await api.get<Me>('/auth/verify')).data;
 export const changePassword = async (current_password: string, new_password: string) =>

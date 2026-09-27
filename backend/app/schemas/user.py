@@ -69,6 +69,9 @@ class PublicRegister(BaseModel):
     email: EmailStr
     phone: str = Field(max_length=20)
     password: str
+    # Cloudflare Turnstile challenge token from the frontend widget - required
+    # only when TURNSTILE_SECRET_KEY is configured server-side.
+    turnstile_token: Optional[str] = None
 
     @field_validator("username")
     @classmethod
@@ -112,6 +115,7 @@ class UserUpdate(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+    turnstile_token: Optional[str] = None
 
 
 class UserOut(BaseModel):
@@ -170,6 +174,7 @@ class DeleteAccountConfirm(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
+    turnstile_token: Optional[str] = None
 
 
 class PasswordResetConfirm(BaseModel):

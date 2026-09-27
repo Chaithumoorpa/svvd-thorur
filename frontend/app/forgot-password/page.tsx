@@ -6,22 +6,26 @@ import Image from 'next/image';
 import { Mail } from 'lucide-react';
 import { apiError, forgotPassword } from '@/lib/api';
 import { Notice } from '@/components/ui/States';
+import TurnstileWidget from '@/components/ui/TurnstileWidget';
 import { btnPrimary, inputCls } from '@/components/ui/styles';
+import { useTurnstile } from '@/hooks/useTurnstile';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const turnstile = useTurnstile();
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError('');
     setBusy(true);
     try {
-      await forgotPassword(email.trim());
+      await forgotPassword(email.trim(), turnstile.token || undefined);
       setSent(true);
     } catch (err) {
+      turnstile.reset();
       setError(apiError(err, 'Something went wrong. Please try again.'));
     } finally {
       setBusy(false);
@@ -64,6 +68,9 @@ export default function ForgotPasswordPage() {
               <Mail className="h-4 w-4" aria-hidden="true" />
               {busy ? 'Sending…' : 'Send reset link'}
             </button>
+            <div className="flex justify-center">
+              <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+            </div>
           </form>
         )}
 

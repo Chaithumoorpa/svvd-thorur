@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     # Public site origin, used to build links inside outgoing emails (password reset, etc).
     FRONTEND_BASE_URL: str = "https://svvdthorur.org"
 
+    # Cloudflare Turnstile (bot/brute-force challenge on login, register, forgot-password).
+    # Unset = verification is skipped rather than failing closed - matches SES/S3 above,
+    # so local dev and any environment without keys configured still works.
+    TURNSTILE_SECRET_KEY: str | None = None
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):

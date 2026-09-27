@@ -48,11 +48,15 @@ class SevaTicketRepository(BaseRepository):
     def list_tickets(self, **filters) -> List[SevaTicket]:
         return self.query_tickets(**filters).all()
 
-    def get_by_user(self, user_id: int) -> List[SevaTicket]:
+    def get_by_user(self, user_id: int, limit: int = 200) -> List[SevaTicket]:
+        """Most recent first, capped - "My Bookings" shows history, not an
+        unbounded archive; a devotee with more than `limit` past bookings is
+        an edge case this doesn't need to serve in one response."""
         return (
             self.db.query(SevaTicket)
             .filter(SevaTicket.booked_by_user_id == user_id)
             .order_by(SevaTicket.created_at.desc())
+            .limit(limit)
             .all()
         )
 

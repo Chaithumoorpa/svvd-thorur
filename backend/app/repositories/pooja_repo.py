@@ -18,8 +18,8 @@ class PoojaRepository(BaseRepository):
     def query_all(self):
         return self.db.query(Pooja).order_by(*self._ORDER)
 
-    def get_all(self):
-        return self.query_active().all()
+    def get_all(self, limit: int = 200):
+        return self.query_active().limit(limit).all()
 
     def get_by_id(self, pooja_id: int):
         return self.db.query(Pooja).filter(Pooja.id == pooja_id).first()
