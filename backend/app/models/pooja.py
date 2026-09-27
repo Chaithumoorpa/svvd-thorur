@@ -28,5 +28,12 @@ class Pooja(Base):
     suggested_amount = Column(Numeric(MONEY_PRECISION, MONEY_SCALE), nullable=True)  # INR
     sort_order = Column(Integer, default=0, nullable=False)
 
+    # Bookings allowed per date, online and counter alike (cancelled ones free
+    # their slot); None = unlimited. 7 for Abhishekam, like the paper register.
+    daily_slot_cap = Column(Integer, nullable=True)
+    # Devotees booking this seva may add one occasion photo and show their
+    # blessing publicly - the Abhishekam calendar and blessings pages.
+    public_blessings = Column(Boolean, default=False, nullable=False)
+
     # Status
     is_active = Column(Boolean, default=True, nullable=False)

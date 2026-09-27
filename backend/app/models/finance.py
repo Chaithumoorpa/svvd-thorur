@@ -11,6 +11,8 @@ class IncomeSourceType(str, enum.Enum):
     DONATION = "DONATION"
     HUNDI = "HUNDI"
     MANUAL = "MANUAL"
+    # Only on ledger rows from the retired standalone Abhishekam booking - Abhishekam
+    # is an ordinary seva (SEVA) now. Kept so those rows still load.
     ABHISHEKAM = "ABHISHEKAM"
 
 class PaymentMode(str, enum.Enum):

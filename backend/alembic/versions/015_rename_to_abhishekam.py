@@ -24,7 +24,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE incomesourcetype RENAME VALUE 'OCCASION_BLESSING' TO 'ABHISHEKAM'")
+    # Skipped when ABHISHEKAM already exists - left behind by downgrade(), which
+    # can't remove an enum value - so a downgrade + re-upgrade still works.
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+                WHERE t.typname = 'incomesourcetype' AND e.enumlabel = 'ABHISHEKAM'
+            ) THEN
+                ALTER TYPE incomesourcetype RENAME VALUE 'OCCASION_BLESSING' TO 'ABHISHEKAM';
+            END IF;
+        END $$;
+    """)
     op.execute("ALTER TYPE blessingpaymentstatus RENAME TO abhishekampaymentstatus")
 
     op.rename_table("occasion_blessings", "abhishekams")

@@ -19,6 +19,8 @@ class PoojaCreate(BaseModel):
     is_paid: bool = False
     suggested_amount: Optional[Money] = None
     sort_order: int = Field(default=0, ge=0, le=10000)
+    daily_slot_cap: Optional[int] = Field(default=None, ge=1, le=1000)
+    public_blessings: bool = False
 
     @field_validator("description", mode="before")
     @classmethod
@@ -44,6 +46,8 @@ class PoojaUpdate(BaseModel):
     suggested_amount: Optional[Money] = None
     sort_order: Optional[int] = Field(default=None, ge=0, le=10000)
     is_active: Optional[bool] = None
+    daily_slot_cap: Optional[int] = Field(default=None, ge=1, le=1000)  # explicit null = unlimited
+    public_blessings: Optional[bool] = None
 
     @field_validator("description", mode="before")
     @classmethod
@@ -62,6 +66,8 @@ class PoojaOut(BaseModel):
     suggested_amount: Optional[MoneyOut] = None
     sort_order: int = 0
     is_active: bool
+    daily_slot_cap: Optional[int] = None
+    public_blessings: bool = False
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)

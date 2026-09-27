@@ -7,16 +7,23 @@ from datetime import date, datetime
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.utils.dependencies import (
-    AuditContext, get_audit, get_current_user, get_current_user_optional, get_occasion_greeting_service,
-    get_otp_service, get_seva_ticket_service, get_turnstile_service, require_admin, require_permission,
+    AuditContext, get_audit, get_blessing_service, get_current_user, get_current_user_optional,
+    get_occasion_greeting_service, get_otp_service, get_seva_ticket_service, get_storage_service,
+    get_turnstile_service, require_admin, require_permission,
 )
-from app.utils.rate_limiter import booking_limiter, enforce, get_client_ip, otp_request_limiter, otp_verify_limiter
+from app.utils.rate_limiter import (
+    blessing_photo_upload_limiter, booking_limiter, enforce, get_client_ip, otp_request_limiter, otp_verify_limiter,
+)
+from app.services.blessing_service import BlessingService
 from app.services.email_service import EmailService
 from app.services.occasion_greeting_service import OccasionGreetingService
 from app.services.otp_service import OtpService
 from app.services.seva_ticket_service import PaymentPendingError, SevaTicketService
+from app.services.storage_service import StorageService
 from app.services.turnstile_service import TurnstileService
+from app.schemas.blessing import PersonalBlessingOut
 from app.schemas.otp import OtpRequest, OtpVerifyRequest, OtpVerifyResponse
+from app.schemas.upload import UploadUrlRequest, UploadUrlResponse
 from app.schemas.seva_ticket import (
     SevaBookingOnline,
     SevaTicketCreate,
@@ -57,6 +64,20 @@ def verify_booking_otp(
     per IP; the code itself allows only 5 incorrect guesses before it's dead."""
     enforce(otp_verify_limiter, get_client_ip(request), "Too many attempts. Please try again later.")
     return OtpVerifyResponse(booking_token=service.verify_otp(payload.email, payload.code))
+
+
+@router.post("/booking/upload-url", response_model=UploadUrlResponse)
+def create_blessing_photo_upload_url(
+    payload: UploadUrlRequest,
+    request: Request,
+    storage: StorageService = Depends(get_storage_service),
+):
+    """Presigned S3 upload for the one occasion photo a devotee may add when
+    booking a seva with public blessings - public (nobody is signed in at this
+    point in the flow), but rate limited. Stored under the public-read
+    gallery/ prefix, like gallery and member photos."""
+    enforce(blessing_photo_upload_limiter, get_client_ip(request), "Too many upload attempts. Please try again later.")
+    return storage.create_upload(payload.content_type, key_prefix="gallery/blessings")
 
 
 @router.post("", response_model=SevaTicketOut)
@@ -115,13 +136,18 @@ def book_seva_ticket(
 def create_admin_seva_ticket(
     payload: SevaTicketCreate,
     service: SevaTicketService = Depends(get_seva_ticket_service),
+    greetings: OccasionGreetingService = Depends(get_occasion_greeting_service),
     audit: AuditContext = Depends(get_audit),
     admin_user: User = Depends(_manage),
 ):
-    """Counter ticket (staff). Requires the tickets:manage permission."""
+    """Counter ticket (staff). Requires the tickets:manage permission. With an
+    occasion and the devotee's email, they get the same blessing email as an
+    online booking - today if the seva is today, else on the seva date."""
     ticket = service.create_counter_ticket(payload, admin_user)
     audit.log("CREATE", "seva_ticket", ticket.id, f"Issued counter ticket {ticket.ticket_number}",
               {"amount": ticket.amount, "payment": ticket.payment_status})
+    if greetings.seva_due(ticket, date.today()):
+        greetings.send_seva(ticket)
     return ticket
 
 
@@ -187,6 +213,18 @@ def delete_seva_ticket(
               {"seva": ticket.seva_name, "amount": ticket.amount, "payment": ticket.payment_status})
     service.delete_ticket(ticket_id)
     return {"message": "Ticket deleted"}
+
+
+@router.get("/{ticket_id}/blessing", response_model=PersonalBlessingOut)
+def view_blessing(
+    ticket_id: UUID,
+    service: BlessingService = Depends(get_blessing_service),
+):
+    """Public: the devotee's own blessing page, linked from their greeting
+    email. The ticket's random UUID makes the link unguessable, and it shows
+    nothing beyond seva/occasion/date until the seva is paid for and its date
+    has arrived - see BlessingService.personal."""
+    return service.personal(ticket_id)
 
 
 @router.get("/{ticket_id}", response_model=SevaTicketOut)

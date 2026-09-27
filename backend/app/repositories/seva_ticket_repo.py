@@ -60,6 +60,14 @@ class SevaTicketRepository(BaseRepository):
             .all()
         )
 
+    def count_booked(self, seva_id: int, seva_date: date) -> int:
+        """Tickets holding a slot that day - paid or not; cancelled ones don't."""
+        return self.db.query(SevaTicket).filter(
+            SevaTicket.seva_id == seva_id,
+            SevaTicket.seva_date == seva_date,
+            SevaTicket.status != TicketStatus.CANCELLED,
+        ).count()
+
     def check_duplicate(self, mobile_number: str, seva_date: date, seva_id: int) -> bool:
         return self.db.query(SevaTicket).filter(
             and_(

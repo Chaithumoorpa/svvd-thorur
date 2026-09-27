@@ -25,7 +25,7 @@ from app.services.festival_service import FestivalService
 from app.services.gallery_service import GalleryService
 from app.services.member_service import MemberService
 from app.services.pooja_service import PoojaService
-from app.services.abhishekam_service import AbhishekamService
+from app.services.blessing_service import BlessingService
 from app.services.occasion_greeting_service import OccasionGreetingService
 from app.services.otp_service import OtpService
 from app.services.seva_ticket_service import SevaTicketService
@@ -216,8 +216,8 @@ def get_turnstile_service() -> TurnstileService:
     return TurnstileService()
 
 
-def get_abhishekam_service(db: Session = Depends(get_db)) -> AbhishekamService:
-    return AbhishekamService(db)
+def get_blessing_service(db: Session = Depends(get_db)) -> BlessingService:
+    return BlessingService(db)
 
 
 def get_occasion_greeting_service(db: Session = Depends(get_db)) -> OccasionGreetingService:

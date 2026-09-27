@@ -118,6 +118,10 @@ export interface Pooja {
   suggested_amount: number | null;
   sort_order: number;
   is_active: boolean;
+  /** Bookings allowed per date (online + counter); null = unlimited. */
+  daily_slot_cap: number | null;
+  /** Devotees may add an occasion photo and show their blessing publicly. */
+  public_blessings: boolean;
 }
 
 export interface PoojaInput {
@@ -130,6 +134,8 @@ export interface PoojaInput {
   suggested_amount?: number | null;
   sort_order?: number;
   is_active?: boolean;
+  daily_slot_cap?: number | null;
+  public_blessings?: boolean;
 }
 
 export interface GalleryItem {
@@ -277,6 +283,8 @@ export interface SevaTicket {
   payment_status: PaymentStatus;
   amount: number;
   occasion?: string | null;
+  photo_url?: string | null;
+  show_publicly?: boolean;
   status: TicketStatus;
   source: 'ONLINE' | 'COUNTER';
   qr_token: string;
@@ -298,12 +306,15 @@ export interface SevaBookingOnlineInput extends SevaBookingInput {
   email: string;
   booking_token: string;
   turnstile_token?: string;
+  photo_url?: string;
+  show_publicly?: boolean;
 }
 
 export interface CounterTicketInput extends SevaBookingInput {
   seva_name?: string;
   payment_status?: 'FREE' | 'PAID';
   amount?: number;
+  email?: string;
 }
 
 export interface AppUser {
@@ -429,84 +440,44 @@ export interface VisitorStats {
   today_visitors: number;
 }
 
-// ------------------------------------------------------------------------ abhishekam
-export type AbhishekamPaymentStatus = 'PENDING' | 'PAID';
-export type AbhishekamVisibility = 'PUBLIC' | 'PRIVATE';
-
-export interface Abhishekam {
-  id: string;
-  reference_number: string;
-  devotee_name: string;
-  mobile_number: string;
-  email: string;
-  occasion: string;
-  occasion_date: string;
-  relation: string | null;
-  message: string | null;
-  photo_url: string;
-  visibility: AbhishekamVisibility;
-  amount: number;
-  payment_status: AbhishekamPaymentStatus;
-  paid_at: string | null;
-  collected_by_admin_id: number | null;
-  greeting_sent_at: string | null;
-  created_at: string;
-}
-
-export interface AbhishekamCreateInput {
-  devotee_name: string;
-  mobile_number: string;
-  email: string;
-  occasion: string;
-  occasion_date: string;
-  relation?: string;
-  message?: string;
-  photo_url: string;
-  visibility: AbhishekamVisibility;
-  booking_token: string;
-  turnstile_token?: string;
-}
-
-/** pending: fee not paid yet. scheduled: paid, occasion_date still ahead.
- * active: from occasion_date through visible_until. expired: after that. */
-export interface AbhishekamPersonalPageView {
-  status: 'pending' | 'scheduled' | 'active' | 'expired';
-  reference_number: string;
-  occasion: string;
-  occasion_date: string;
-  devotee_name: string | null;
-  relation: string | null;
-  message: string | null;
-  photo_url: string | null;
-  visible_until: string | null;
-}
-
-/** One day's slot usage for the public 365-day calendar grid - every day of
- * the year, zero-filled, same shape whether or not anyone booked that day. */
-export interface AbhishekamCalendarDay {
+// ------------------------------------------------------------ seva calendar & blessings
+/** One day's bookings for a seva's public contribution-style grid. */
+export interface SevaCalendarDay {
   date: string;
   slots_used: number;
-  slots_total: number;
+  /** The seva's daily_slot_cap - null when it has no limit. */
+  slots_total: number | null;
 }
 
-/** One PUBLIC, PAID booking on a day. Name + occasion always (the public
- * timeline); relation + photo only while that day's blessings are active. */
-export interface AbhishekamDayEntry {
+/** A booking the devotee chose to show publicly. Name + occasion always (the
+ * public timeline); the photo only while that day's blessings are active. */
+export interface BlessingEntry {
   devotee_name: string;
   occasion: string;
-  relation: string | null;
   photo_url: string | null;
 }
 
 /** upcoming: before the date. active: the date through visible_until
  * (photos shown). archived: after that (names + occasions only). */
-export type AbhishekamBlessingStatus = 'upcoming' | 'active' | 'archived';
+export type BlessingStatus = 'upcoming' | 'active' | 'archived';
 
-export interface AbhishekamDayFlyer {
+export interface SevaDay {
   date: string;
   slots_used: number;
-  slots_total: number;
-  blessing_status: AbhishekamBlessingStatus;
+  slots_total: number | null;
+  blessing_status: BlessingStatus;
   visible_until: string;
-  entries: AbhishekamDayEntry[];
+  entries: BlessingEntry[];
+}
+
+/** pending: fee not paid yet. scheduled: paid, seva date still ahead.
+ * active: the seva date through visible_until. expired: after that. */
+export interface PersonalBlessing {
+  status: 'pending' | 'scheduled' | 'active' | 'expired';
+  seva_name: string;
+  occasion: string;
+  seva_date: string;
+  devotee_name: string | null;
+  photo_url: string | null;
+  visible_until: string | null;
 }

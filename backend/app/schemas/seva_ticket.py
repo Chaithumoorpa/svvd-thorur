@@ -2,10 +2,10 @@ from datetime import date, datetime, time
 from typing import Annotated, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator, model_validator
 
 from app.models.seva_ticket import PaymentStatus, TicketSource, TicketStatus
-from app.schemas.common import MoneyInOrZero, MoneyOut, blank_to_none, normalize_mobile
+from app.schemas.common import MoneyInOrZero, MoneyOut, SafeUrl, blank_to_none, normalize_mobile
 
 DevoteeName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=100)]
 
@@ -37,17 +37,33 @@ class SevaBookingPublic(BaseModel):
 
 class SevaBookingOnline(SevaBookingPublic):
     """Public online booking, gated on a verified email: `booking_token` is the
-    one issued by POST /seva-tickets/booking/verify-otp for this exact email."""
+    one issued by POST /seva-tickets/booking/verify-otp for this exact email.
+    `photo_url`/`show_publicly` only for a seva with public_blessings."""
     email: EmailStr
     booking_token: str
     turnstile_token: Optional[str] = None
+    photo_url: Optional[SafeUrl] = None
+    show_publicly: bool = False
+
+    @model_validator(mode="after")
+    def _blessing_needs_occasion(self):
+        if (self.photo_url or self.show_publicly) and not self.occasion:
+            raise ValueError("Add the occasion to share a blessing photo or show it publicly")
+        return self
 
 
 class SevaTicketCreate(SevaBookingPublic):
-    """Counter (staff) ticket: staff may record a fee and payment status."""
+    """Counter (staff) ticket: staff may record a fee and payment status, and
+    the devotee's email for their occasion blessing."""
     seva_name: Optional[str] = Field(default=None, max_length=200)
     payment_status: PaymentStatus = PaymentStatus.FREE
     amount: MoneyInOrZero = 0
+    email: Optional[EmailStr] = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _blank_email(cls, v):
+        return blank_to_none(v)
 
 
 class SevaTicketOut(BaseModel):
@@ -63,6 +79,8 @@ class SevaTicketOut(BaseModel):
     payment_status: PaymentStatus
     amount: MoneyOut
     occasion: Optional[str] = None
+    photo_url: Optional[str] = None
+    show_publicly: bool = False
     status: TicketStatus
     source: TicketSource
     created_by_admin_id: Optional[int] = None

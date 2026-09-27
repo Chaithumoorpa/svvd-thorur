@@ -8,7 +8,6 @@ import pytest
 from sqlalchemy import event
 
 from app.core import cache as content_cache
-from app.models.abhishekam import Abhishekam, AbhishekamPaymentStatus, AbhishekamVisibility
 from app.models.announcement import Announcement
 from app.models.audit_log import AuditLog
 from app.models.contact import ContactMessage
@@ -19,7 +18,7 @@ from app.models.finance import ExpenseCategory, ExpenseTransaction, IncomeSource
 from app.models.gallery import Gallery
 from app.models.member import Member
 from app.models.pooja import Pooja
-from app.models.seva_ticket import SevaTicket
+from app.models.seva_ticket import PaymentStatus, SevaTicket
 from app.models.temple import Temple
 from app.models.temple_timing import TempleTiming
 from app.models.user import User
@@ -28,9 +27,9 @@ TODAY = date.today()
 ROWS = 3
 
 LIST_ENDPOINTS = [
-    "/api/v1/abhishekams",
-    f"/api/v1/abhishekams/calendar?start={TODAY - timedelta(days=182)}&end={TODAY + timedelta(days=182)}",
-    f"/api/v1/abhishekams/calendar/{TODAY}",
+    # "{seva}": the blessing seva created for the test - see below
+    f"/api/v1/poojas/{{seva}}/calendar?start={TODAY - timedelta(days=182)}&end={TODAY + timedelta(days=182)}",
+    f"/api/v1/poojas/{{seva}}/calendar/{TODAY}",
     "/api/v1/announcements",
     "/api/v1/announcements/admin/all",
     "/api/v1/audit-logs",
@@ -57,7 +56,7 @@ LIST_ENDPOINTS = [
 ]
 
 
-def _seed_batch(db, batch: int, owner_id: int) -> None:
+def _seed_batch(db, batch: int, owner_id: int, blessing_seva_id: int) -> None:
     """ROWS more of everything, each row linked to a different staff user /
     donor / pooja, so any per-row relationship load shows up as extra queries."""
     staff = [User(username=f"staff{batch}-{i}", email=f"s{batch}-{i}@example.com", hashed_password="x",
@@ -83,10 +82,10 @@ def _seed_batch(db, batch: int, owner_id: int) -> None:
             ExpenseTransaction(category=list(ExpenseCategory)[0], description="Flowers", amount=50,
                                payment_mode=PaymentMode.CASH, paid_to="Vendor", approved_by=staff[i].id),
             AuditLog(actor_id=staff[i].id, actor_username=staff[i].username, action="UPDATE", entity_type="pooja"),
-            Abhishekam(reference_number=f"ABHI-{batch}-{i}", devotee_name="Devotee", mobile_number="9876543210",
-                       email="a@example.com", occasion="Birthday", occasion_date=TODAY,
-                       photo_url="https://example.com/p.jpg", visibility=AbhishekamVisibility.PUBLIC,
-                       amount=50, payment_status=AbhishekamPaymentStatus.PAID),
+            SevaTicket(ticket_number=f"B-{batch}-{i}", seva_id=blessing_seva_id, seva_name="Abhishekam",
+                       devotee_name="Devotee", mobile_number="9876543210", seva_date=TODAY,
+                       qr_token=f"bqr-{batch}-{i}", payment_status=PaymentStatus.PAID, amount=700,
+                       occasion="Birthday", photo_url="https://example.com/p.jpg", show_publicly=True),
             TempleTiming(label=f"Darshan {batch}-{i}", start_time=time(6), end_time=time(12)),
         ])
     db.commit()
@@ -111,7 +110,12 @@ def test_list_endpoint_query_count_does_not_grow_with_rows(client, db, super_adm
     devotee, devotee_headers = make_user("GENERAL_USER", username="devotee")
     headers = devotee_headers if url.endswith("/mine") else admin_headers
     db.add(Temple(name="SVVD"))
-    _seed_batch(db, 0, devotee.id)
+    seva = Pooja(name="Abhishekam", pooja_type="daily", is_paid=True, suggested_amount=700,
+                 daily_slot_cap=7, public_blessings=True)
+    db.add(seva)
+    db.commit()
+    url = url.replace("{seva}", str(seva.id))
+    _seed_batch(db, 0, devotee.id, seva.id)
 
     def queries_for_request() -> int:
         content_cache._cache.clear()  # measure the database work, not a cached response
@@ -122,5 +126,5 @@ def test_list_endpoint_query_count_does_not_grow_with_rows(client, db, super_adm
 
     few = queries_for_request()
     for batch in (1, 2, 3):
-        _seed_batch(db, batch, devotee.id)
+        _seed_batch(db, batch, devotee.id, seva.id)
     assert queries_for_request() == few

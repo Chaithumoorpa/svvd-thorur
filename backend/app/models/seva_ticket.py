@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Time, ForeignKey, Index, Numeric, Enum as SQLEnum
+from sqlalchemy import Boolean, Column, Integer, String, Date, DateTime, Time, ForeignKey, Index, Numeric, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 import enum
@@ -69,3 +69,7 @@ class SevaTicket(Base):
     # the seva is paid for (or free) - see OccasionGreetingService.
     occasion = Column(String(100), nullable=True)
     greeting_sent_at = Column(DateTime, nullable=True)
+    # Only for a seva with public_blessings: one occasion photo, and whether the
+    # devotee chose to show name + occasion (+ photo) publicly. Default private.
+    photo_url = Column(String, nullable=True)
+    show_publicly = Column(Boolean, default=False, nullable=False)

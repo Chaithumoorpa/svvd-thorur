@@ -1,8 +1,8 @@
-"""Occasion blessing emails. A seva booking or Abhishekam can say what it's
-for - a birthday, a wedding anniversary, ... - and gets a personal blessing
-email on its own date (seva_date / occasion_date) once paid for (or booked,
-if the seva is free): sent by the daily cron job, or right away when the
-booking is paid/booked on or after that date. Never twice, never more than
+"""Occasion blessing emails. A seva booking (Abhishekam included) can say
+what it's for - a birthday, a wedding anniversary, ... - and gets a personal
+blessing email on its seva date once paid for (or booked, if the seva is
+free): sent by the daily cron job, or right away when the booking is paid/
+booked on or after that date. Never twice, never more than
 GREETING_WINDOW_DAYS late. A donation has no future date, so its blessing
 goes out as soon as it's recorded."""
 import re
@@ -12,7 +12,6 @@ from uuid import UUID
 
 import pytest
 
-from app.models.abhishekam import Abhishekam, AbhishekamPaymentStatus
 from app.models.pooja import Pooja
 from app.models.seva_ticket import SevaTicket, TicketStatus
 from app.services.occasion_greeting_service import GREETING_WINDOW_DAYS, OccasionGreetingService
@@ -48,13 +47,13 @@ def _pooja(db, is_paid=False):
     return pooja
 
 
-def _book(client, sent, pooja_id, occasion="Birthday", seva_date=TOMORROW, email="devotee@example.com"):
+def _book(client, sent, pooja_id, occasion="Birthday", seva_date=TOMORROW, email="devotee@example.com", **extra):
     client.post("/api/v1/seva-tickets/booking/request-otp", json={"email": email})
     token = client.post("/api/v1/seva-tickets/booking/verify-otp",
                         json={"email": email, "code": _code_from(sent)}).json()["booking_token"]
     payload = {
         "seva_id": pooja_id, "devotee_name": "Lakshmi", "mobile_number": "9876543214",
-        "seva_date": seva_date.isoformat(), "email": email, "booking_token": token,
+        "seva_date": seva_date.isoformat(), "email": email, "booking_token": token, **extra,
     }
     if occasion is not None:
         payload["occasion"] = occasion
@@ -76,14 +75,14 @@ def test_free_seva_for_a_later_date_is_blessed_on_that_date(client, db, monkeypa
     assert _blessing_calls(sent) == []  # not at booking time
 
     greetings = OccasionGreetingService(db)
-    assert greetings.send_due(TODAY) == (0, 0)
-    assert greetings.send_due(TOMORROW) == (0, 1)
+    assert greetings.send_due(TODAY) == 0
+    assert greetings.send_due(TOMORROW) == 1
     blessings = _blessing_calls(sent)
     assert len(blessings) == 1
     assert blessings[0].args[0] == "devotee@example.com"
     assert "Birthday" in blessings[0].args[1]
 
-    assert greetings.send_due(TOMORROW) == (0, 0)  # idempotent - never twice
+    assert greetings.send_due(TOMORROW) == 0  # idempotent - never twice
     assert len(_blessing_calls(sent)) == 1
 
 
@@ -92,14 +91,14 @@ def test_free_seva_booked_for_today_is_blessed_immediately(client, db, monkeypat
     ticket = _book(client, sent, _pooja(db).id, seva_date=TODAY)
     assert len(_blessing_calls(sent)) == 1
     assert _ticket(db, ticket["id"]).greeting_sent_at is not None
-    assert OccasionGreetingService(db).send_due(TODAY) == (0, 0)
+    assert OccasionGreetingService(db).send_due(TODAY) == 0
 
 
 def test_free_seva_without_occasion_sends_no_blessing(client, db, monkeypatch):
     sent = _capture_email(monkeypatch)
     _book(client, sent, _pooja(db).id, occasion=None, seva_date=TODAY)
     assert _blessing_calls(sent) == []
-    assert OccasionGreetingService(db).send_due(TODAY) == (0, 0)
+    assert OccasionGreetingService(db).send_due(TODAY) == 0
 
 
 def test_pending_seva_is_blessed_on_its_date_only_once_paid(client, db, monkeypatch, staff):
@@ -109,11 +108,11 @@ def test_pending_seva_is_blessed_on_its_date_only_once_paid(client, db, monkeypa
     assert ticket["payment_status"] == "PENDING"
 
     greetings = OccasionGreetingService(db)
-    assert greetings.send_due(TOMORROW) == (0, 0)  # unpaid on the day: nothing
+    assert greetings.send_due(TOMORROW) == 0  # unpaid on the day: nothing
 
     assert client.post(f"/api/v1/seva-tickets/{ticket['id']}/collect-payment", headers=headers).status_code == 200
     assert _blessing_calls(sent) == []  # paid before the date: wait for it
-    assert greetings.send_due(TOMORROW) == (0, 1)
+    assert greetings.send_due(TOMORROW) == 1
     assert "Wedding Anniversary" in _blessing_calls(sent)[0].args[1]
 
 
@@ -132,7 +131,7 @@ def test_cancelled_seva_is_never_blessed(client, db, monkeypatch):
     ticket = _book(client, sent, _pooja(db).id)
     _ticket(db, ticket["id"]).status = TicketStatus.CANCELLED
     db.commit()
-    assert OccasionGreetingService(db).send_due(TOMORROW) == (0, 0)
+    assert OccasionGreetingService(db).send_due(TOMORROW) == 0
 
 
 def test_blessing_is_not_sent_once_the_window_has_passed(client, db, monkeypatch):
@@ -140,8 +139,8 @@ def test_blessing_is_not_sent_once_the_window_has_passed(client, db, monkeypatch
     ticket = _book(client, sent, _pooja(db).id)
     greetings = OccasionGreetingService(db)
     last_day = TOMORROW + timedelta(days=GREETING_WINDOW_DAYS - 1)
-    assert greetings.send_due(last_day + timedelta(days=1)) == (0, 0)  # e.g. cron down all week
-    assert greetings.send_due(last_day) == (0, 1)  # still inside it: sent late rather than never
+    assert greetings.send_due(last_day + timedelta(days=1)) == 0  # e.g. cron down all week
+    assert greetings.send_due(last_day) == 1  # still inside it: sent late rather than never
     assert _ticket(db, ticket["id"]).greeting_sent_at is not None
 
 
@@ -151,54 +150,42 @@ def test_failed_send_is_retried_on_the_next_run(client, db, monkeypatch):
 
     monkeypatch.setattr("app.services.email_service.EmailService.send", MagicMock(return_value=False))
     greetings = OccasionGreetingService(db)
-    assert greetings.send_due(TOMORROW) == (0, 0)
+    assert greetings.send_due(TOMORROW) == 0
     assert _ticket(db, ticket["id"]).greeting_sent_at is None  # claim released
 
     _capture_email(monkeypatch)
-    assert greetings.send_due(TOMORROW) == (0, 1)
+    assert greetings.send_due(TOMORROW) == 1
 
 
-# ------------------------------------------------------------------ abhishekam
+# -------------------------------------------------------------- email content
 
 
-def _abhishekam(db, occasion_date, payment_status=AbhishekamPaymentStatus.PAID, email="a@example.com"):
-    row = Abhishekam(
-        reference_number=f"ABHI-TEST-{email}-{occasion_date}", devotee_name="Lakshmi",
-        mobile_number="9876543214", email=email, occasion="Birthday", occasion_date=occasion_date,
-        photo_url="https://example.com/p.jpg", amount=50, payment_status=payment_status,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return row
-
-
-def test_paid_abhishekam_is_blessed_on_its_date(db, monkeypatch):
+def test_blessing_email_links_the_devotees_page_and_the_public_page_if_chosen(client, db, monkeypatch):
     sent = _capture_email(monkeypatch)
-    row = _abhishekam(db, TOMORROW)
-    greetings = OccasionGreetingService(db)
-    assert greetings.send_due(TODAY) == (0, 0)
-    assert greetings.send_due(TOMORROW) == (1, 0)
-    blessing = _blessing_calls(sent)[0]
-    assert blessing.args[0] == "a@example.com"
-    assert f"/abhishekam/{row.id}" in blessing.args[2]
-    assert greetings.send_due(TOMORROW) == (0, 0)
+    pooja = _pooja(db)
+    pooja.public_blessings = True
+    db.commit()
+    ticket = _book(client, sent, pooja.id, seva_date=TODAY)
+    body = _blessing_calls(sent)[0].args[2]
+    assert f"/blessing/{ticket['id']}" in body
+    assert "/abhishekam/blessings/" not in body  # private by default
+
+    _book(client, sent, pooja.id, seva_date=TODAY, email="public@example.com", mobile_number="9876543215",
+          show_publicly=True, photo_url="https://example.com/p.jpg")
+    public_body = _blessing_calls(sent)[-1].args[2]
+    assert f"/abhishekam/blessings/{TODAY.isoformat()}" in public_body
 
 
-def test_unpaid_abhishekam_is_never_blessed(db, monkeypatch):
-    _capture_email(monkeypatch)
-    _abhishekam(db, TODAY, payment_status=AbhishekamPaymentStatus.PENDING)
-    assert OccasionGreetingService(db).send_due(TODAY) == (0, 0)
-
-
-def test_cron_entry_point_runs_send_due(db, monkeypatch):
+def test_cron_entry_point_runs_send_due(client, db, monkeypatch):
     from app.cli import send_occasion_greetings
 
-    _capture_email(monkeypatch)
-    _abhishekam(db, TODAY)
+    sent = _capture_email(monkeypatch)
+    ticket = _book(client, sent, _pooja(db).id)
+    _ticket(db, ticket["id"]).seva_date = TODAY  # its day has come
+    db.commit()
     monkeypatch.setattr(send_occasion_greetings, "SessionLocal", lambda: db)
     send_occasion_greetings.main()
-    assert db.query(Abhishekam).one().greeting_sent_at is not None
+    assert _ticket(db, ticket["id"]).greeting_sent_at is not None
 
 
 # -------------------------------------------------------------------- donation

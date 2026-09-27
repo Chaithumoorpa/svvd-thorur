@@ -35,7 +35,7 @@ class PoojaService:
             raise HTTPException(status_code=400, detail="Pooja with this name already exists")
 
         for key, value in fields.items():
-            if key in ("name", "pooja_type", "is_paid", "is_active", "sort_order") and value is None:
+            if key in ("name", "pooja_type", "is_paid", "is_active", "sort_order", "public_blessings") and value is None:
                 continue
             setattr(pooja, key, value)
 

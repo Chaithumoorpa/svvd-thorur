@@ -1,14 +1,19 @@
+from datetime import date
 from typing import List
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.core.cache import cached, invalidate
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.models.user import User
+from app.schemas.blessing import SevaCalendarDay, SevaDay
 from app.schemas.pooja import PoojaCreate, PoojaOut, PoojaUpdate
+from app.services.blessing_service import MAX_CALENDAR_DAYS, BlessingService
 from app.services.pooja_service import PoojaService
-from app.utils.dependencies import AuditContext, get_audit, get_pooja_service, require_permission
+from app.utils.dependencies import (
+    AuditContext, get_audit, get_blessing_service, get_pooja_service, require_permission,
+)
 
 router = APIRouter(prefix="/poojas", tags=["Poojas"])
 
@@ -38,6 +43,35 @@ def list_all_poojas(
 @router.get("/{pooja_id}", response_model=PoojaOut)
 def get_pooja(pooja_id: int, service: PoojaService = Depends(get_pooja_service)):
     return service.get_pooja(pooja_id)
+
+
+@router.get("/{pooja_id}/calendar", response_model=List[SevaCalendarDay])
+def get_seva_calendar(
+    response: Response,
+    pooja_id: int,
+    start: date,
+    end: date,
+    service: BlessingService = Depends(get_blessing_service),
+):
+    """Public: the seva's bookings per day from `start` to `end` (inclusive) -
+    the rolling contribution-style grid behind the Abhishekam calendar."""
+    if end < start or (end - start).days >= MAX_CALENDAR_DAYS:
+        raise HTTPException(status_code=400, detail=f"Choose a range of 1 to {MAX_CALENDAR_DAYS} days.")
+    response.headers["Cache-Control"] = "public, max-age=60"
+    return service.calendar(pooja_id, start, end)
+
+
+@router.get("/{pooja_id}/calendar/{day}", response_model=SevaDay)
+def get_seva_day(
+    response: Response,
+    pooja_id: int,
+    day: date,
+    service: BlessingService = Depends(get_blessing_service),
+):
+    """Public: one day - a calendar square's pop-up, and that date's public
+    blessings page. Only bookings the devotee chose to show, once paid for."""
+    response.headers["Cache-Control"] = "public, max-age=60"
+    return service.day(pooja_id, day)
 
 
 @router.post("", response_model=PoojaOut, status_code=201)
