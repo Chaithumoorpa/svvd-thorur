@@ -50,10 +50,11 @@ function PoojaCard({ p }: { p: Pooja }) {
   );
 }
 
-export default async function PoojasPage({ searchParams }: { searchParams: { type?: string } }) {
+export default async function PoojasPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
+  const { type } = await searchParams;
   const poojas = await fetchPoojas();
   const t = await getTranslations('poojas');
-  const only = GROUPS.find((g) => g.id === searchParams.type);
+  const only = GROUPS.find((g) => g.id === type);
   const groups = (only ? [only] : GROUPS)
     .map((g) => ({ ...g, items: poojas.filter((p) => g.types.includes(p.pooja_type)) }))
     .filter((g) => g.items.length);
@@ -67,8 +68,8 @@ export default async function PoojasPage({ searchParams }: { searchParams: { typ
           <Link
             key={g.id || 'all'}
             href={g.id ? `/poojas?type=${g.id}` : '/poojas'}
-            aria-current={(searchParams.type ?? '') === g.id ? 'page' : undefined}
-            className={`rounded-full border px-5 py-2 text-sm font-medium ${(searchParams.type ?? '') === g.id ? 'border-maroon bg-maroon text-white' : 'border-amber-300 bg-white text-maroon-dark hover:bg-amber-50'}`}
+            aria-current={(type ?? '') === g.id ? 'page' : undefined}
+            className={`rounded-full border px-5 py-2 text-sm font-medium ${(type ?? '') === g.id ? 'border-maroon bg-maroon text-white' : 'border-amber-300 bg-white text-maroon-dark hover:bg-amber-50'}`}
           >
             {t(g.titleKey)}
           </Link>

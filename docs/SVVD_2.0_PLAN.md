@@ -145,5 +145,5 @@ Enforced only on the backend via `require_permission`; the frontend hides UI fro
 - `public/logo.png` has a baked-in checkerboard "transparent" background; a proper transparent PNG/SVG is needed.
 - Timestamps are stored as naive local time; run the backend and Postgres containers with the same `TZ` (compose defaults to `Asia/Kolkata`).
 - Legacy gifts copied into `donations` are not in `income_transactions`, so Finance totals only include gifts recorded after the upgrade.
-- The frontend Dockerfile still uses Node 18 (past its support window); moving to Node 20 was not attempted.
+- The frontend Dockerfile uses Node 22 LTS (moved from Node 18 with the Next.js 15.5 upgrade).
 - PostgreSQL was validated with a local PostgreSQL 17 instance because Docker was unavailable in the authoring environment, so `docker compose up` itself has not been exercised.

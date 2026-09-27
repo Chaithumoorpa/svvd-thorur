@@ -31,7 +31,7 @@ Everything below is what's left, done from the AWS Console, your terminal
 
 | Item | Cost |
 |---|---|
-| EC2 `t3.micro` or `t4g.micro` (1 vCPU/AWS Graviton, 1GB RAM) | **Free** for 12 months on a new AWS account (750 hrs/month), then ~$6-8/month (`t4g.micro` is cheaper than `t3.micro` — Graviton/ARM). Since our Docker images (`python:3.11-slim`, `node:18-alpine`) build fine on ARM, `t4g.micro` is the better long-term default. |
+| EC2 `t3.micro` or `t4g.micro` (1 vCPU/AWS Graviton, 1GB RAM) | **Free** for 12 months on a new AWS account (750 hrs/month), then ~$6-8/month (`t4g.micro` is cheaper than `t3.micro` — Graviton/ARM). Since our Docker images (`python:3.11-slim`, `node:22-alpine`) build fine on ARM, `t4g.micro` is the better long-term default. |
 | EBS storage (20-30GB gp3) | Free tier covers 30GB for 12 months, then ~$2-3/month |
 | Elastic IP | Free while attached to a running instance |
 | Data transfer | First 100GB/month outbound free (Always Free); at 1-2k users you won't get near this |
