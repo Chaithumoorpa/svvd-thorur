@@ -75,7 +75,14 @@ function refreshSessionOnActivity() {
   lastRefreshAt = now;
   api
     .post<{ access_token: string }>('/auth/refresh')
-    .then((res) => setStoredToken(res.data.access_token))
+    .then((res) => {
+      // Only apply the refreshed token if the stored token is still the exact
+      // one this call refreshed - a click that lands mid-login (e.g. signing
+      // in as a different account without a full page reload in between)
+      // could otherwise let this stale background refresh silently overwrite
+      // the session that just replaced it.
+      if (getStoredToken() === token) setStoredToken(res.data.access_token);
+    })
     .catch(() => {
       /* token already expired/invalid - leave it; the next real request 401s and signs out */
     });
