@@ -69,6 +69,9 @@ password_reset_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60 * 6
 otp_request_limiter = SimpleRateLimiter(max_requests=5, window_seconds=60 * 60)
 otp_verify_limiter = SimpleRateLimiter(max_requests=15, window_seconds=60 * 60)
 blessing_photo_upload_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60 * 60)
+# Creating a Razorpay order costs an API call against the temple's own Razorpay
+# account - shared by the paid-seva and public-donation payment flows.
+payment_order_limiter = SimpleRateLimiter(max_requests=10, window_seconds=60 * 60)
 
 
 def get_client_ip(request: Request, trusted_hops: Optional[int] = None) -> str:

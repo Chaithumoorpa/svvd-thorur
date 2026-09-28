@@ -217,7 +217,7 @@ export interface DonorInput {
   pan_number?: string | null;
 }
 
-export type PaymentMode = 'CASH' | 'UPI' | 'BANK' | 'CHEQUE';
+export type PaymentMode = 'CASH' | 'UPI' | 'BANK' | 'CHEQUE' | 'ONLINE';
 export type DonationType = 'general' | 'annadanam' | 'festival' | 'pooja' | 'construction' | 'other';
 
 export interface Donation {
@@ -320,6 +320,48 @@ export interface CounterTicketInput extends SevaBookingInput {
   payment_status?: 'FREE' | 'PAID';
   amount?: number;
   email?: string;
+}
+
+// ---------------------------------------------------------------------- payments
+/** Whether online payment (Razorpay) is configured - the public donation form
+ * and BookSeva's "pay online" option check this first (see getPaymentStatus). */
+export interface PaymentStatusInfo {
+  enabled: boolean;
+}
+
+/** From an .../online-order call: open Razorpay's Checkout with these, then
+ * call the matching .../online-confirm with payment_token + what Checkout's
+ * own success callback gives you. See lib/razorpay.ts. */
+export interface RazorpayOrder {
+  order_id: string;
+  amount_paise: number;
+  currency: string;
+  key_id: string;
+  payment_token: string;
+}
+
+export interface RazorpayConfirmInput {
+  payment_token: string;
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}
+
+/** Same shape as SevaBookingOnlineInput minus turnstile_token (already spent
+ * at the order step) - createSevaPaymentOrder's request body. */
+export type SevaPaymentOrderInput = SevaBookingOnlineInput;
+
+export interface DonationOrderInput {
+  donor_name: string;
+  phone: string;
+  email?: string;
+  pan_number?: string;
+  address?: string;
+  amount: number;
+  donation_type?: DonationType;
+  purpose?: string;
+  occasion?: string;
+  turnstile_token?: string;
 }
 
 export interface AppUser {

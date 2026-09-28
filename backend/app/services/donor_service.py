@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.donation import Donation
 from app.models.donor import Donor
-from app.models.finance import IncomeSourceType, IncomeTransaction
+from app.models.finance import IncomeSourceType, IncomeTransaction, PaymentMode
 from app.repositories.donor_repo import DonationRepository, DonorRepository
 from app.schemas.donor import (
     DonationCreate, DonationUpdate, DonorCreate, DonorOut, mask_pan,
@@ -82,36 +82,76 @@ class DonationService:
         return donation
 
     # ---- commands ----------------------------------------------------------------
-    def create(self, data: DonationCreate, user_id: int) -> Donation:
-        donor = self.donors.get_by_id(data.donor_id)
-        if not donor or not donor.is_active:
-            raise HTTPException(status_code=400, detail="Donor not found or inactive")
-
+    def _create(self, donor: Donor, *, amount, donation_type: str, purpose, donated_on, payment_mode,
+               recorded_by_id: Optional[int], occasion, ledger_notes: str) -> Donation:
+        """Shared by every path that records a donation (admin-entered and the
+        public online one): the gift and its ledger entry are stored together
+        in one transaction, or not at all."""
         donation = Donation(
-            donor_id=data.donor_id,
-            amount=data.amount,
-            donation_type=data.donation_type.value,
-            purpose=data.purpose,
-            donated_on=data.donated_on or datetime.now(),
-            payment_mode=data.payment_mode,
-            recorded_by_id=user_id,
-            occasion=data.occasion,
+            donor_id=donor.id,
+            amount=amount,
+            donation_type=donation_type,
+            purpose=purpose,
+            donated_on=donated_on,
+            payment_mode=payment_mode,
+            recorded_by_id=recorded_by_id,
+            occasion=occasion,
         )
         self.db.add(donation)
         self.db.flush()  # need the id for the ledger reference
 
-        # Same transaction: a gift and its ledger entry are stored together or not at all.
         self.db.add(IncomeTransaction(
             source_type=IncomeSourceType.DONATION,
             reference_id=f"donation:{donation.id}",
-            amount=data.amount,
-            payment_mode=data.payment_mode,
-            received_by=user_id,
-            received_at=donation.donated_on,
-            notes=f"Donation from {donor.name}",
+            amount=amount,
+            payment_mode=payment_mode,
+            received_by=recorded_by_id,
+            received_at=donated_on,
+            notes=ledger_notes,
         ))
         self.db.commit()
         return self.get(donation.id)
+
+    def create(self, data: DonationCreate, user_id: int) -> Donation:
+        donor = self.donors.get_by_id(data.donor_id)
+        if not donor or not donor.is_active:
+            raise HTTPException(status_code=400, detail="Donor not found or inactive")
+        return self._create(
+            donor, amount=data.amount, donation_type=data.donation_type.value, purpose=data.purpose,
+            donated_on=data.donated_on or datetime.now(), payment_mode=data.payment_mode,
+            recorded_by_id=user_id, occasion=data.occasion, ledger_notes=f"Donation from {donor.name}",
+        )
+
+    def find_or_create_donor_by_phone(self, name: str, phone: str, email, pan_number, address) -> Donor:
+        """For the public online donation flow, where nobody is signed in to
+        pick an existing donor: match by phone (the one field every donor has
+        and a devotee reliably remembers), else create one. An existing
+        donor's own details are left as they are - only filled in where blank,
+        never overwritten by a later gift's paperwork."""
+        donor = self.donors.get_by_phone(phone)
+        if donor:
+            for field, value in (("email", email), ("pan_number", pan_number), ("address", address)):
+                if value and not getattr(donor, field):
+                    setattr(donor, field, value)
+            self.db.commit()
+            return donor
+        return self.donors.create(Donor(name=name, phone=phone, email=email, pan_number=pan_number, address=address))
+
+    def create_public(self, donor: Donor, *, amount, donation_type: str, purpose, occasion,
+                      razorpay_payment_id: str, razorpay_method: Optional[str]) -> Donation:
+        """A donation paid online (Razorpay), already verified by the caller -
+        see app.api.v1.donors' online-confirm endpoint. Issues the receipt
+        immediately, since the money has actually arrived (unlike a
+        staff-entered PENDING/counter donation - there is no such thing for
+        this path, online donations are always paid up front)."""
+        method_note = f" ({razorpay_method})" if razorpay_method else ""
+        donation = self._create(
+            donor, amount=amount, donation_type=donation_type, purpose=purpose, donated_on=datetime.now(),
+            payment_mode=PaymentMode.ONLINE, recorded_by_id=None, occasion=occasion,
+            ledger_notes=f"Donation from {donor.name} - paid online via Razorpay{method_note}, "
+                        f"payment {razorpay_payment_id}",
+        )
+        return self.issue_receipt(donation.id)
 
     def _linked_income(self, donation_id: int) -> Optional[IncomeTransaction]:
         return (

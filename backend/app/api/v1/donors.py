@@ -1,21 +1,31 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query
 from sqlalchemy.orm import Session
 
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission, has_permission
+from app.core.security import create_access_token, decode_access_token
 from app.models.user import User
 from app.repositories.donor_repo import DonorRepository
 from app.repositories.temple_repo import TempleRepository
 from app.schemas.donor import (
     DonationCreate, DonationOut, DonationUpdate, DonorCreate, DonorOut, DonorUpdate, DonationType,
 )
+from app.schemas.payment import DONATION_ONLINE_MODE, DonationOrderIn, RazorpayConfirmIn, RazorpayOrderOut
 from app.services.donation_receipt_service import DonationReceiptService
 from app.services.donor_service import DonationService, DonorService, donor_to_out
 from app.services.email_service import EmailService
-from app.utils.dependencies import AuditContext, get_audit, get_db, require_permission
+from app.services.razorpay_service import RazorpayService
+from app.services.turnstile_service import TurnstileService
+from app.utils.dependencies import (
+    AuditContext, get_audit, get_db, get_razorpay_service, get_turnstile_service, require_permission,
+)
+from app.utils.rate_limiter import enforce, get_client_ip, payment_order_limiter
+
+DONATION_PAYMENT_PURPOSE = "donation_payment"
+PAYMENT_TOKEN_TTL = timedelta(minutes=20)  # generous for a bank's own OTP step mid-checkout
 
 router = APIRouter(tags=["Donors & Donations"])
 
@@ -199,8 +209,6 @@ def download_receipt(
     _: User = Depends(_read_donations),
 ):
     """Receipt PDF. Authenticated (TRUSTEE+): receipts contain donor personal data."""
-    from fastapi import HTTPException
-
     donation = service.get(donation_id)
     if not donation.receipt_number:
         raise HTTPException(status_code=400, detail="Receipt has not been generated yet")
@@ -211,3 +219,82 @@ def download_receipt(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="Receipt_{donation.receipt_number}.pdf"'},
     )
+
+
+# ---------------------------------------------------------------- public: pay online
+@router.post("/donations/public/order", response_model=RazorpayOrderOut)
+def create_donation_payment_order(
+    payload: DonationOrderIn,
+    request: Request,
+    razorpay: RazorpayService = Depends(get_razorpay_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
+):
+    """Step 1 of a public online donation (no sign-in, no staff involved -
+    contrast with POST /donations above, which requires an existing donor_id
+    and TRUSTEE+ auth). The amount comes from the devotee's own input here
+    (there's no server-side price to check it against, unlike a seva), but
+    is bounded and never trusted again after this - the confirm step below
+    refunds nothing extra and books nothing more than what this order paid
+    for. Nothing is written to the database until the payment is verified."""
+    enforce(payment_order_limiter, get_client_ip(request), "Too many payment attempts. Please try again later.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
+
+    order = razorpay.create_order(payload.amount, purpose=f"Donation: {payload.donation_type.value}")
+    donation = payload.model_dump(mode="json", exclude={"turnstile_token"})
+    token = create_access_token(
+        {"purpose": DONATION_PAYMENT_PURPOSE, "order_id": order["order_id"], "donation": donation},
+        expires_delta=PAYMENT_TOKEN_TTL,
+    )
+    return RazorpayOrderOut(**order, payment_token=token)
+
+
+@router.post("/donations/public/confirm", response_model=DonationOut)
+def confirm_donation_payment(
+    payload: RazorpayConfirmIn,
+    service: DonationService = Depends(get_donation_service),
+    razorpay: RazorpayService = Depends(get_razorpay_service),
+):
+    """Step 2: verifies the payment_token from public/order and the payment
+    itself, then records the donation - matched or created by phone (see
+    DonationService.find_or_create_donor_by_phone) - and issues its receipt
+    right away, since the money has already arrived."""
+    claims = decode_access_token(payload.payment_token)
+    if not claims or claims.get("purpose") != DONATION_PAYMENT_PURPOSE or claims.get("order_id") != payload.razorpay_order_id:
+        raise HTTPException(status_code=400, detail="This payment session has expired. Please try again.")
+    if not razorpay.verify_payment_signature(
+        payload.razorpay_order_id, payload.razorpay_payment_id, payload.razorpay_signature
+    ):
+        raise HTTPException(status_code=400, detail="Payment could not be verified. Please contact the temple office.")
+
+    data = DonationOrderIn.model_validate(claims["donation"])
+    donor = service.find_or_create_donor_by_phone(
+        data.donor_name, data.phone, data.email, data.pan_number, data.address,
+    )
+    method = razorpay.payment_method(payload.razorpay_payment_id)
+    donation = service.create_public(
+        donor, amount=data.amount, donation_type=data.donation_type.value, purpose=data.purpose,
+        occasion=data.occasion, razorpay_payment_id=payload.razorpay_payment_id, razorpay_method=method,
+    )
+    out = _donation_out(donation)
+    EmailService().notify_admin(
+        f"New online donation: Rs. {donation.amount}",
+        f"Donor: {donor.name}\nPhone: {donor.phone}\nAmount: Rs. {donation.amount}\n"
+        f"Type: {donation.donation_type}\nReceipt: {donation.receipt_number}\n"
+        f"Paid online via Razorpay, payment {payload.razorpay_payment_id}",
+    )
+    if donor.email:
+        EmailService().send(
+            donor.email,
+            f"Thank you for your donation - receipt {donation.receipt_number}",
+            f"Dear {donor.name},\n\n"
+            f"Thank you for your generous donation of Rs. {donation.amount} to "
+            "Sri Varasidhi Vinayaka Swamy Devasthanam, Thorur.\n\n"
+            f"Receipt number: {donation.receipt_number}\n"
+            f"Date: {donation.donated_on:%d-%m-%Y}\n\n"
+            "This receipt number is recorded in the temple's accounts; the receipt itself is "
+            "available from the temple office on request.\n\n"
+            "May Sri Varasidhi Vinayaka Swamy bless you and your family.\n\n"
+            "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
+        )
+    return out

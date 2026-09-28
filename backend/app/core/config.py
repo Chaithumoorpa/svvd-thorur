@@ -95,6 +95,13 @@ class Settings(BaseSettings):
     # so local dev and any environment without keys configured still works.
     TURNSTILE_SECRET_KEY: str | None = None
 
+    # Razorpay (online payments for donations and paid seva bookings). Unset =
+    # the payment endpoints return 503 and the public UI falls back to the
+    # existing offline paths (pay at counter / donations coming soon) - same
+    # degrade-safely pattern as S3/SES/Turnstile above.
+    RAZORPAY_KEY_ID: str | None = None
+    RAZORPAY_KEY_SECRET: str | None = None
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):

@@ -43,7 +43,7 @@ class IncomeTransactionOut(BaseModel):
     payment_mode: PaymentMode
     reference_id: Optional[str] = None
     notes: Optional[str] = None
-    received_by: int
+    received_by: Optional[int] = None  # None: collected automatically online, not by staff
     received_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
