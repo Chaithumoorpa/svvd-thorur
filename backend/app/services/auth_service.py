@@ -69,7 +69,9 @@ class AuthService:
         return self.user_repository.create(user)
 
     def create_general_user(self, data: PublicRegister) -> User:
-        """Public self-registration: always GENERAL_USER, no admin access."""
+        """Public self-registration: always GENERAL_USER, no admin access.
+        data.accept_terms is already validated True by the schema - this just
+        records when, as proof of consent."""
         self._ensure_unique(data.username, data.email)
         user = User(
             username=data.username,
@@ -78,6 +80,7 @@ class AuthService:
             hashed_password=hash_password(data.password),
             roles=["GENERAL_USER"],
             must_change_password=False,
+            terms_accepted_at=datetime.now(timezone.utc),
         )
         return self.user_repository.create(user)
 

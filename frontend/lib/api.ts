@@ -143,8 +143,9 @@ export const forgotPassword = async (email: string, turnstile_token?: string) =>
   (await api.post<{ message: string }>('/auth/forgot-password', { email, turnstile_token })).data;
 export const resetPassword = async (token: string, new_password: string) =>
   (await api.post<{ message: string }>('/auth/reset-password', { token, new_password })).data;
-export const register = async (data: { username: string; password: string; email: string; phone: string; turnstile_token?: string }) =>
-  (await api.post<AppUser>('/auth/register', data)).data;
+export const register = async (data: {
+  username: string; password: string; email: string; phone: string; accept_terms: boolean; turnstile_token?: string;
+}) => (await api.post<AppUser>('/auth/register', data)).data;
 export const getMe = async () => (await api.get<Me>('/auth/verify')).data;
 export const changePassword = async (current_password: string, new_password: string) =>
   (await api.post('/auth/change-password', { current_password, new_password })).data;

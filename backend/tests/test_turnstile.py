@@ -75,7 +75,7 @@ def test_register_requires_turnstile_when_configured(client, monkeypatch):
     _configure_turnstile(monkeypatch, passes=False)
     r = client.post("/api/v1/auth/register", json={
         "username": "newdevotee", "email": "newdevotee@example.com", "phone": "9876543210",
-        "password": "Password123",
+        "password": "Password123", "accept_terms": True,
     })
     assert r.status_code == 400
     assert "Security check" in r.json()["detail"]
