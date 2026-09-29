@@ -17,6 +17,6 @@ xhtml2pdf==0.2.20
 reportlab==5.0.1
 boto3==1.35.99
 httpx==0.28.1
-cachetools==5.5.2
+cachetools==7.2.0
 # Sun/moon positions for the festival calendar (app/services/panchang.py).
 ephem==4.2.1
