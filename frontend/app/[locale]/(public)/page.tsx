@@ -8,13 +8,13 @@ import SectionHeading from '@/components/public/SectionHeading';
 import { Link } from '@/i18n/navigation';
 import { formatDate, parseDate } from '@/lib/format';
 import { fetchHome } from '@/lib/server-api';
-import { SITE_URL, localizedAlternates, templeAddress, templeName } from '@/lib/site';
+import { SITE_URL, pageMetadata, templeAddress, templeName } from '@/lib/site';
 
 
 const HH_MM = (t: string) => t.slice(0, 5);
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { alternates: await localizedAlternates('/') };
+  return pageMetadata('/');
 }
 
 export default async function HomePage() {
