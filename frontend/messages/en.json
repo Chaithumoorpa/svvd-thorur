@@ -216,13 +216,6 @@
       "sectionText": "Placeholder: how visitor information is handled.",
       "lastUpdated": "Last updated: {date}"
     },
-    "termsPage": {
-      "title": "Terms & Conditions",
-      "intro": "This is placeholder legal text for terms and conditions. The final document will be prepared by the temple trustees.",
-      "sectionHeading": "Use of Site",
-      "sectionText": "Placeholder: acceptable use and limitations.",
-      "lastUpdated": "Last updated: {date}"
-    },
     "refundPolicy": {
       "title": "Refund Policy",
       "intro": "Placeholder refund policy. Any refunds for donations or services will be handled transparently by the temple administration.",
