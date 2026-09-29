@@ -69,6 +69,7 @@ class PublicRegister(BaseModel):
     email: EmailStr
     phone: str = Field(max_length=20)
     password: str
+    accept_terms: bool
     # Cloudflare Turnstile challenge token from the frontend widget - required
     # only when TURNSTILE_SECRET_KEY is configured server-side.
     turnstile_token: Optional[str] = None
@@ -90,6 +91,13 @@ class PublicRegister(BaseModel):
     @classmethod
     def validate_password(cls, v: str) -> str:
         return _validate_password(v)
+
+    @field_validator("accept_terms")
+    @classmethod
+    def validate_accept_terms(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError("You must agree to the Terms & Conditions and Privacy Policy to register")
+        return v
 
 
 class UserUpdate(BaseModel):
