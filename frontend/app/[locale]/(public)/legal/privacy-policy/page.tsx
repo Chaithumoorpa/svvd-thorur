@@ -24,7 +24,7 @@ export default async function PrivacyPolicyPage() {
   return (
     <PageContainer>
       <h1 className="text-3xl font-serif font-semibold text-templeDark">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-gray-500">Last updated: 24 September 2026</p>
+      <p className="mt-2 text-sm text-gray-500">Last updated: 29 September 2026</p>
       <p className="mt-4 text-gray-700">
         {name} (&quot;the temple&quot;, &quot;we&quot;, &quot;us&quot;) operates svvdthorur.org for devotees to look up
         temple information, book sevas, make donations and get in touch with the temple office. This
@@ -42,7 +42,8 @@ export default async function PrivacyPolicyPage() {
           <li><strong>Seva bookings:</strong> devotee name, mobile number, email address, and the seva/date booked. Online bookings verify the email with a one-time code before the booking is created.</li>
           <li><strong>Donations:</strong> donor name, phone, email, postal address, and PAN (only when provided, to issue an 80G tax receipt).</li>
           <li><strong>Contact form:</strong> name, email address, and your message.</li>
-          <li><strong>Site visits:</strong> an anonymized, one-way hash of your IP address plus the date, used only to show a visitor count - never a raw IP, and never linked to any account.</li>
+          <li><strong>Site visits:</strong> for the public visitor counter, an anonymized, one-way hash of your IP address plus the date - never a raw IP, and never linked to any account.</li>
+          <li><strong>Security log:</strong> separately, signing in, changing your password, or deleting your own account records the IP address you did it from, tied to that account action - this is a standard security log, kept for accountability, not used to profile or track you.</li>
         </ul>
         <p className="mt-2 text-gray-700">We do not use advertising or third-party tracking cookies. Staying signed in relies on a token your browser stores locally, not a tracking cookie.</p>
       </section>
@@ -68,6 +69,7 @@ export default async function PrivacyPolicyPage() {
         </p>
         <ul className="mt-2 list-disc pl-6 text-gray-700">
           <li>Amazon Web Services (AWS), for hosting and file storage, and Amazon SES, to deliver booking/verification/receipt emails.</li>
+          <li>Cloudflare Turnstile, a CAPTCHA-style check on registration, login, and public forms, to block automated abuse - it receives your IP address and browser signals, not your name or contact details.</li>
           <li>Once online payment is enabled, a payment gateway - only for the transaction it's processing, and only the details that transaction needs.</li>
         </ul>
         <p className="mt-2 text-gray-700">We disclose personal data to government or law enforcement only where legally required to do so.</p>
@@ -78,7 +80,11 @@ export default async function PrivacyPolicyPage() {
         <p className="mt-2 text-gray-700">
           We keep personal data only as long as needed for the purpose it was collected for, and as long as
           applicable tax and charity-accounting rules require donation and receipt records to be kept.
-          Devotee account data is kept until you delete your account (see below) or ask us to.
+          Devotee account data is kept until you delete your account (see below) or ask us to. Deleting
+          your account removes your registration details, but a record that the action happened (date,
+          action taken, and the username, which no longer identifies a live account) stays in our security
+          log, as it does for any account action - this is a legitimate accountability record, not personal
+          data we could otherwise act on.
         </p>
       </section>
 
@@ -113,7 +119,7 @@ export default async function PrivacyPolicyPage() {
         <ul className="mt-2 list-disc pl-6 text-gray-700">
           <li>All traffic to the site is encrypted (HTTPS).</li>
           <li>Passwords are never stored in plain text - only a one-way cryptographic hash.</li>
-          <li>Access to donor, booking and account data is restricted to authorized temple staff and administrators, and every sensitive action they take is logged.</li>
+          <li>Access to donor, booking and account data is restricted to authorized temple staff and administrators, and every sensitive action they take is logged with the account, action, and IP address involved.</li>
           <li>Sign-in sessions expire automatically after a period of inactivity.</li>
         </ul>
       </section>
