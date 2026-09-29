@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
 import PageContainer from '@/components/PageContainer'
 import { fetchTemple } from '@/lib/server-api'
-import { localizedAlternates, templeAddress, templeName } from '@/lib/site'
+import { pageMetadata, templeAddress, templeName } from '@/lib/site'
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { alternates: await localizedAlternates('/legal/privacy-policy') }
+  return pageMetadata('/legal/privacy-policy');
 }
 
 /**
