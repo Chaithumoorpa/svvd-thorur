@@ -1,7 +1,7 @@
 # Pinned to the versions the test suite runs against. Upgrade deliberately:
 # bump, run `pytest` in backend/, then commit.
 fastapi==0.141.1
-starlette==1.6.0
+starlette==1.7.0
 uvicorn[standard]==0.53.0
 sqlalchemy==2.0.54
 psycopg2-binary==2.9.13
