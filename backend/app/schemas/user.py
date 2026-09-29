@@ -185,3 +185,15 @@ class PasswordResetConfirm(BaseModel):
     @classmethod
     def validate_new_password(cls, v: str) -> str:
         return _validate_password(v)
+
+
+class NotificationPreferenceOut(BaseModel):
+    """What the /unsubscribe page shows before the devotee picks anything -
+    identifies the account by email only, never the username."""
+    email: Optional[str] = None
+    receive_notifications: bool
+
+
+class NotificationPreferenceUpdate(BaseModel):
+    token: str
+    receive_notifications: bool

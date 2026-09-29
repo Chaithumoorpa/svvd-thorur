@@ -10,5 +10,5 @@ export const config = {
   // pages (public but English-only, same reasoning as the auth pages), which all
   // stay outside next-intl's locale routing. Also excluded: Next internals and any
   // request for a file with an extension (favicon.ico, logo.png, robots.txt, etc).
-  matcher: ['/((?!api|admin|login|register|my-bookings|forgot-password|reset-password|abhishekam|blessing|_next|.*\\..*).*)'],
+  matcher: ['/((?!api|admin|login|register|my-bookings|forgot-password|reset-password|unsubscribe|abhishekam|blessing|_next|.*\\..*).*)'],
 };

@@ -20,6 +20,7 @@ class User(Base):
     roles = Column(StringArray, nullable=False, default=lambda: ["GENERAL_USER"])
     last_login = Column(DateTime, nullable=True)
     must_change_password = Column(Boolean, default=False, nullable=False)
+    receive_notifications = Column(Boolean, default=True, nullable=False)
 
     # Relationships
     member = relationship("Member", back_populates="user", uselist=False)

@@ -7,15 +7,18 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission, permissions_for
+from app.core.security import decode_access_token
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import (
-    DeleteAccountConfirm, LoginOtpVerify, LoginResponse, PasswordChange, PasswordResetConfirm,
-    PasswordResetRequest, PublicRegister, TokenOut, UserCreate, UserLogin, UserOut, UserUpdate,
+    DeleteAccountConfirm, LoginOtpVerify, LoginResponse, NotificationPreferenceOut,
+    NotificationPreferenceUpdate, PasswordChange, PasswordResetConfirm, PasswordResetRequest,
+    PublicRegister, TokenOut, UserCreate, UserLogin, UserOut, UserUpdate,
 )
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
+from app.services.notification_service import NOTIFICATION_PREF_PURPOSE
 from app.services.otp_service import OtpService
 from app.services.turnstile_service import TurnstileService
 from app.utils.dependencies import (
@@ -153,6 +156,36 @@ def reset_password(
     enforce(password_reset_limiter, get_client_ip(request), "Too many attempts. Please try again later.")
     service.reset_password(payload.token, payload.new_password)
     return {"message": "Password reset successfully. You can now sign in."}
+
+
+def _user_from_pref_token(token: str, db: Session) -> User:
+    claims = decode_access_token(token)
+    if not claims or claims.get("purpose") != NOTIFICATION_PREF_PURPOSE:
+        raise HTTPException(status_code=400, detail="This link is invalid or has expired.")
+    user = UserRepository(db).get_by_id(claims["user_id"])
+    if not user:
+        raise HTTPException(status_code=400, detail="This link is invalid or has expired.")
+    return user
+
+
+@router.get("/notification-preference", response_model=NotificationPreferenceOut)
+def get_notification_preference(token: str, db: Session = Depends(get_db)):
+    """Read-only lookup for the /unsubscribe page - deliberately has no side
+    effect, so an email client or security scanner prefetching the link
+    can't silently unsubscribe someone who never clicked it."""
+    user = _user_from_pref_token(token, db)
+    return NotificationPreferenceOut(email=user.email, receive_notifications=user.receive_notifications)
+
+
+@router.post("/notification-preference", response_model=NotificationPreferenceOut)
+def set_notification_preference(payload: NotificationPreferenceUpdate, db: Session = Depends(get_db)):
+    """Flips the opt-out flag either way - the same link doubles as a
+    resubscribe page if someone changes their mind, since the token doesn't
+    expire for over a year."""
+    user = _user_from_pref_token(payload.token, db)
+    user.receive_notifications = payload.receive_notifications
+    db.commit()
+    return NotificationPreferenceOut(email=user.email, receive_notifications=user.receive_notifications)
 
 
 @router.get("/verify", response_model=dict)

@@ -143,6 +143,14 @@ export const forgotPassword = async (email: string, turnstile_token?: string) =>
   (await api.post<{ message: string }>('/auth/forgot-password', { email, turnstile_token })).data;
 export const resetPassword = async (token: string, new_password: string) =>
   (await api.post<{ message: string }>('/auth/reset-password', { token, new_password })).data;
+export const getNotificationPreference = async (token: string) =>
+  (await api.get<{ email: string | null; receive_notifications: boolean }>(
+    '/auth/notification-preference', { params: { token } },
+  )).data;
+export const setNotificationPreference = async (token: string, receive_notifications: boolean) =>
+  (await api.post<{ email: string | null; receive_notifications: boolean }>(
+    '/auth/notification-preference', { token, receive_notifications },
+  )).data;
 export const register = async (data: { username: string; password: string; email: string; phone: string; turnstile_token?: string }) =>
   (await api.post<AppUser>('/auth/register', data)).data;
 export const getMe = async () => (await api.get<Me>('/auth/verify')).data;
