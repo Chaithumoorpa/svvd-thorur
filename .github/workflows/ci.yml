@@ -1,0 +1,65 @@
+name: CI
+
+# Runs the same checks deploy.yml runs before deploying, but on every pull
+# request instead of after merge - so a broken PR fails here instead of
+# breaking `development` (deploy.yml still runs its own copy of these before
+# deploying, since a PR could be merged without going through Actions).
+on:
+  pull_request:
+    branches: [development]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:15  # same as production
+        env:
+          POSTGRES_USER: templeuser
+          POSTGRES_PASSWORD: templepass
+          POSTGRES_DB: templedb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U templeuser -d templedb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      # pytest runs on SQLite and never touches Alembic, so a migration that
+      # only fails on Postgres would otherwise first fail in the production
+      # container's entrypoint - crash-looping the backend.
+      - name: Apply all migrations to Postgres
+        env:
+          ENV: production
+          DATABASE_URL: postgresql://templeuser:templepass@localhost:5432/templedb
+          SECRET_KEY: ci-only-throwaway-secret-key-0123456789abcdef
+          CORS_ORIGINS: https://svvdthorur.org
+        run: alembic -c alembic.prod.ini upgrade head
+      - run: pytest
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
