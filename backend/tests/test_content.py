@@ -152,6 +152,29 @@ def test_temple_profile_and_timings(client, admin, staff):
     assert client.delete(f"/api/v1/temple/timings/{tid}", headers=headers).status_code == 200
 
 
+# ---------------------------------------------------------------------- e-Hundi QR
+def test_hundi_qr_not_configured_until_vpa_set(client, admin):
+    _, headers = admin
+    client.put("/api/v1/temple/", headers=headers, json={"name": "SVVD Thorur"})
+
+    unconfigured = client.get("/api/v1/temple/hundi-qr")
+    assert unconfigured.status_code == 200
+    body = unconfigured.json()
+    assert body == {"configured": False, "upi_vpa": None, "payee_name": None, "qr_base64": None}
+
+    bad = client.put("/api/v1/temple/", headers=headers, json={"upi_vpa": "not-a-vpa"})
+    assert bad.status_code == 422
+
+    ok = client.put("/api/v1/temple/", headers=headers, json={"upi_vpa": "svvdthorur@upi"})
+    assert ok.status_code == 200 and ok.json()["upi_vpa"] == "svvdthorur@upi"
+
+    configured = client.get("/api/v1/temple/hundi-qr").json()
+    assert configured["configured"] is True
+    assert configured["upi_vpa"] == "svvdthorur@upi"
+    assert configured["payee_name"] == "SVVD Thorur"
+    assert configured["qr_base64"]  # a non-empty base64 PNG
+
+
 # ----------------------------------------------------------------------- members
 def test_members_directory(client, admin, trustee):
     _, headers = admin

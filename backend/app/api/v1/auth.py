@@ -11,7 +11,8 @@ from app.models.user import User
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import (
     DeleteAccountConfirm, LoginOtpVerify, LoginResponse, PasswordChange, PasswordResetConfirm,
-    PasswordResetRequest, PublicRegister, TokenOut, UserCreate, UserLogin, UserOut, UserUpdate,
+    PasswordResetRequest, PublicRegister, TokenOut, UsernameRecoveryRequest, UserCreate, UserLogin,
+    UserOut, UserUpdate,
 )
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
@@ -22,7 +23,10 @@ from app.utils.dependencies import (
     AuditContext, get_audit, get_current_user, get_db, get_otp_service, get_turnstile_service,
     require_permission,
 )
-from app.utils.rate_limiter import enforce, get_client_ip, login_limiter, password_reset_limiter, register_limiter
+from app.utils.rate_limiter import (
+    enforce, get_client_ip, login_limiter, password_reset_limiter, register_limiter,
+    username_recovery_limiter,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 logger = logging.getLogger(__name__)
@@ -84,7 +88,7 @@ def verify_login_otp(
     if not login_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many attempts. Please try again in a minute.")
 
-    user = service.user_repository.get_by_username(payload.username.strip())
+    user = service.resolve_identifier(payload.username)
     if not user or not user.email:
         raise HTTPException(status_code=400, detail="Invalid sign-in attempt. Please start again.")
 
@@ -142,6 +146,24 @@ def forgot_password(
             "Thank you,\nSVVD Thorur",
         )
     return {"message": "If that email is registered, a reset link has been sent."}
+
+
+@router.post("/forgot-username", response_model=dict)
+def forgot_username(
+    payload: UsernameRecoveryRequest,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
+):
+    """Recovers a forgotten username/email by identifier (email or mobile
+    number) - same generic response either way, so it never reveals which
+    accounts exist. Only delivers when the account has an email on file;
+    there is no SMS channel to reach a phone-only account."""
+    enforce(username_recovery_limiter, get_client_ip(request), "Too many requests. Please try again later.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
+    service.request_username_recovery(payload.identifier)
+    return {"message": "If that email or mobile number is registered, we've emailed the username to the account's address."}
 
 
 @router.post("/reset-password", response_model=dict)

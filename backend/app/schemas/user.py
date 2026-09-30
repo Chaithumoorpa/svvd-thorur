@@ -121,6 +121,9 @@ class UserUpdate(BaseModel):
 
 
 class UserLogin(BaseModel):
+    """`username` accepts a username, an email address, or a mobile number -
+    whichever the account was found by, the frontend sends back the same
+    string for verify-otp below."""
     username: str = Field(max_length=100)
     password: str = Field(max_length=128)
     turnstile_token: Optional[str] = Field(default=None, max_length=4000)
@@ -182,6 +185,13 @@ class DeleteAccountConfirm(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
+
+
+class UsernameRecoveryRequest(BaseModel):
+    """Unlike password reset, this takes an email OR a mobile number - there's
+    no "username" field to type here, that's the whole point."""
+    identifier: str = Field(max_length=255)
     turnstile_token: Optional[str] = Field(default=None, max_length=4000)
 
 

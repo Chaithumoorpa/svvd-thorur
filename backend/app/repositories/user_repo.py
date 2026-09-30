@@ -17,6 +17,12 @@ class UserRepository(BaseRepository):
     def get_by_email(self, email: str) -> Optional[User]:
         return self.db.query(User).filter(func.lower(User.email) == email.lower()).first()
 
+    def get_by_phone(self, phone: str) -> List[User]:
+        """Every account with this exact phone - phone has no unique constraint
+        (some staff share a desk line), so the caller decides what to do when
+        this isn't exactly one row."""
+        return self.db.query(User).filter(User.phone == phone).all()
+
     def query_all(self):
         """Deterministic ordering: username, then id."""
         return self.db.query(User).order_by(User.username.asc(), User.id.asc())

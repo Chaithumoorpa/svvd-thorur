@@ -30,6 +30,7 @@ class TempleUpdate(BaseModel):
     facebook_url: OptionalSafeUrl = None
     instagram_url: OptionalSafeUrl = None
     youtube_url: OptionalSafeUrl = None
+    upi_vpa: Optional[str] = Field(default=None, max_length=100, pattern=r"^[\w.\-]{2,100}@[a-zA-Z0-9.]{2,64}$")
 
     @model_validator(mode="before")
     @classmethod
@@ -59,7 +60,17 @@ class TempleOut(BaseModel):
     facebook_url: Optional[str] = None
     instagram_url: Optional[str] = None
     youtube_url: Optional[str] = None
+    upi_vpa: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class HundiQrOut(BaseModel):
+    """e-Hundi: a UPI deep-link QR the temple generates from its own VPA - a
+    direct devotee-to-temple transfer, never processed by this backend."""
+    configured: bool
+    upi_vpa: Optional[str] = None
+    payee_name: Optional[str] = None
+    qr_base64: Optional[str] = None
 
 
 class TimingBase(BaseModel):

@@ -7,9 +7,9 @@ import Field from '@/components/ui/Field';
 import { ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
 import { btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
 import { useAction } from '@/hooks/useAction';
-import { getTemple, updateTemple } from '@/lib/api';
+import { getHundiQr, getTemple, updateTemple } from '@/lib/api';
 import { emptyToNull } from '@/lib/format';
-import type { Temple } from '@/lib/types';
+import type { HundiQrInfo, Temple } from '@/lib/types';
 import axios from 'axios';
 
 type Form = Record<Exclude<keyof Temple, 'id'>, string>;
@@ -31,15 +31,37 @@ const FIELDS: Array<{ key: keyof Form; label: string; hint?: string; type?: stri
   { key: 'facebook_url', label: 'Facebook page' },
   { key: 'instagram_url', label: 'Instagram page' },
   { key: 'youtube_url', label: 'YouTube channel' },
+  {
+    key: 'upi_vpa', label: 'UPI ID for e-Hundi', hint: 'e.g. temple@upi. Devotees scan a QR built from this to pay the Hundi directly - set to remove the Online Hundi page.',
+  },
   { key: 'history', label: 'Temple history', area: true, wide: true, hint: 'Shown on the About page. Separate paragraphs with a blank line.' },
 ];
 
 const toForm = (t: Temple | null): Form =>
   Object.fromEntries(FIELDS.map(({ key }) => [key, (t?.[key as keyof Temple] as string | null) ?? ''])) as Form;
 
+function printHundiPoster(qr: HundiQrInfo, templeName: string) {
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.write(`<!doctype html><html><head><title>Hundi QR</title><style>
+    body { font-family: sans-serif; text-align: center; padding: 40px; }
+    img { width: 320px; height: 320px; margin: 24px auto; }
+    h1 { margin-bottom: 4px; } p { color: #444; }
+  </style></head><body>
+    <h1>${templeName}</h1>
+    <p>Scan to offer to the Hundi via any UPI app</p>
+    <img src="data:image/png;base64,${qr.qr_base64}" alt="Hundi UPI QR" />
+    <p>${qr.upi_vpa}</p>
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
 export default function TempleAdmin() {
   const [form, setForm] = useState<Form | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [hundiQr, setHundiQr] = useState<HundiQrInfo | null>(null);
   const action = useAction();
 
   useEffect(() => {
@@ -50,7 +72,8 @@ export default function TempleAdmin() {
         if (axios.isAxiosError(err) && err.response?.status === 404) setForm(toForm(null));
         else setLoadError('Could not load the temple profile.');
       });
-  }, []);
+    getHundiQr().then(setHundiQr).catch(() => setHundiQr(null));
+  }, [action.success]);
 
   if (loadError) return <ErrorBlock message={loadError} onRetry={() => window.location.reload()} />;
   if (!form) return <LoadingBlock />;
@@ -85,6 +108,20 @@ export default function TempleAdmin() {
           </button>
         </div>
       </form>
+
+      {hundiQr?.configured && (
+        <div className={`${cardCls} mt-6 flex flex-wrap items-center gap-4 p-5`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`data:image/png;base64,${hundiQr.qr_base64}`} alt="Hundi UPI QR" className="h-24 w-24 rounded border border-gray-200" />
+          <div className="flex-1">
+            <p className="font-medium text-gray-800">Online Hundi QR</p>
+            <p className="text-sm text-gray-500">{hundiQr.upi_vpa} - shown on the public &quot;Online Hundi&quot; page.</p>
+          </div>
+          <button type="button" className={btnPrimary} onClick={() => printHundiPoster(hundiQr, form.name || 'Temple')}>
+            Print poster
+          </button>
+        </div>
+      )}
     </AdminPage>
   );
 }

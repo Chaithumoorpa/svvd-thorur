@@ -131,7 +131,7 @@ export default function LoginPage() {
             {error && <Notice kind="error">{error}</Notice>}
             <div>
               <label htmlFor="username" className="mb-1 block text-sm font-medium text-gray-700">
-                Username
+                Username, email, or mobile number
               </label>
               <input
                 id="username"
@@ -220,9 +220,12 @@ export default function LoginPage() {
                 Create an account
               </Link>
             </p>
-            <p className="mt-2 text-center text-sm">
+            <p className="mt-2 flex justify-center gap-4 text-center text-sm">
               <Link href="/forgot-password" className="text-red-900 hover:underline">
                 Forgot password?
+              </Link>
+              <Link href="/forgot-username" className="text-red-900 hover:underline">
+                Forgot username or email?
               </Link>
             </p>
           </>
