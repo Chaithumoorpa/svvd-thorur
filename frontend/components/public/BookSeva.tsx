@@ -8,11 +8,14 @@ import Modal from '@/components/ui/Modal';
 import { Notice } from '@/components/ui/States';
 import TurnstileWidget from '@/components/ui/TurnstileWidget';
 import { btnGhost, btnPrimary, inputCls } from '@/components/ui/styles';
+import { useLoad } from '@/hooks/useLoad';
 import { useTurnstile } from '@/hooks/useTurnstile';
 import {
-  apiError, bookSeva, getSevaDay, requestBookingOtp, uploadBlessingPhoto, verifyBookingOtp,
+  apiError, bookSeva, confirmSevaPayment, createSevaPaymentOrder, getPaymentStatus, getSevaDay,
+  requestBookingOtp, uploadBlessingPhoto, verifyBookingOtp,
 } from '@/lib/api';
 import { formatDate, formatMoney, todayISO } from '@/lib/format';
+import { CheckoutDismissedError, openRazorpayCheckout } from '@/lib/razorpay';
 import type { Pooja, SevaTicket } from '@/lib/types';
 
 type Step = 'email' | 'otp' | 'details' | 'done';
@@ -51,6 +54,7 @@ export default function BookSeva({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [availability, setAvailability] = useState<Availability | null>(null);
+  const [payOnline, setPayOnline] = useState(true); // preferred once available; ignored otherwise
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [ticket, setTicket] = useState<SevaTicket | null>(null);
@@ -58,6 +62,12 @@ export default function BookSeva({
   const offersBlessing = seva.public_blessings && occasion.trim().length > 0;
   const slots = availability?.date === date ? availability : null;
   const full = slots !== null && slots.left <= 0;
+  // Only asked once actually needed - not on page load for every seva card.
+  const paymentStatus = useLoad(
+    () => (open && seva.is_paid ? getPaymentStatus() : Promise.resolve({ enabled: false })),
+    [open, seva.is_paid],
+  );
+  const onlinePaymentAvailable = seva.is_paid && !!paymentStatus.data?.enabled;
 
   // Free slots for the chosen date, for a seva with a daily cap.
   useEffect(() => {
@@ -89,6 +99,7 @@ export default function BookSeva({
     setShowPublicly(false);
     setUploadError('');
     setAvailability(null);
+    setPayOnline(true);
     setError('');
     setTicket(null);
     turnstile.reset();
@@ -147,23 +158,46 @@ export default function BookSeva({
     e.preventDefault();
     setError('');
     setBusy(true);
+    const booking = {
+      seva_id: seva.id, devotee_name: name.trim(), mobile_number: mobile.trim(), seva_date: date,
+      email: email.trim(), booking_token: bookingToken, occasion: occasion.trim() || undefined,
+      photo_key: offersBlessing && photoKey ? photoKey : undefined,
+      show_publicly: offersBlessing ? showPublicly : undefined,
+      turnstile_token: turnstile.token || undefined,
+    };
     try {
-      const booked = await bookSeva({
-        seva_id: seva.id, devotee_name: name.trim(), mobile_number: mobile.trim(), seva_date: date,
-        email: email.trim(), booking_token: bookingToken, occasion: occasion.trim() || undefined,
-        photo_key: offersBlessing && photoKey ? photoKey : undefined,
-        show_publicly: offersBlessing ? showPublicly : undefined,
-        turnstile_token: turnstile.token || undefined,
-      });
+      const booked = onlinePaymentAvailable && payOnline
+        ? await payAndBook(booking)
+        : await bookSeva(booking);
       turnstile.reset();
       setTicket(booked);
       setStep('done');
     } catch (err) {
       turnstile.reset();
-      setError(apiError(err, 'Could not book the seva. Please try again.'));
+      if (err instanceof CheckoutDismissedError) {
+        setError('Payment was not completed. You can try again, or pay at the counter instead.');
+      } else {
+        setError(apiError(err, 'Could not complete the payment. Please try again, or pay at the counter instead.'));
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Pays for the seva online first (Razorpay), then books it as already
+   * paid. Nothing is booked until the payment is verified - see
+   * app.api.v1.seva_tickets' online-order/online-confirm endpoints. */
+  async function payAndBook(booking: Parameters<typeof bookSeva>[0]): Promise<SevaTicket> {
+    const order = await createSevaPaymentOrder(booking);
+    const paid = await openRazorpayCheckout({
+      keyId: order.key_id, orderId: order.order_id, amountPaise: order.amount_paise, currency: order.currency,
+      name: 'Sri Varasidhi Vinayaka Swamy Devasthanam', description: `${seva.name} - ${formatDate(date)}`,
+      prefill: { name: booking.devotee_name, email: booking.email, contact: booking.mobile_number },
+    });
+    return confirmSevaPayment({
+      payment_token: order.payment_token, razorpay_order_id: paid.razorpay_order_id,
+      razorpay_payment_id: paid.razorpay_payment_id, razorpay_signature: paid.razorpay_signature,
+    });
   }
 
   return (
@@ -182,6 +216,9 @@ export default function BookSeva({
                 <Notice kind="success">
                   Fee: {formatMoney(ticket.amount)} - please pay in cash at the temple counter when you arrive.
                 </Notice>
+              )}
+              {ticket.payment_status === 'PAID' && ticket.source === 'ONLINE' && (
+                <Notice kind="success">Payment received online: {formatMoney(ticket.amount)}. Thank you!</Notice>
               )}
               {ticket.occasion && (
                 <p className="text-sm text-gray-600">
@@ -226,9 +263,25 @@ export default function BookSeva({
             <form onSubmit={submit} className="space-y-4">
               {error && <Notice kind="error">{error}</Notice>}
               {seva.is_paid && (
-                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  This seva has a fee of {formatMoney(seva.suggested_amount)}, payable in cash at the temple counter when you arrive.
-                </p>
+                <fieldset className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                  <legend className="px-1 text-sm font-medium text-maroon-dark">
+                    Fee: {formatMoney(seva.suggested_amount)}
+                  </legend>
+                  {onlinePaymentAvailable ? (
+                    <div className="space-y-2 text-sm text-gray-700">
+                      <label className="flex items-center gap-2">
+                        <input type="radio" name="pay-method" checked={payOnline} onChange={() => setPayOnline(true)} />
+                        Pay online now (card, UPI, netbanking)
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="radio" name="pay-method" checked={!payOnline} onChange={() => setPayOnline(false)} />
+                        Pay in cash at the temple counter
+                      </label>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-amber-900">Payable in cash at the temple counter when you arrive.</p>
+                  )}
+                </fieldset>
               )}
               <Field label="Devotee name" required><input className={inputCls} maxLength={100} autoComplete="name" autoFocus value={name} onChange={(e) => setName(e.target.value)} /></Field>
               <Field label="Mobile number" required hint="10 digits. Used to look up your booking at the temple."><input className={inputCls} type="tel" inputMode="tel" autoComplete="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} /></Field>
@@ -281,7 +334,11 @@ export default function BookSeva({
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" className={btnGhost} onClick={close}>Cancel</button>
-                <button type="submit" className={btnPrimary} disabled={busy || uploading || full || name.trim().length < 2 || mobile.replace(/\D/g, '').length < 10 || !date}>{busy ? 'Booking…' : 'Confirm booking'}</button>
+                <button type="submit" className={btnPrimary} disabled={busy || uploading || full || name.trim().length < 2 || mobile.replace(/\D/g, '').length < 10 || !date}>
+                  {busy
+                    ? (onlinePaymentAvailable && payOnline ? 'Opening payment…' : 'Booking…')
+                    : (onlinePaymentAvailable && payOnline ? `Pay ${formatMoney(seva.suggested_amount)} & book` : 'Confirm booking')}
+                </button>
               </div>
             </form>
           )}

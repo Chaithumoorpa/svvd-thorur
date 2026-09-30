@@ -50,6 +50,14 @@ class DonorRepository(BaseRepository):
     def get_by_id(self, donor_id: int):
         return self.db.query(Donor).filter(Donor.id == donor_id).first()
 
+    def get_by_phone(self, phone: str):
+        """Exact match on the stored phone - reliable because the one caller
+        (the public online donation form) normalizes it the same way every
+        time (see DonationOrderIn.phone); an admin-entered donor's phone may
+        be formatted differently and won't match, which just means a new
+        donor row rather than a wrong match."""
+        return self.db.query(Donor).filter(Donor.phone == phone, Donor.is_active.is_(True)).first()
+
     def get_with_totals(self, donor_id: int):
         return self.query_with_totals(include_inactive=True).filter(Donor.id == donor_id).first()
 

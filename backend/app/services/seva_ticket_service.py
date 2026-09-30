@@ -83,7 +83,12 @@ class SevaTicketService:
                 db.rollback()
         raise HTTPException(status_code=503, detail="Could not allocate a ticket number, please retry")
 
-    def book_ticket(self, data: SevaBookingOnline, booked_by_user_id: Optional[int] = None) -> SevaTicket:
+    def validate_seva_for_booking(self, data: SevaBookingOnline):
+        """Guards shared by every online booking path (pay-at-counter and
+        pay-online alike): the seva itself, and this exact request. Run again
+        at pay-online's confirm step, not just at order time - minutes may
+        have passed, in which the seva could have been deactivated or the
+        devotee could already hold a ticket for that date some other way."""
         pooja = self.pooja_repo.get_by_id(data.seva_id)
         if not pooja or not pooja.is_active:
             raise HTTPException(status_code=400, detail="Invalid or inactive Seva selected")
@@ -96,19 +101,11 @@ class SevaTicketService:
             )
         if (data.photo_key or data.show_publicly) and not pooja.public_blessings:
             raise HTTPException(status_code=400, detail=f"{pooja.name} doesn't offer public blessings")
+        return pooja
 
-        # No online payment gateway yet: a paid seva still gets a ticket, but the fee
-        # is collected in person at the temple counter (see collect_payment below) -
-        # PENDING, not PAID, so the finance ledger never records income that hasn't
-        # actually been received.
-        if pooja.is_paid:
-            payment_status = PaymentStatus.PENDING
-            amount = pooja.suggested_amount or 0
-        else:
-            payment_status = PaymentStatus.FREE
-            amount = 0
-
-        return self._create_booking(pooja, {
+    def _booking_fields(self, pooja, data: SevaBookingOnline, *, payment_status, amount,
+                        booked_by_user_id: Optional[int]) -> dict:
+        return {
             "seva_id": pooja.id,
             "seva_name": pooja.name,          # from the database, not the client
             "devotee_name": data.devotee_name,
@@ -127,7 +124,56 @@ class SevaTicketService:
             "status": TicketStatus.ACTIVE,
             "source": ModelTicketSource.ONLINE,
             "booked_by_user_id": booked_by_user_id,
-        })
+        }
+
+    def book_ticket(self, data: SevaBookingOnline, booked_by_user_id: Optional[int] = None) -> SevaTicket:
+        pooja = self.validate_seva_for_booking(data)
+
+        # No payment collected yet at this step: a paid seva still gets a ticket,
+        # but the fee is either collected in person at the temple counter (see
+        # collect_payment below) or paid online first (see book_ticket_paid_online) -
+        # PENDING, not PAID, so the finance ledger never records income that hasn't
+        # actually been received.
+        if pooja.is_paid:
+            payment_status = PaymentStatus.PENDING
+            amount = pooja.suggested_amount or 0
+        else:
+            payment_status = PaymentStatus.FREE
+            amount = 0
+
+        return self._create_booking(pooja, self._booking_fields(
+            pooja, data, payment_status=payment_status, amount=amount, booked_by_user_id=booked_by_user_id,
+        ))
+
+    def book_ticket_paid_online(self, data: SevaBookingOnline, razorpay_payment_id: str,
+                                razorpay_method: Optional[str], booked_by_user_id: Optional[int] = None) -> SevaTicket:
+        """Same booking, already paid via Razorpay (see app.api.v1.seva_tickets'
+        online-order/online-confirm endpoints, which verify the payment before
+        calling this). Only for a seva that actually has a fee - a free seva
+        has nothing to pay online, and skips this path entirely. Raises the
+        usual 400/409s from _validate_online_booking/_create_booking - the
+        caller is responsible for refunding the payment if a 409 (the seva
+        filled up between order and confirm) reaches it, since the money has
+        already been taken."""
+        pooja = self.validate_seva_for_booking(data)
+        if not pooja.is_paid:
+            raise HTTPException(status_code=400, detail=f"{pooja.name} has no fee to pay online")
+
+        ticket = self._create_booking(pooja, self._booking_fields(
+            pooja, data, payment_status=PaymentStatus.PAID, amount=pooja.suggested_amount or 0,
+            booked_by_user_id=booked_by_user_id,
+        ))
+        method_note = f" ({razorpay_method})" if razorpay_method else ""
+        self.ticket_repo.db.add(IncomeTransaction(
+            source_type=IncomeSourceType.SEVA,
+            reference_id=f"seva_ticket:{ticket.id}",
+            amount=ticket.amount,
+            payment_mode=PaymentMode.ONLINE,
+            notes=f"Seva ticket {ticket.ticket_number} - {ticket.seva_name} ({ticket.devotee_name}) "
+                  f"- paid online via Razorpay{method_note}, payment {razorpay_payment_id}",
+        ))
+        self.ticket_repo.db.commit()
+        return ticket
 
     def create_counter_ticket(self, data: SevaTicketCreate, admin_user) -> SevaTicket:
         """Manual ticket from the temple counter; records the staff member who issued it."""

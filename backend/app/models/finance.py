@@ -20,6 +20,9 @@ class PaymentMode(str, enum.Enum):
     UPI = "UPI"
     BANK = "BANK"
     CHEQUE = "CHEQUE"
+    # Paid through the Razorpay checkout (card/UPI/netbanking/wallet - the specific
+    # instrument is recorded in the transaction notes, not broken out here).
+    ONLINE = "ONLINE"
 
 class ExpenseCategory(str, enum.Enum):
     SALARY = "SALARY"
@@ -38,7 +41,9 @@ class IncomeTransaction(Base):
     reference_id = Column(String(255), nullable=True, index=True)
     amount = Column(Numeric(MONEY_PRECISION, MONEY_SCALE), nullable=False)
     payment_mode = Column(Enum(PaymentMode), nullable=False, index=True)
-    received_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # NULL for a payment nobody on staff handled - collected automatically
+    # through the online (Razorpay) gateway, not received in person.
+    received_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     received_at = Column(DateTime, default=func.now(), nullable=False)
     notes = Column(Text, nullable=True)
 

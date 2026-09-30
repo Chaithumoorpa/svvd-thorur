@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getTranslations } from 'next-intl/server'
 import PageContainer from '@/components/PageContainer'
+import DonationForm from '@/components/public/DonationForm'
 import { Link } from '@/i18n/navigation'
 import { pageMetadata } from '@/lib/site'
 
@@ -36,14 +37,20 @@ export default async function DonationsComingSoon() {
         </p>
       </div>
 
-      <div className="mt-8 border rounded p-6 bg-gray-50 shadow-inner text-center">
-        <p className="text-2xl font-semibold text-gray-700">{t('onlineComingSoonTitle')}</p>
-        <p className="mt-3 text-gray-500">{t('onlineComingSoonText')}</p>
-        <div className="mt-6 flex justify-center gap-4">
-          <button className="bg-white border text-gray-400 px-6 py-2 rounded font-semibold cursor-not-allowed" disabled>
-            {t('donateDisabled')}
-          </button>
-        </div>
+      <div className="mt-8">
+        <DonationForm
+          fallback={
+            <div className="border rounded p-6 bg-gray-50 shadow-inner text-center">
+              <p className="text-2xl font-semibold text-gray-700">{t('onlineComingSoonTitle')}</p>
+              <p className="mt-3 text-gray-500">{t('onlineComingSoonText')}</p>
+              <div className="mt-6 flex justify-center gap-4">
+                <button className="bg-white border text-gray-400 px-6 py-2 rounded font-semibold cursor-not-allowed" disabled>
+                  {t('donateDisabled')}
+                </button>
+              </div>
+            </div>
+          }
+        />
       </div>
     </PageContainer>
   )

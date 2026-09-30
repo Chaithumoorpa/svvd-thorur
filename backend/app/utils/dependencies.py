@@ -28,6 +28,7 @@ from app.services.pooja_service import PoojaService
 from app.services.blessing_service import BlessingReviewService, BlessingService
 from app.services.occasion_greeting_service import OccasionGreetingService
 from app.services.otp_service import OtpService
+from app.services.razorpay_service import RazorpayService
 from app.services.seva_ticket_service import SevaTicketService
 from app.services.storage_service import StorageService
 from app.services.turnstile_service import TurnstileService
@@ -220,6 +221,10 @@ def get_otp_service(db: Session = Depends(get_db)) -> OtpService:
 
 def get_turnstile_service() -> TurnstileService:
     return TurnstileService()
+
+
+def get_razorpay_service() -> RazorpayService:
+    return RazorpayService()
 
 
 def get_blessing_service(db: Session = Depends(get_db)) -> BlessingService:

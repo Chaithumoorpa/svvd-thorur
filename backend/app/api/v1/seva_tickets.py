@@ -1,29 +1,33 @@
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 from typing import List, Optional
 from uuid import UUID
-from datetime import date, datetime
 
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
+from app.core.security import create_access_token, decode_access_token
 from app.utils.dependencies import (
     AuditContext, get_audit, get_blessing_review_service, get_blessing_service, get_current_user,
     get_current_user_optional,
-    get_occasion_greeting_service, get_otp_service, get_seva_ticket_service, get_storage_service,
-    get_turnstile_service, require_admin, require_permission,
+    get_occasion_greeting_service, get_otp_service, get_razorpay_service, get_seva_ticket_service,
+    get_storage_service, get_turnstile_service, require_admin, require_permission,
 )
 from app.utils.rate_limiter import (
-    blessing_photo_upload_limiter, booking_limiter, enforce, get_client_ip, otp_request_limiter, otp_verify_limiter,
+    blessing_photo_upload_limiter, booking_limiter, enforce, get_client_ip, otp_request_limiter,
+    otp_verify_limiter, payment_order_limiter,
 )
 from app.services.blessing_service import BlessingReviewService, BlessingService
 from app.services.email_service import EmailService
 from app.services.occasion_greeting_service import OccasionGreetingService
 from app.services.otp_service import OtpService
+from app.services.razorpay_service import RazorpayService
 from app.services.seva_ticket_service import PaymentPendingError, SevaTicketService
 from app.services.storage_service import StorageService
 from app.services.turnstile_service import TurnstileService
 from app.schemas.blessing import BlessingReviewIn, BlessingReviewOut, PersonalBlessingOut
 from app.schemas.otp import OtpRequest, OtpVerifyRequest, OtpVerifyResponse
+from app.schemas.payment import RazorpayConfirmIn, RazorpayOrderOut, SevaPaymentOrderIn
 from app.schemas.upload import UploadUrlRequest, UploadUrlResponse
 from app.schemas.seva_ticket import (
     BLESSING_PHOTO_PREFIX,
@@ -40,6 +44,51 @@ from app.models.user import User
 router = APIRouter(prefix="/seva-tickets", tags=["Seva Tickets"])
 
 _manage = require_permission(Permission.TICKETS_MANAGE)
+
+SEVA_PAYMENT_PURPOSE = "seva_payment"
+PAYMENT_TOKEN_TTL = timedelta(minutes=20)  # generous for a bank's own OTP step mid-checkout
+
+
+def _after_booking(ticket, greetings: OccasionGreetingService) -> None:
+    """Admin notification + devotee confirmation email, and the occasion
+    greeting if it's already due - shared by every path that produces a
+    booked ticket (free/pay-at-counter and paid-online alike)."""
+    review_note = (
+        "\n\nTo review: the devotee added a photo and/or asked to show their blessing publicly. "
+        "Nothing appears on the website until you approve it - Admin > Seva Tickets > Blessings to review."
+        if ticket.review_status else ""
+    )
+    EmailService().notify_admin(
+        f"New seva booking: {ticket.seva_name} ({ticket.ticket_number})",
+        f"Devotee: {ticket.devotee_name}\nMobile: {ticket.mobile_number}\nEmail: {ticket.email}\n"
+        f"Seva: {ticket.seva_name}\nDate: {ticket.seva_date}\nTicket: {ticket.ticket_number}"
+        f"{review_note}",
+    )
+    if ticket.payment_status.value == "PAID" and ticket.source.value == "ONLINE" and ticket.amount:
+        payment_note = f"Payment received online: Rs. {ticket.amount}.\n\n"
+    elif ticket.payment_status.value == "PENDING":
+        payment_note = (
+            f"This seva has a fee of Rs. {ticket.amount}, payable in cash at the temple counter "
+            "when you arrive.\n\n"
+        )
+    else:
+        payment_note = ""
+    EmailService().send(
+        ticket.email,
+        f"Booking confirmed: {ticket.seva_name} ({ticket.ticket_number})",
+        f"Dear {ticket.devotee_name},\n\n"
+        f"Your seva booking is confirmed.\n\n"
+        f"Ticket number: {ticket.ticket_number}\n"
+        f"Seva: {ticket.seva_name}\n"
+        f"Date: {ticket.seva_date}\n\n"
+        f"{payment_note}"
+        "Please show this ticket number at the temple counter.\n\n"
+        "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
+    )
+    # A booking already paid for (free, or paid online) gets its occasion blessing
+    # now if the date has come; a PENDING one waits until its fee is collected.
+    if greetings.seva_due(ticket, date.today()):
+        greetings.send_seva(ticket)
 
 
 @router.post("/booking/request-otp", response_model=dict)
@@ -106,39 +155,86 @@ def book_seva_ticket(
         raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
     OtpService.check_booking_token(payload.booking_token, payload.email)
     ticket = service.book_ticket(payload, booked_by_user_id=current_user.id if current_user else None)
-    review_note = (
-        "\n\nTo review: the devotee added a photo and/or asked to show their blessing publicly. "
-        "Nothing appears on the website until you approve it - Admin > Seva Tickets > Blessings to review."
-        if ticket.review_status else ""
+    _after_booking(ticket, greetings)
+    return ticket
+
+
+@router.post("/booking/online-order", response_model=RazorpayOrderOut)
+def create_seva_payment_order(
+    payload: SevaPaymentOrderIn,
+    request: Request,
+    service: SevaTicketService = Depends(get_seva_ticket_service),
+    razorpay: RazorpayService = Depends(get_razorpay_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
+):
+    """Step 1 of paying for a seva online (an alternative to the existing
+    pay-at-counter path - book_ticket above still exists for that): same
+    checks as a normal booking (OTP-verified email, turnstile, seva/slot
+    availability), then a Razorpay order for the seva's own fee - never a
+    client-supplied amount. Nothing is booked yet; the client opens Razorpay's
+    Checkout.js with the returned order_id, then calls online-confirm below
+    with the payment_token and the payment proof Razorpay's callback gives."""
+    enforce(payment_order_limiter, get_client_ip(request), "Too many payment attempts. Please try again later.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
+    OtpService.check_booking_token(payload.booking_token, payload.email)
+    pooja = service.validate_seva_for_booking(payload)
+    if not pooja.is_paid:
+        raise HTTPException(status_code=400, detail=f"{pooja.name} has no fee to pay online")
+
+    order = razorpay.create_order(pooja.suggested_amount or 0, purpose=f"Seva: {pooja.name}")
+    booking = payload.model_dump(mode="json", exclude={"turnstile_token"})
+    token = create_access_token(
+        {"purpose": SEVA_PAYMENT_PURPOSE, "order_id": order["order_id"], "booking": booking,
+         "amount_paise": order["amount_paise"]},
+        expires_delta=PAYMENT_TOKEN_TTL,
     )
-    EmailService().notify_admin(
-        f"New seva booking: {ticket.seva_name} ({ticket.ticket_number})",
-        f"Devotee: {ticket.devotee_name}\nMobile: {ticket.mobile_number}\nEmail: {ticket.email}\n"
-        f"Seva: {ticket.seva_name}\nDate: {ticket.seva_date}\nTicket: {ticket.ticket_number}"
-        f"{review_note}",
-    )
-    payment_note = (
-        f"This seva has a fee of Rs. {ticket.amount}, payable in cash at the temple counter "
-        "when you arrive.\n\n"
-        if ticket.payment_status.value == "PENDING" else ""
-    )
-    EmailService().send(
-        ticket.email,
-        f"Booking confirmed: {ticket.seva_name} ({ticket.ticket_number})",
-        f"Dear {ticket.devotee_name},\n\n"
-        f"Your seva booking is confirmed.\n\n"
-        f"Ticket number: {ticket.ticket_number}\n"
-        f"Seva: {ticket.seva_name}\n"
-        f"Date: {ticket.seva_date}\n\n"
-        f"{payment_note}"
-        "Please show this ticket number at the temple counter.\n\n"
-        "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
-    )
-    # A FREE seva booked for today gets its occasion blessing now; one booked
-    # for a later date gets it on that date (cron), and a PENDING one once
-    # its fee is collected - see collect_ticket_payment below.
-    if greetings.seva_due(ticket, date.today()):
-        greetings.send_seva(ticket)
+    return RazorpayOrderOut(**order, payment_token=token)
+
+
+@router.post("/booking/online-confirm", response_model=SevaTicketOut)
+def confirm_seva_payment(
+    payload: RazorpayConfirmIn,
+    service: SevaTicketService = Depends(get_seva_ticket_service),
+    razorpay: RazorpayService = Depends(get_razorpay_service),
+    greetings: OccasionGreetingService = Depends(get_occasion_greeting_service),
+    current_user: User | None = Depends(get_current_user_optional),
+):
+    """Step 2: verifies the payment_token from online-order and the payment
+    itself, then books the ticket as PAID. If the seva has since filled up
+    (a real, if rare, race with other bookings during checkout), the payment
+    is refunded and the devotee is told plainly - the temple never keeps
+    money for a seva it can't actually give them."""
+    claims = decode_access_token(payload.payment_token)
+    if not claims or claims.get("purpose") != SEVA_PAYMENT_PURPOSE or claims.get("order_id") != payload.razorpay_order_id:
+        raise HTTPException(status_code=400, detail="This payment session has expired. Please try again.")
+    if not razorpay.verify_payment_signature(
+        payload.razorpay_order_id, payload.razorpay_payment_id, payload.razorpay_signature
+    ):
+        raise HTTPException(status_code=400, detail="Payment could not be verified. Please contact the temple office.")
+
+    booking = SevaBookingOnline.model_validate(claims["booking"])
+    method = razorpay.payment_method(payload.razorpay_payment_id)
+    try:
+        ticket = service.book_ticket_paid_online(
+            booking, payload.razorpay_payment_id, method,
+            booked_by_user_id=current_user.id if current_user else None,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 409:  # the seva filled up between order and confirm
+            refunded = razorpay.refund_payment(
+                payload.razorpay_payment_id, claims.get("amount_paise", 0),
+                notes={"reason": "seva fully booked before confirmation"},
+            )
+            detail = exc.detail + (
+                " Your payment will be refunded within a few days."
+                if refunded else
+                " Your payment could not be automatically refunded - please contact the temple office "
+                "with your payment reference so they can refund it by hand."
+            )
+            raise HTTPException(status_code=409, detail=detail)
+        raise
+    _after_booking(ticket, greetings)
     return ticket
 
 
