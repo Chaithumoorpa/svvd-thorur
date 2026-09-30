@@ -118,3 +118,25 @@ def test_login_otp_is_rate_limited_per_ip(client, make_user, monkeypatch):
     statuses = [_login(client, "henry", "wrong").status_code for _ in range(7)]
     assert statuses[:5] == [401] * 5
     assert 429 in statuses[5:]
+
+
+def test_verify_otp_rate_limited_shares_the_login_limiter(client, make_user, monkeypatch):
+    _capture_email(monkeypatch)
+    make_user("ADMIN", username="iris", password="Password123", email="iris@example.com")
+    statuses = [
+        client.post("/api/v1/auth/login/verify-otp", json={"username": "iris", "code": "000000"}).status_code
+        for _ in range(6)
+    ]
+    assert statuses[:5] == [400] * 5
+    assert statuses[5] == 429
+
+
+def test_verify_otp_rejects_unknown_username(client):
+    r = client.post("/api/v1/auth/login/verify-otp", json={"username": "ghost", "code": "123456"})
+    assert r.status_code == 400
+
+
+def test_verify_otp_rejects_account_with_no_email(client, make_user):
+    make_user("ADMIN", username="jack", password="Password123")  # no email on file
+    r = client.post("/api/v1/auth/login/verify-otp", json={"username": "jack", "code": "123456"})
+    assert r.status_code == 400

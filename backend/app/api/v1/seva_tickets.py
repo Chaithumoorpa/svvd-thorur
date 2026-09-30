@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 from datetime import date, datetime
 
@@ -330,7 +330,7 @@ def print_ticket(
 @router.get("/{ticket_id}/pdf")
 def get_ticket_pdf(
     ticket_id: UUID,
-    action: str = Query("print", enum=["download", "print"]),
+    action: Literal["download", "print"] = Query("print"),
     service: SevaTicketService = Depends(get_seva_ticket_service),
     _: User = Depends(_manage),
 ):
