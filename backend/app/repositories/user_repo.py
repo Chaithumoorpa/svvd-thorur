@@ -1,6 +1,8 @@
 from typing import List, Optional
 
+from fastapi import HTTPException
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from app.models.user import User
 from app.repositories.base import BaseRepository
@@ -35,8 +37,16 @@ class UserRepository(BaseRepository):
         return sum(1 for u in self.db.query(User).filter(User.is_active.is_(True)).all() if u.is_super_admin)
 
     def create(self, user: User) -> User:
+        """_ensure_unique (AuthService) already checked username/email don't
+        exist, but two requests can both pass that check before either
+        commits - the table's own unique constraints are the real guarantee.
+        Without this, that race surfaces as a raw IntegrityError -> 500."""
         self.db.add(user)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise HTTPException(status_code=400, detail="Username or email already exists")
         self.db.refresh(user)
         return user
 

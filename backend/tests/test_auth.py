@@ -112,6 +112,33 @@ def test_duplicate_username_and_email(client):
     assert client.post("/api/v1/auth/register", json=other).status_code == 400  # same email
 
 
+def test_registration_race_on_duplicate_username_is_a_clean_400_not_a_500(client, monkeypatch):
+    """Two requests can both pass the pre-check (_ensure_unique) before either
+    commits - simulated here by making the pre-check a no-op for one request,
+    same as if a second request's insert had landed in between. The table's
+    own unique constraint must still turn this into a normal 400, not an
+    unhandled IntegrityError bubbling up as a 500."""
+    ok = {"username": "racer", "password": "Temple123", "email": "racer@example.com",
+          "phone": "9876543210", "accept_terms": True}
+    assert client.post("/api/v1/auth/register", json=ok).status_code == 201
+
+    monkeypatch.setattr("app.services.auth_service.AuthService._ensure_unique", lambda *a, **k: None)
+    raced = client.post("/api/v1/auth/register", json=ok)
+    assert raced.status_code == 400
+    assert "already exists" in raced.json()["detail"].lower()
+
+
+def test_register_rate_limited(client):
+    statuses = []
+    for n in range(6):
+        statuses.append(client.post("/api/v1/auth/register", json={
+            "username": f"limited{n}", "password": "Temple123", "email": f"limited{n}@example.com",
+            "phone": "9876543210", "accept_terms": True,
+        }).status_code)
+    assert statuses[:5] == [201] * 5
+    assert statuses[5] == 429
+
+
 def test_registration_can_be_disabled(client, monkeypatch):
     from app.core.config import settings
 

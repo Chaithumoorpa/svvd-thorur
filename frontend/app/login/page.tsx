@@ -167,7 +167,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            <button type="submit" disabled={busy || !username || !password} className={`${btnPrimary} w-full`}>
+            <button type="submit" disabled={busy || !username || !password || turnstile.blocked} className={`${btnPrimary} w-full`}>
               <LogIn className="h-4 w-4" aria-hidden="true" />
               {busy ? 'Signing in…' : 'Sign in'}
             </button>
@@ -201,7 +201,7 @@ export default function LoginPage() {
               <button type="button" className="text-red-900 hover:underline" onClick={() => { setStep('credentials'); setCode(''); setError(''); }}>
                 ← Back
               </button>
-              <button type="button" className={btnGhost} disabled={busy} onClick={resendCode}>
+              <button type="button" className={btnGhost} disabled={busy || turnstile.blocked} onClick={resendCode}>
                 Resend code
               </button>
             </div>
@@ -209,7 +209,7 @@ export default function LoginPage() {
         )}
 
         <div className="mt-4 flex justify-center">
-          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} onError={turnstile.setFailed} />
         </div>
 
         {step === 'credentials' && (

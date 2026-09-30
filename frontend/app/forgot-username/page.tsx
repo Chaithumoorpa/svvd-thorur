@@ -63,12 +63,12 @@ export default function ForgotUsernamePage() {
                 onChange={(e) => setIdentifier(e.target.value)}
               />
             </div>
-            <button type="submit" disabled={busy || !identifier} className={`${btnPrimary} w-full`}>
+            <button type="submit" disabled={busy || !identifier || turnstile.blocked} className={`${btnPrimary} w-full`}>
               <Mail className="h-4 w-4" aria-hidden="true" />
               {busy ? 'Sending…' : 'Send my username'}
             </button>
             <div className="flex justify-center">
-              <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+              <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} onError={turnstile.setFailed} />
             </div>
           </form>
         )}

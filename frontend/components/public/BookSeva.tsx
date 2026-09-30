@@ -277,11 +277,11 @@ export default function BookSeva({
                 </fieldset>
               )}
               <div className="flex justify-center">
-                <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+                <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} onError={turnstile.setFailed} />
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" className={btnGhost} onClick={close}>Cancel</button>
-                <button type="submit" className={btnPrimary} disabled={busy || uploading || full || name.trim().length < 2 || mobile.replace(/\D/g, '').length < 10 || !date}>{busy ? 'Booking…' : 'Confirm booking'}</button>
+                <button type="submit" className={btnPrimary} disabled={busy || uploading || full || name.trim().length < 2 || mobile.replace(/\D/g, '').length < 10 || !date || turnstile.blocked}>{busy ? 'Booking…' : 'Confirm booking'}</button>
               </div>
             </form>
           )}

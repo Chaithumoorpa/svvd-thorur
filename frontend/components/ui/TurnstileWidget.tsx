@@ -38,10 +38,17 @@ function loadScript(): Promise<void> {
  * TurnstileService skips verification the same way, so a form using this
  * still works in any environment that hasn't set Turnstile up yet.
  */
-export default function TurnstileWidget({ onToken }: { onToken: (token: string | null) => void }) {
+export default function TurnstileWidget({
+  onToken, onError,
+}: { onToken: (token: string | null) => void; onError?: (failed: boolean) => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
   const [failed, setFailed] = useState(false);
+
+  const fail = (value: boolean) => {
+    setFailed(value);
+    onError?.(value);
+  };
 
   useEffect(() => {
     if (!SITE_KEY || !containerRef.current) return;
@@ -51,12 +58,12 @@ export default function TurnstileWidget({ onToken }: { onToken: (token: string |
         if (!mounted || !containerRef.current || !window.turnstile) return;
         widgetId.current = window.turnstile.render(containerRef.current, {
           sitekey: SITE_KEY,
-          callback: (token: string) => onToken(token),
+          callback: (token: string) => { fail(false); onToken(token); },
           'expired-callback': () => onToken(null),
-          'error-callback': () => setFailed(true),
+          'error-callback': () => fail(true),
         });
       })
-      .catch(() => setFailed(true));
+      .catch(() => fail(true));
     return () => {
       mounted = false;
       if (widgetId.current && window.turnstile) window.turnstile.remove(widgetId.current);
