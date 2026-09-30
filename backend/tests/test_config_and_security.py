@@ -64,3 +64,25 @@ def test_security_headers_middleware_and_cors_methods(client):
     response = client.options("/api/v1/announcements/", headers={
         "Origin": "http://localhost:3000", "Access-Control-Request-Method": "TRACE"})
     assert response.status_code == 400  # TRACE is not an allowed method
+
+
+def test_oversized_body_rejected_before_reaching_any_route(client):
+    from app.core.config import settings
+
+    # Declared via Content-Length - rejected immediately, without needing a
+    # real route or valid JSON (the point is nothing downstream ever sees it).
+    huge = b"x" * (settings.MAX_REQUEST_BODY_BYTES + 1)
+    response = client.post(
+        "/api/v1/contacts", content=huge, headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
+
+
+def test_normal_body_is_not_rejected_by_size(client):
+    # Well under the cap - fails normal field validation (a short message), not 413,
+    # proving the size limit doesn't interfere with an ordinary request.
+    response = client.post(
+        "/api/v1/contacts",
+        json={"name": "A", "email": "a@b.com", "subject": "hi there", "message": "short"},
+    )
+    assert response.status_code == 422

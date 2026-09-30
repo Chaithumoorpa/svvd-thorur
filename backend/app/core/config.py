@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     ENABLE_RATE_LIMITING: bool | None = None
     RATE_LIMIT_PER_MINUTE: int = 120
 
+    # Hard cap on request body size (every endpoint here is JSON text - no file
+    # bytes ever pass through this backend, those go straight to S3 via a
+    # presigned URL) - rejects an oversized body before it's buffered into memory.
+    MAX_REQUEST_BODY_BYTES: int = 1_000_000
+
     # Alembic
     ALEMBIC_CONFIG: str = "alembic.ini"
 

@@ -29,7 +29,7 @@ def _validate_password(value: str) -> str:
 
 
 class UserBase(BaseModel):
-    username: str
+    username: str = Field(max_length=100)
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(default=None, max_length=20)
     is_active: Optional[bool] = True
@@ -65,14 +65,14 @@ class PublicRegister(BaseModel):
     """Self-registration: can never choose roles. Email and phone are required -
     a devotee account is only useful if the temple can reach its owner, and a
     booking's contact details already require both anyway."""
-    username: str
+    username: str = Field(max_length=100)
     email: EmailStr
     phone: str = Field(max_length=20)
     password: str
     accept_terms: bool
     # Cloudflare Turnstile challenge token from the frontend widget - required
     # only when TURNSTILE_SECRET_KEY is configured server-side.
-    turnstile_token: Optional[str] = None
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
 
     @field_validator("username")
     @classmethod
@@ -121,9 +121,9 @@ class UserUpdate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    username: str
-    password: str
-    turnstile_token: Optional[str] = None
+    username: str = Field(max_length=100)
+    password: str = Field(max_length=128)
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
 
 
 class UserOut(BaseModel):
@@ -160,12 +160,12 @@ class LoginResponse(BaseModel):
 
 
 class LoginOtpVerify(BaseModel):
-    username: str
-    code: str
+    username: str = Field(max_length=100)
+    code: str = Field(max_length=20)
 
 
 class PasswordChange(BaseModel):
-    current_password: str
+    current_password: str = Field(max_length=128)
     new_password: str
 
     @field_validator("new_password")
@@ -177,16 +177,16 @@ class PasswordChange(BaseModel):
 class DeleteAccountConfirm(BaseModel):
     """Requires the current password, same as changing it - a destructive,
     irreversible action deserves the same confirmation."""
-    password: str
+    password: str = Field(max_length=128)
 
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
-    turnstile_token: Optional[str] = None
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
 
 
 class PasswordResetConfirm(BaseModel):
-    token: str
+    token: str = Field(max_length=2000)
     new_password: str
 
     @field_validator("new_password")

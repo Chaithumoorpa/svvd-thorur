@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
+from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 
 # Configure logging before anything else
 from app.core.logging_config import setup_logging
@@ -98,6 +99,14 @@ else:
             calls=settings.RATE_LIMIT_PER_MINUTE,
             period=60
         )
+
+# Reject an oversized body before it reaches any route or Pydantic model - every
+# endpoint here takes JSON text (uploads go straight to S3 via a presigned URL,
+# never through this backend), so no legitimate request needs to approach this.
+# Added last so it wraps every other middleware (outermost, right after
+# Starlette's own ServerErrorMiddleware) - the same position Starlette's native
+# `max_body_size` app option would use, had FastAPI exposed that option itself.
+app.add_middleware(RequestBodyLimitMiddleware, max_body_size=settings.MAX_REQUEST_BODY_BYTES)
 
 # Include API router
 app.include_router(api_router)

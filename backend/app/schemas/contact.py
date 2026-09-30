@@ -15,7 +15,7 @@ class ContactCreate(BaseModel):
     message: Annotated[str, StringConstraints(strip_whitespace=True, min_length=5, max_length=5000)]
     # Honeypot: real visitors never see/fill this hidden field, bots usually do.
     website: Optional[str] = Field(default=None, max_length=200, exclude=True)
-    turnstile_token: Optional[str] = None
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
 
 
 class ContactUpdate(BaseModel):
