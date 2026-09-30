@@ -88,6 +88,13 @@ def test_forgot_password_requires_turnstile_when_configured(client, monkeypatch)
     assert "Security check" in r.json()["detail"]
 
 
+def test_forgot_username_requires_turnstile_when_configured(client, monkeypatch):
+    _configure_turnstile(monkeypatch, passes=False)
+    r = client.post("/api/v1/auth/forgot-username", json={"identifier": "someone@example.com"})
+    assert r.status_code == 400
+    assert "Security check" in r.json()["detail"]
+
+
 def test_contact_form_requires_turnstile_when_configured(client, monkeypatch):
     _configure_turnstile(monkeypatch, passes=False)
     r = client.post("/api/v1/contacts", json={

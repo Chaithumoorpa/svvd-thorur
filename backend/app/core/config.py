@@ -123,6 +123,13 @@ class Settings(BaseSettings):
             )
         if "*" in self.CORS_ORIGINS:
             raise ValueError("CORS_ORIGINS must not contain '*' in production")
+        if not self.TURNSTILE_SECRET_KEY:
+            # Unset makes TurnstileService a silent no-op (see its docstring) -
+            # fine for local dev, but in production it would mean every
+            # CAPTCHA-gated form (registration, login, forgot-password, ...)
+            # accepts every submission with no bot/abuse check at all, with
+            # nothing in the logs to say so. Refuse to boot instead.
+            raise ValueError("TURNSTILE_SECRET_KEY must be set in production")
         return self
 
     # ---- derived flags -------------------------------------------------

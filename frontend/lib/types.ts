@@ -43,9 +43,19 @@ export interface Temple {
   facebook_url: string | null;
   instagram_url: string | null;
   youtube_url: string | null;
+  upi_vpa: string | null;
 }
 
 export type TempleUpdate = Partial<Omit<Temple, 'id'>>;
+
+/** e-Hundi: a UPI deep-link QR built from the temple's own VPA. A direct
+ * devotee-to-temple transfer - never processed by this backend. */
+export interface HundiQrInfo {
+  configured: boolean;
+  upi_vpa: string | null;
+  payee_name: string | null;
+  qr_base64: string | null;
+}
 
 export interface TempleTiming {
   id: number;

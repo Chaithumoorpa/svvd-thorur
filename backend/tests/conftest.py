@@ -47,8 +47,9 @@ def client(db):
     # limiters are process-global; reset so tests do not affect each other
     for limiter in (rate_limiter.login_limiter, rate_limiter.register_limiter,
                     rate_limiter.contact_limiter, rate_limiter.booking_limiter,
-                    rate_limiter.password_reset_limiter, rate_limiter.otp_request_limiter,
-                    rate_limiter.otp_verify_limiter, rate_limiter.blessing_photo_upload_limiter):
+                    rate_limiter.password_reset_limiter, rate_limiter.username_recovery_limiter,
+                    rate_limiter.otp_request_limiter, rate_limiter.otp_verify_limiter,
+                    rate_limiter.blessing_photo_upload_limiter):
         limiter.requests.clear()
     # The content cache (app/core/cache.py) is also process-global - each test
     # gets a fresh in-memory database above, so a cached response from a

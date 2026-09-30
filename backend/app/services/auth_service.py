@@ -12,6 +12,7 @@ from app.models.password_reset import PasswordResetToken
 from app.models.seva_ticket import SevaTicket
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
+from app.schemas.common import normalize_mobile
 from app.schemas.user import PasswordChange, PublicRegister, UserCreate, UserLogin, UserUpdate
 
 # How long an emailed password-reset link stays valid.
@@ -28,11 +29,30 @@ class AuthService:
         self.logger = logging.getLogger(__name__)
 
     # ---- login -----------------------------------------------------------------
+    def resolve_identifier(self, identifier: str) -> Optional[User]:
+        """The sign-in field accepts a username, an email address, or a mobile
+        number. Username is tried first (its own account always wins if a
+        number happens to collide with someone else's phone). Phone only
+        resolves when it's unambiguous - phone has no unique constraint, so a
+        shared number must not let one attempt sign in as an arbitrary match."""
+        identifier = identifier.strip()
+        user = self.user_repository.get_by_username(identifier)
+        if user:
+            return user
+        if "@" in identifier:
+            return self.user_repository.get_by_email(identifier)
+        try:
+            phone = normalize_mobile(identifier)
+        except ValueError:
+            return None
+        matches = self.user_repository.get_by_phone(phone)
+        return matches[0] if len(matches) == 1 else None
+
     def authenticate_user(self, data: UserLogin) -> User:
-        user = self.user_repository.get_by_username(data.username.strip())
+        user = self.resolve_identifier(data.username)
         password_ok = verify_password(data.password, user.hashed_password if user else _DUMMY_HASH)
         if not user or not password_ok or not user.is_active:
-            self.logger.warning("Authentication failed for username: %s", data.username)
+            self.logger.warning("Authentication failed for identifier: %s", data.username)
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         user.last_login = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -196,6 +216,41 @@ class AuthService:
             hashlib.sha256(secrets.token_urlsafe(32).encode()).hexdigest()
             return None
         return user, self._issue_reset_token(user)
+
+    # ---- forgot username/email --------------------------------------------------
+    def request_username_recovery(self, identifier: str) -> None:
+        """Looks up the account by email or phone (never by username - the
+        point is the caller doesn't have it) and, only when it has an email on
+        file, sends the username there. Same email either way (or matched
+        only by phone, with no email to send to) - the caller can't tell
+        which, so nothing about which accounts exist leaks."""
+        identifier = identifier.strip()
+        user: Optional[User] = None
+        if "@" in identifier:
+            user = self.user_repository.get_by_email(identifier)
+        else:
+            try:
+                phone = normalize_mobile(identifier)
+            except ValueError:
+                phone = None
+            if phone:
+                matches = self.user_repository.get_by_phone(phone)
+                user = matches[0] if len(matches) == 1 else None
+
+        if user and user.is_active and user.email:
+            from app.core.config import settings
+            from app.services.email_service import EmailService
+
+            EmailService().send(
+                user.email,
+                "Your SVVD Thorur username",
+                f"Hello,\n\n"
+                "We received a request to recover the username for this SVVD Thorur account.\n\n"
+                f"Your username is: {user.username}\n\n"
+                f"You can sign in here: {settings.FRONTEND_BASE_URL}/login\n\n"
+                "If you didn't request this, you can safely ignore this email.\n\n"
+                "Thank you,\nSVVD Thorur",
+            )
 
     def reset_password(self, token: str, new_password: str) -> None:
         db = self.user_repository.db

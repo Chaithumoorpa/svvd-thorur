@@ -246,6 +246,54 @@ def test_ledger_exports(client, admin):
     assert report.status_code == 200 and report.json()["total_expenses"] == 1
 
 
+def test_monthly_report_pdf(client, admin):
+    _, headers = admin
+    today = date.today()
+    _add(client, headers, "income", source_type="HUNDI", amount=100, payment_mode="CASH")
+    _add(client, headers, "expense", category="OTHER", description="Flowers", amount=20,
+         payment_mode="CASH", paid_to="Vendor", expense_date=today.isoformat())
+
+    pdf = client.get(f"/api/v1/finance/reports/monthly/pdf?year={today.year}&month={today.month}", headers=headers)
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    assert pdf.headers["content-type"] == "application/pdf"
+
+
+def test_monthly_report_with_no_transactions(client, admin):
+    """A month with nothing recorded still renders (income/expense breakdown
+    empty dicts) instead of erroring - both the JSON and PDF paths."""
+    _, headers = admin
+    report = client.get("/api/v1/finance/reports/monthly?year=2020&month=1", headers=headers)
+    assert report.status_code == 200
+    body = report.json()
+    assert body["total_income"] == 0 and body["total_expenses"] == 0
+    assert body["income_breakdown"] == {} and body["expense_breakdown"] == {}
+
+    pdf = client.get("/api/v1/finance/reports/monthly/pdf?year=2020&month=1", headers=headers)
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+
+
+def test_monthly_report_rejects_bad_month(client, admin):
+    _, headers = admin
+    assert client.get("/api/v1/finance/reports/monthly?year=2026&month=13", headers=headers).status_code == 422
+    assert client.get("/api/v1/finance/reports/monthly?year=2026&month=0", headers=headers).status_code == 422
+
+
+def test_finance_rejects_bad_enum_values(client, admin):
+    _, headers = admin
+    assert _add(client, headers, "income", source_type="NOT_A_SOURCE", amount=10,
+               payment_mode="CASH").status_code == 422
+    assert _add(client, headers, "income", source_type="MANUAL", amount=10,
+               payment_mode="NOT_A_MODE").status_code == 422
+    assert _add(client, headers, "expense", category="NOT_A_CATEGORY", description="x", amount=10,
+               payment_mode="CASH", paid_to="Vendor", expense_date="2026-01-01").status_code == 422
+
+
+def test_ledger_csv_requires_date_range(client, admin):
+    _, headers = admin
+    assert client.get("/api/v1/finance/ledger/csv", headers=headers).status_code == 422  # start/end required
+    assert client.get("/api/v1/finance/ledger/pdf", headers=headers).status_code == 422
+
+
 def test_finance_service_layer_direct(db, admin):
     from app.schemas.finance import IncomeTransactionCreate
 

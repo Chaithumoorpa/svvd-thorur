@@ -1,4 +1,6 @@
-import type { CommitteeMember, Festival, GalleryItem, HomePayload, Pooja, Temple, TempleTiming, Announcement } from './types';
+import type {
+  CommitteeMember, Festival, GalleryItem, HomePayload, HundiQrInfo, Pooja, Temple, TempleTiming, Announcement,
+} from './types';
 
 /**
  * Server-side (React Server Component) data access for the public site.
@@ -30,3 +32,5 @@ export const fetchFestivals = () => get<Festival[]>('/festivals/', []);
 export const fetchPoojas = () => get<Pooja[]>('/poojas/', []);
 export const fetchGallery = () => get<GalleryItem[]>('/gallery/?page_size=200', []);
 export const fetchCommittee = () => get<CommitteeMember[]>('/public/committee', []);
+export const fetchHundiQr = () =>
+  get<HundiQrInfo>('/temple/hundi-qr', { configured: false, upi_vpa: null, payee_name: null, qr_base64: null });

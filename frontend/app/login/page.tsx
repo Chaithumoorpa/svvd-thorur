@@ -131,7 +131,7 @@ export default function LoginPage() {
             {error && <Notice kind="error">{error}</Notice>}
             <div>
               <label htmlFor="username" className="mb-1 block text-sm font-medium text-gray-700">
-                Username
+                Username, email, or mobile number
               </label>
               <input
                 id="username"
@@ -167,7 +167,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            <button type="submit" disabled={busy || !username || !password} className={`${btnPrimary} w-full`}>
+            <button type="submit" disabled={busy || !username || !password || turnstile.blocked} className={`${btnPrimary} w-full`}>
               <LogIn className="h-4 w-4" aria-hidden="true" />
               {busy ? 'Signing in…' : 'Sign in'}
             </button>
@@ -201,7 +201,7 @@ export default function LoginPage() {
               <button type="button" className="text-red-900 hover:underline" onClick={() => { setStep('credentials'); setCode(''); setError(''); }}>
                 ← Back
               </button>
-              <button type="button" className={btnGhost} disabled={busy} onClick={resendCode}>
+              <button type="button" className={btnGhost} disabled={busy || turnstile.blocked} onClick={resendCode}>
                 Resend code
               </button>
             </div>
@@ -209,7 +209,7 @@ export default function LoginPage() {
         )}
 
         <div className="mt-4 flex justify-center">
-          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} onError={turnstile.setFailed} />
         </div>
 
         {step === 'credentials' && (
@@ -220,9 +220,12 @@ export default function LoginPage() {
                 Create an account
               </Link>
             </p>
-            <p className="mt-2 text-center text-sm">
+            <p className="mt-2 flex justify-center gap-4 text-center text-sm">
               <Link href="/forgot-password" className="text-red-900 hover:underline">
                 Forgot password?
+              </Link>
+              <Link href="/forgot-username" className="text-red-900 hover:underline">
+                Forgot username or email?
               </Link>
             </p>
           </>

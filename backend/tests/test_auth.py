@@ -112,6 +112,33 @@ def test_duplicate_username_and_email(client):
     assert client.post("/api/v1/auth/register", json=other).status_code == 400  # same email
 
 
+def test_registration_race_on_duplicate_username_is_a_clean_400_not_a_500(client, monkeypatch):
+    """Two requests can both pass the pre-check (_ensure_unique) before either
+    commits - simulated here by making the pre-check a no-op for one request,
+    same as if a second request's insert had landed in between. The table's
+    own unique constraint must still turn this into a normal 400, not an
+    unhandled IntegrityError bubbling up as a 500."""
+    ok = {"username": "racer", "password": "Temple123", "email": "racer@example.com",
+          "phone": "9876543210", "accept_terms": True}
+    assert client.post("/api/v1/auth/register", json=ok).status_code == 201
+
+    monkeypatch.setattr("app.services.auth_service.AuthService._ensure_unique", lambda *a, **k: None)
+    raced = client.post("/api/v1/auth/register", json=ok)
+    assert raced.status_code == 400
+    assert "already exists" in raced.json()["detail"].lower()
+
+
+def test_register_rate_limited(client):
+    statuses = []
+    for n in range(6):
+        statuses.append(client.post("/api/v1/auth/register", json={
+            "username": f"limited{n}", "password": "Temple123", "email": f"limited{n}@example.com",
+            "phone": "9876543210", "accept_terms": True,
+        }).status_code)
+    assert statuses[:5] == [201] * 5
+    assert statuses[5] == 429
+
+
 def test_registration_can_be_disabled(client, monkeypatch):
     from app.core.config import settings
 
@@ -223,6 +250,79 @@ def test_reset_password_expired_token(client, db, make_user):
 def test_forgot_password_rate_limited(client, make_user):
     make_user("STAFF", username="grace", password="Password123", email="grace@example.com")
     statuses = [client.post("/api/v1/auth/forgot-password", json={"email": "grace@example.com"}).status_code
+                for _ in range(6)]
+    assert statuses[:5] == [200] * 5
+    assert 429 in statuses[5:]
+
+
+# ---------------------------------------------------------------- login by email/phone
+def test_login_by_email(client, make_user, monkeypatch):
+    # heidi has an email on file, so login sends an OTP (see test_login_2fa.py) -
+    # only asserting here that the identifier itself resolved to her account.
+    monkeypatch.setattr("app.services.otp_service.EmailService.send", lambda *a, **k: True)
+    make_user("ADMIN", username="heidi", password="Password123", email="heidi@example.com")
+    response = _login(client, "heidi@example.com", "Password123")
+    assert response.status_code == 200
+    assert response.json()["otp_required"] is True
+
+
+def test_login_by_unique_phone(client, make_user):
+    make_user("ADMIN", username="ivan", password="Password123", phone="9876500001")
+    assert _login(client, "9876500001", "Password123").status_code == 200
+
+
+def test_login_by_ambiguous_phone_fails(client, make_user):
+    make_user("ADMIN", username="jack", password="Password123", phone="9876500002")
+    make_user("ADMIN", username="jill", password="Password456", phone="9876500002")
+    # Neither account's own password resolves - the shared number matches no one account.
+    assert _login(client, "9876500002", "Password123").status_code == 401
+    assert _login(client, "9876500002", "Password456").status_code == 401
+
+
+def test_username_always_wins_over_a_colliding_phone(client, make_user):
+    # "kim" the username and someone else's phone number happen to collide.
+    make_user("ADMIN", username="kim", password="Password123")
+    make_user("ADMIN", username="owner-of-kim-as-phone", password="Password456", phone="kim")
+    assert _login(client, "kim", "Password123").status_code == 200
+
+
+# ---------------------------------------------------------------- forgot username/email
+def test_forgot_username_unknown_identifier_is_silent(client):
+    r = client.post("/api/v1/auth/forgot-username", json={"identifier": "nobody@example.com"})
+    assert r.status_code == 200
+    assert "registered" in r.json()["message"].lower()
+
+    r2 = client.post("/api/v1/auth/forgot-username", json={"identifier": "9999999999"})
+    assert r2.status_code == 200
+
+
+def test_forgot_username_by_email_sends_username(client, db, make_user, monkeypatch):
+    make_user("STAFF", username="laura", password="Password123", email="laura@example.com")
+    sent = {}
+    monkeypatch.setattr(
+        "app.services.email_service.EmailService.send",
+        lambda self, to, subject, body: sent.update(to=to, body=body),
+    )
+    r = client.post("/api/v1/auth/forgot-username", json={"identifier": "laura@example.com"})
+    assert r.status_code == 200
+    assert sent["to"] == "laura@example.com"
+    assert "laura" in sent["body"]
+
+
+def test_forgot_username_by_phone_with_no_email_sends_nothing(client, make_user, monkeypatch):
+    make_user("STAFF", username="mallory", password="Password123", phone="9876500003")
+    sent = {"called": False}
+    monkeypatch.setattr(
+        "app.services.email_service.EmailService.send",
+        lambda self, *a, **k: sent.update(called=True),
+    )
+    r = client.post("/api/v1/auth/forgot-username", json={"identifier": "9876500003"})
+    assert r.status_code == 200
+    assert sent["called"] is False
+
+
+def test_forgot_username_rate_limited(client):
+    statuses = [client.post("/api/v1/auth/forgot-username", json={"identifier": "nobody@example.com"}).status_code
                 for _ in range(6)]
     assert statuses[:5] == [200] * 5
     assert 429 in statuses[5:]

@@ -7,7 +7,7 @@ from app.utils.rate_limiter import get_client_ip
 
 
 def _settings(**kw):
-    base = dict(DATABASE_URL="sqlite://", SECRET_KEY="k" * 40)
+    base = dict(DATABASE_URL="sqlite://", SECRET_KEY="k" * 40, TURNSTILE_SECRET_KEY="turnstile-secret")
     return Settings(_env_file=None, **{**base, **kw})
 
 
@@ -16,6 +16,16 @@ def test_production_rejects_weak_secret():
         with pytest.raises(ValidationError):
             _settings(ENV="production", SECRET_KEY=secret)
     assert _settings(ENV="production").is_production
+
+
+def test_production_requires_turnstile_secret():
+    """A blank/unset key makes TurnstileService a silent no-op (see its
+    docstring) - in production that means every CAPTCHA-gated public form
+    accepts anything, with nothing logged to say so. Must refuse to boot."""
+    for missing in ({"TURNSTILE_SECRET_KEY": None}, {"TURNSTILE_SECRET_KEY": ""}):
+        with pytest.raises(ValidationError):
+            _settings(ENV="production", **missing)
+    assert _settings(ENV="production").is_production  # a real key still boots fine
 
 
 def test_public_registration_is_off_by_default(monkeypatch):

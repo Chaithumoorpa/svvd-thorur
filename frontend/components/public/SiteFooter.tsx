@@ -5,6 +5,7 @@ import { Facebook, Github, Instagram, Mail, MapPin, Phone, Youtube } from 'lucid
 import { Link } from '@/i18n/navigation';
 import { fetchTemple, fetchTimings } from '@/lib/server-api';
 import { isEmbeddableMap, NAV_LINKS, templeAddress, templeName } from '@/lib/site';
+import CookiePreferencesLink from './CookiePreferencesLink';
 import VisitorCount from './VisitorCount';
 
 /** Credited in the footer, so people wanting a site like this know who to contact. */
@@ -15,7 +16,9 @@ export default async function SiteFooter() {
   const name = templeName(temple);
   const address = templeAddress(temple);
   const year = new Date().getFullYear();
-  const [t, tNav, tCommon] = await Promise.all([getTranslations('footer'), getTranslations('nav'), getTranslations('common')]);
+  const [t, tNav, tCommon, tCookie] = await Promise.all([
+    getTranslations('footer'), getTranslations('nav'), getTranslations('common'), getTranslations('cookieConsent'),
+  ]);
   const socials = [
     { href: temple?.facebook_url, label: 'Facebook', Icon: Facebook },
     { href: temple?.instagram_url, label: 'Instagram', Icon: Instagram },
@@ -64,6 +67,7 @@ export default async function SiteFooter() {
               <li key={l.href}><Link href={l.href} className="hover:text-white hover:underline">{tNav(l.key)}</Link></li>
             ))}
             <li><Link href="/donations" className="hover:text-white hover:underline">{tNav('donations')}</Link></li>
+            <li><Link href="/hundi" className="hover:text-white hover:underline">{tNav('hundi')}</Link></li>
             <li><Link href="/committee" className="hover:text-white hover:underline">{tNav('committee')}</Link></li>
           </ul>
         </div>
@@ -104,10 +108,12 @@ export default async function SiteFooter() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-5 text-xs text-amber-100/70 sm:flex-row">
           <p>© {year} {name}. {t('rightsReserved')}</p>
           <VisitorCount />
-          <nav aria-label={tNav('legalNav')} className="flex gap-4">
+          <nav aria-label={tNav('legalNav')} className="flex flex-wrap gap-4">
             <Link href="/legal/privacy-policy" className="hover:text-white">{t('privacy')}</Link>
             <Link href="/legal/terms" className="hover:text-white">{t('terms')}</Link>
             <Link href="/legal/refund-policy" className="hover:text-white">{t('refunds')}</Link>
+            <Link href="/legal/cookie-policy" className="hover:text-white">{t('cookiePolicy')}</Link>
+            <CookiePreferencesLink label={tCookie('managePreferences')} />
             <NextLink href="/login" className="hover:text-white">{t('staffLogin')}</NextLink>
           </nav>
         </div>

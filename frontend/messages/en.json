@@ -21,7 +21,8 @@
     "closeMenu": "Close menu",
     "mainNav": "Main",
     "legalNav": "Legal",
-    "staffLogin": "Staff login"
+    "staffLogin": "Staff login",
+    "hundi": "Online Hundi"
   },
   "language": {
     "label": "Language",
@@ -45,7 +46,8 @@
     "terms": "Terms",
     "refunds": "Refunds",
     "staffLogin": "Staff login",
-    "rightsReserved": "All rights reserved."
+    "rightsReserved": "All rights reserved.",
+    "cookiePolicy": "Cookies"
   },
   "home": {
     "darshanHeading": "Darshan Timings",
@@ -222,6 +224,19 @@
       "sectionHeading": "Eligibility",
       "sectionText": "Placeholder: conditions under which refunds may be considered.",
       "lastUpdated": "Last updated: {date}"
+    },
+    "cookiePolicy": {
+      "title": "Cookie Policy",
+      "intro": "This page explains what cookies and local storage this website uses, and what \"Accept\" and \"Decline\" on our cookie banner actually do.",
+      "whatWeUseHeading": "1. What we use",
+      "whatWeUseText": "We use only a small number of strictly necessary items stored in your browser: a sign-in token (kept in local storage, not a cookie, so you stay signed in), your chosen display language, a security check from Cloudflare Turnstile on public forms (to block automated abuse), and the cookie choice you make on the banner itself. We do not use any advertising or analytics cookies today.",
+      "whyNecessaryHeading": "2. Why these don't need your consent",
+      "whyNecessaryText": "Everything listed above is \"strictly necessary\" - the site cannot sign you in, remember your language, or protect its forms from bots without it. Under GDPR, UK PECR, and similar laws, strictly necessary storage is used regardless of your Accept/Decline choice, the same way it would be if the banner didn't exist.",
+      "acceptDeclineHeading": "3. What Accept / Decline changes",
+      "acceptDeclineText": "Right now, nothing optional is set on this site, so Accept and Decline have the same practical effect - we simply remember which you chose. If we ever add analytics or similar optional cookies in future, they will only run after you Accept; choosing Decline keeps them off. You can change your choice anytime using \"Cookie preferences\" in the footer.",
+      "rightsHeading": "4. Your choice, and your data",
+      "rightsText": "You can accept, decline, or change your choice at any time - it never affects your ability to browse the site, book a seva, or donate. For everything else we do with personal data you give us directly (bookings, donations, your account), see our Privacy Policy.",
+      "lastUpdated": "Last updated: {date}"
     }
   },
   "support": {
@@ -244,13 +259,57 @@
     "returnHome": "Return to Home"
   },
   "metadata": {
-    "history": { "title": "History of the Temple", "description": "The history and significance of the temple." },
-    "announcements": { "title": "Announcements", "description": "Latest news, notices and updates from the temple." },
-    "committee": { "title": "Temple Committee", "description": "The trustees and office bearers who serve the temple." },
-    "contact": { "title": "Contact Us", "description": "Get in touch with the temple office: address, phone, email and a contact form." },
-    "festivals": { "title": "Festivals & Events", "description": "Annual festivals, utsavams and special events at the temple." },
-    "gallery": { "title": "Gallery", "description": "Photographs of the temple, festivals and events." },
-    "poojas": { "title": "Poojas & Sevas", "description": "Daily poojas, festival sevas and special sevas offered at the temple, with timings and fees." },
-    "timings": { "title": "Darshan Timings", "description": "Daily darshan and pooja timings at the temple." }
+    "history": {
+      "title": "History of the Temple",
+      "description": "The history and significance of the temple."
+    },
+    "announcements": {
+      "title": "Announcements",
+      "description": "Latest news, notices and updates from the temple."
+    },
+    "committee": {
+      "title": "Temple Committee",
+      "description": "The trustees and office bearers who serve the temple."
+    },
+    "contact": {
+      "title": "Contact Us",
+      "description": "Get in touch with the temple office: address, phone, email and a contact form."
+    },
+    "festivals": {
+      "title": "Festivals & Events",
+      "description": "Annual festivals, utsavams and special events at the temple."
+    },
+    "gallery": {
+      "title": "Gallery",
+      "description": "Photographs of the temple, festivals and events."
+    },
+    "poojas": {
+      "title": "Poojas & Sevas",
+      "description": "Daily poojas, festival sevas and special sevas offered at the temple, with timings and fees."
+    },
+    "timings": {
+      "title": "Darshan Timings",
+      "description": "Daily darshan and pooja timings at the temple."
+    },
+    "hundi": {
+      "title": "Online Hundi",
+      "description": "Scan a QR code to offer directly to the temple's Hundi via UPI."
+    }
+  },
+  "hundi": {
+    "title": "Online Hundi",
+    "subtitle": "Offer your contribution directly to the temple's Hundi, from anywhere.",
+    "howTo": "Open any UPI app - Google Pay, PhonePe, Paytm, or BHIM - and scan the QR code above, or pay directly to the UPI ID shown.",
+    "directNote": "This is an instant, direct transfer to the temple's bank account. It is not processed through this website, and no payment details pass through our servers.",
+    "receiptNote": "Want a receipt for your offering? Share your name, PAN and phone number with the temple office after paying, using",
+    "contactLink": "the Contact page",
+    "notConfigured": "Online Hundi isn't set up yet. Please contact the temple office, or offer at the Hundi box during your visit."
+  },
+  "cookieConsent": {
+    "message": "This site uses only essential cookies and local storage - for sign-in and your language preference. No advertising or tracking cookies are used.",
+    "policyLinkText": "Cookie Policy",
+    "accept": "Accept",
+    "decline": "Decline",
+    "managePreferences": "Cookie preferences"
   }
 }

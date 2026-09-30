@@ -2,7 +2,7 @@ import axios, { AxiosError } from 'axios';
 import type {
   ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog, BlessingReview, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
   Donation, DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
-  GalleryInput, GalleryItem, HomePayload, IncomeInput, LedgerEntry, Me, Member, MemberInput,
+  GalleryInput, GalleryItem, HomePayload, HundiQrInfo, IncomeInput, LedgerEntry, Me, Member, MemberInput,
   Paged, PersonalBlessing, Pooja, PoojaInput, SevaBookingOnlineInput, SevaCalendarDay, SevaDay, SevaTicket,
   Temple, TempleTiming,
   TempleTimingInput, TempleUpdate, TicketStatus, UploadUrlResponse, UserCreateInput,
@@ -141,6 +141,8 @@ export const verifyLoginOtp = async (username: string, code: string) =>
   )).data;
 export const forgotPassword = async (email: string, turnstile_token?: string) =>
   (await api.post<{ message: string }>('/auth/forgot-password', { email, turnstile_token })).data;
+export const forgotUsername = async (identifier: string, turnstile_token?: string) =>
+  (await api.post<{ message: string }>('/auth/forgot-username', { identifier, turnstile_token })).data;
 export const resetPassword = async (token: string, new_password: string) =>
   (await api.post<{ message: string }>('/auth/reset-password', { token, new_password })).data;
 export const register = async (data: {
@@ -161,6 +163,7 @@ export const deleteUser = async (id: number) => (await api.delete(`/auth/admin/u
 export const getTemple = async () => (await api.get<Temple>('/temple/')).data;
 export const updateTemple = async (data: TempleUpdate) => (await api.put<Temple>('/temple/', data)).data;
 export const listAllTimings = async () => (await api.get<TempleTiming[]>('/temple/timings/all')).data;
+export const getHundiQr = async () => (await api.get<HundiQrInfo>('/temple/hundi-qr')).data;
 export const createTiming = async (data: TempleTimingInput) => (await api.post<TempleTiming>('/temple/timings', data)).data;
 export const updateTiming = async (id: number, data: Partial<TempleTimingInput>) =>
   (await api.put<TempleTiming>(`/temple/timings/${id}`, data)).data;

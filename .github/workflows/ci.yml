@@ -43,6 +43,7 @@ jobs:
           DATABASE_URL: postgresql://templeuser:templepass@localhost:5432/templedb
           SECRET_KEY: ci-only-throwaway-secret-key-0123456789abcdef
           CORS_ORIGINS: https://svvdthorur.org
+          TURNSTILE_SECRET_KEY: ci-only-throwaway-turnstile-key
         run: alembic -c alembic.prod.ini upgrade head
       - run: pytest
 

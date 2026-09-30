@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import CookieConsentBanner from '@/components/public/CookieConsentBanner';
 import SiteFooter from '@/components/public/SiteFooter';
 import SiteHeader from '@/components/public/SiteHeader';
 import VisitorTracker from '@/components/VisitorTracker';
@@ -19,6 +20,7 @@ export default async function PublicLayout({ children }: { children: React.React
         {children}
       </main>
       <SiteFooter />
+      <CookieConsentBanner />
     </>
   );
 }

@@ -114,7 +114,7 @@ export default function RegisterPage() {
               <button
                 type="button"
                 className={btnGhost}
-                disabled={busy}
+                disabled={busy || turnstile.blocked}
                 onClick={async () => {
                   setBusy(true);
                   setError('');
@@ -222,7 +222,7 @@ export default function RegisterPage() {
           </label>
           <button
             type="submit"
-            disabled={busy || !username || !email.trim() || !phone.trim() || !password || !acceptTerms}
+            disabled={busy || !username || !email.trim() || !phone.trim() || !password || !acceptTerms || turnstile.blocked}
             className={`${btnPrimary} w-full`}
           >
             <UserPlus className="h-4 w-4" aria-hidden="true" />
@@ -232,7 +232,7 @@ export default function RegisterPage() {
         )}
 
         <div className="mt-4 flex justify-center">
-          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} onError={turnstile.setFailed} />
         </div>
 
         {step === 'details' && (
