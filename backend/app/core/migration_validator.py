@@ -51,9 +51,14 @@ def get_current_revision(database_url: str) -> str | None:
     """
     try:
         engine = create_engine(database_url)
-        with engine.connect() as connection:
-            context = MigrationContext.configure(connection)
-            current_rev = context.get_current_revision()
+        try:
+            with engine.connect() as connection:
+                context = MigrationContext.configure(connection)
+                current_rev = context.get_current_revision()
+        finally:
+            # One-off engine: without this its pooled connection stays open for the
+            # life of the process - one wasted RDS connection per Lambda container.
+            engine.dispose()
         return current_rev
     except Exception as e:
         logger.error(f"Failed to get current revision: {e}")

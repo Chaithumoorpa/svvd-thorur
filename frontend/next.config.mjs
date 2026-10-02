@@ -34,10 +34,23 @@ const redirects = [
   ['/signup', '/login'],
 ];
 
+// Public API origin (e.g. https://api.svvdthorur.org). Unset = local dev, where the
+// browser goes through the /api/v1 rewrite below to a backend on 127.0.0.1:8000.
+const publicApiUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/+$/, '');
+
+// On Vercel there is no backend on localhost: without this the build would succeed
+// and every server-rendered page would quietly render its empty "no data" state.
+if (process.env.VERCEL && !publicApiUrl) {
+  throw new Error('NEXT_PUBLIC_API_URL must be set in the Vercel project (e.g. https://api.svvdthorur.org)');
+}
+
 const nextConfig = {
-  // Proxy /api/v1 requests to the backend
+  // Same-origin /api/v1 proxy: what the browser uses in local dev. With
+  // NEXT_PUBLIC_API_URL set the browser calls the API directly (lib/api.ts), and
+  // this only serves pages still holding a pre-cutover JS bundle.
   async rewrites() {
-    const backendUrl = process.env.INTERNAL_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
+    const backendUrl =
+      process.env.INTERNAL_API_BASE_URL || (publicApiUrl ? `${publicApiUrl}/api/v1` : 'http://127.0.0.1:8000/api/v1');
     return [{ source: '/api/v1/:path*', destination: `${backendUrl}/:path*` }];
   },
 
@@ -59,9 +72,6 @@ const nextConfig = {
 
   reactStrictMode: true,
   poweredByHeader: false,
-
-  // Output configuration for Docker
-  output: 'standalone',
 };
 
 export default withNextIntl(nextConfig);

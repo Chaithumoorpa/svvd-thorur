@@ -6,7 +6,7 @@ name: CI
 # deploying, since a PR could be merged without going through Actions).
 on:
   pull_request:
-    branches: [development]
+    branches: [development, production]
 
 jobs:
   backend-tests:

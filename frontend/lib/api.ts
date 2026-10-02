@@ -12,11 +12,17 @@ import type {
 export * from './types';
 
 /**
- * Browser calls go through the Next.js rewrite (/api/v1 -> backend). Server-side calls
- * (see lib/server-api.ts) talk to the backend directly.
+ * Browser calls go straight to the API's own origin when NEXT_PUBLIC_API_URL is set
+ * (Vercel + Lambda, e.g. https://api.svvdthorur.org - the backend's CORS_ORIGINS must
+ * list this site), otherwise through the same-origin Next.js rewrite (/api/v1 -> backend)
+ * used by local dev. Server-side calls (see lib/server-api.ts) talk to the backend directly.
  */
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
+  ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '')}/api/v1`
+  : '/api/v1';
+
 export const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
 });
 

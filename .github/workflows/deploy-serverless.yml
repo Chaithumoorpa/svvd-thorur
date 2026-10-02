@@ -1,0 +1,134 @@
+name: Deploy backend to AWS Lambda
+
+# Pushes to `production` ship the backend to Lambda. The frontend is deployed by
+# Vercel's own Git integration (Production Branch = production), not by this file.
+# One-time AWS setup and the repository variables below: DEPLOY_SERVERLESS.md.
+on:
+  push:
+    branches: [production]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-serverless.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-lambda
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  LAMBDA_FUNCTION: ${{ vars.LAMBDA_FUNCTION }}
+  API_BASE_URL: ${{ vars.API_BASE_URL }}
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: templeuser
+          POSTGRES_PASSWORD: templepass
+          POSTGRES_DB: templedb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U templeuser -d templedb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - name: Apply all migrations to Postgres
+        env:
+          ENV: production
+          DATABASE_URL: postgresql://templeuser:templepass@localhost:5432/templedb
+          SECRET_KEY: ci-only-throwaway-secret-key-0123456789abcdef
+          CORS_ORIGINS: https://svvdthorur.org
+          TURNSTILE_SECRET_KEY: ci-only-throwaway-turnstile-key
+        run: alembic -c alembic.prod.ini upgrade head
+      - run: pytest
+
+  deploy:
+    needs: backend-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      id-token: write   # GitHub OIDC -> short-lived AWS credentials, no stored keys
+      contents: read
+    steps:
+      - name: Check repository variables
+        run: |
+          for v in AWS_REGION ECR_REPOSITORY LAMBDA_FUNCTION API_BASE_URL; do
+            [ -n "${!v}" ] || { echo "::error::Repository variable $v is not set (see DEPLOY_SERVERLESS.md)"; exit 1; }
+          done
+
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        id: image
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          # --provenance=false: Lambda rejects the multi-manifest image index that
+          # buildx emits by default for attestations.
+          docker buildx build --platform linux/amd64 --provenance=false \
+            -f backend/Dockerfile.lambda -t "$IMAGE" --push backend
+          echo "uri=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Publish a new Lambda version (not live yet)
+        id: version
+        run: |
+          aws lambda update-function-code --function-name "$LAMBDA_FUNCTION" \
+            --image-uri "${{ steps.image.outputs.uri }}" > /dev/null
+          aws lambda wait function-updated-v2 --function-name "$LAMBDA_FUNCTION"
+          VERSION=$(aws lambda publish-version --function-name "$LAMBDA_FUNCTION" \
+            --description "${{ github.sha }}" --query Version --output text)
+          aws lambda wait published-version-active --function-name "$LAMBDA_FUNCTION" --qualifier "$VERSION"
+          echo "number=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Run database migrations with the new version
+        run: |
+          aws lambda invoke --function-name "$LAMBDA_FUNCTION" --qualifier "${{ steps.version.outputs.number }}" \
+            --cli-binary-format raw-in-base64-out --payload '{"task":"migrate"}' \
+            --query FunctionError --output text out.json > err.txt
+          # On failure, don't print out.json: an exception message can embed the
+          # database URL (password included), and this log may be public. The full
+          # traceback is in CloudWatch: /aws/lambda/$LAMBDA_FUNCTION.
+          if [ "$(cat err.txt)" != "None" ]; then
+            echo "::error::Migration failed ($(jq -r .errorType out.json)) - the live version was not changed. Details: CloudWatch log group /aws/lambda/$LAMBDA_FUNCTION"
+            exit 1
+          fi
+          cat out.json; echo
+
+      - name: Switch the live alias to the new version
+        run: |
+          PREVIOUS=$(aws lambda get-alias --function-name "$LAMBDA_FUNCTION" --name live --query FunctionVersion --output text)
+          echo "Previous live version: $PREVIOUS (roll back: aws lambda update-alias --function-name $LAMBDA_FUNCTION --name live --function-version $PREVIOUS)"
+          aws lambda update-alias --function-name "$LAMBDA_FUNCTION" --name live \
+            --function-version "${{ steps.version.outputs.number }}" > /dev/null
+
+      - name: Smoke test
+        run: |
+          for i in 1 2 3 4 5 6; do
+            curl -fsS --max-time 15 "$API_BASE_URL/health" && exit 0
+            sleep 5
+          done
+          echo "::error::$API_BASE_URL/health did not return 200 after the alias switch"; exit 1

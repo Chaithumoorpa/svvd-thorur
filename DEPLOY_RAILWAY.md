@@ -1,5 +1,7 @@
 # Deploying to Railway + svvdthorur.org
 
+> **Note:** the `production` branch deploys the frontend to Vercel and removes the frontend Dockerfile and `frontend/railway.toml` this guide uses. See [DEPLOY_SERVERLESS.md](./DEPLOY_SERVERLESS.md).
+
 This repo is a monorepo with two deployable services (`backend`, a FastAPI API,
 and `frontend`, a Next.js app) plus PostgreSQL. Railway deploys each service
 from its own root directory and Dockerfile, and offers a managed Postgres

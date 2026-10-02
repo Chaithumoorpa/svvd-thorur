@@ -15,7 +15,9 @@ config = context.config
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Keep the app's own loggers alive: migrations also run in-process inside a
+    # Lambda container (app/lambda_handler.py) that may then serve HTTP traffic.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Import models explicitly
 from app.models.base import Base
@@ -26,7 +28,9 @@ target_metadata = Base.metadata
 # Override sqlalchemy.url from environment variable if present
 from app.core.config import settings
 if settings.DATABASE_URL:
-    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+    # The ini store is a ConfigParser, where '%' is interpolation syntax - and a
+    # URL-escaped password (any RDS-generated one) is full of '%xx' sequences.
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:

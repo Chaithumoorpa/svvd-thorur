@@ -1,0 +1,54 @@
+# AWS Lambda image for the FastAPI backend (container-image Lambda, x86_64).
+#
+#   docker build -f Dockerfile.lambda -t svvd-api .
+#
+# The local docker-compose stack keeps using ./Dockerfile; this file is only for
+# Lambda. LAMBDA_BASE is overridable because some networks can't pull from ECR
+# Public - AWS publishes the identical image on Docker Hub as
+# amazon/aws-lambda-python:3.11.
+ARG LAMBDA_BASE=public.ecr.aws/lambda/python:3.11
+
+# ---- builder: resolve dependencies into a standalone directory ---------------
+FROM ${LAMBDA_BASE} AS builder
+
+COPY requirements.txt /tmp/requirements.txt
+# --only-binary: every pinned dependency ships a wheel for this image's glibc
+# (2.26, Amazon Linux 2), so no compiler is needed. A future dependency without
+# one fails the build here instead of silently needing gcc/cairo in the image.
+RUN pip install --no-cache-dir --only-binary=:all: \
+        -r /tmp/requirements.txt --target /deps \
+    && find /deps -type d \( -name "__pycache__" -o -name "tests" \) -prune -exec rm -rf {} +
+
+# AWS RDS CA bundle, so the DB connection can verify the server (sslmode=verify-full).
+ADD https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /certs/rds-global-bundle.pem
+
+# ---- runtime: only the dependencies, the app, and the CA bundle -------------
+FROM ${LAMBDA_BASE}
+
+COPY --from=builder /deps ${LAMBDA_TASK_ROOT}
+COPY --from=builder /certs/rds-global-bundle.pem ${LAMBDA_TASK_ROOT}/certs/rds-global-bundle.pem
+COPY app ${LAMBDA_TASK_ROOT}/app
+COPY assets ${LAMBDA_TASK_ROOT}/assets
+COPY alembic ${LAMBDA_TASK_ROOT}/alembic
+COPY alembic.ini alembic.prod.ini ${LAMBDA_TASK_ROOT}/
+
+# The filesystem is read-only at runtime, so Python can't cache bytecode itself -
+# compile it now to shave import time off every cold start.
+RUN python -m compileall -q ${LAMBDA_TASK_ROOT}
+
+# Secrets (SECRET_KEY, DB_PASSWORD, TURNSTILE_SECRET_KEY, ...) and per-environment
+# values (DB_HOST, CORS_ORIGINS, ...) come from the Lambda function configuration.
+ENV ENV=production \
+    DEBUG=false \
+    LOG_LEVEL=WARNING \
+    ALEMBIC_CONFIG=alembic.prod.ini \
+    TZ=Asia/Kolkata \
+    DB_SSLMODE=verify-full \
+    DB_SSLROOTCERT=/var/task/certs/rds-global-bundle.pem \
+    DB_POOL_SIZE=1 \
+    DB_MAX_OVERFLOW=1 \
+    ENABLE_DOCS=false \
+    ENABLE_SECURITY_HEADERS=true \
+    ENABLE_RATE_LIMITING=true
+
+CMD ["app.lambda_handler.handler"]

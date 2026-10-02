@@ -1,7 +1,8 @@
-from typing import Annotated, List
+from typing import Annotated, List, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from sqlalchemy.engine import URL, make_url
 
 # Values that must never be used to sign tokens in production.
 _WEAK_SECRETS = {
@@ -29,8 +30,25 @@ class Settings(BaseSettings):
     ENV: str = "development"
     DEBUG: bool = True
 
-    # Database
-    DATABASE_URL: str
+    # Database: either one DATABASE_URL (docker-compose, CI, tests) or the discrete
+    # DB_* parts (managed RDS - see _assemble_database_url). DATABASE_URL wins if both.
+    DATABASE_URL: str | None = None
+    DB_HOST: str | None = None
+    DB_PORT: int = 5432
+    DB_NAME: str | None = None
+    DB_USER: str | None = None
+    DB_PASSWORD: str | None = None
+    # libpq sslmode / CA bundle. RDS: verify-full + the AWS RDS global CA bundle
+    # (baked into the Lambda image, see backend/Dockerfile.lambda).
+    DB_SSLMODE: Literal["disable", "allow", "prefer", "require", "verify-ca", "verify-full"] | None = None
+    DB_SSLROOTCERT: str | None = None
+    # Fail fast instead of hanging until the Lambda timeout when the DB is unreachable
+    # (e.g. a security group silently dropping packets).
+    DB_CONNECT_TIMEOUT: int = Field(default=10, ge=1)
+    # Per-process connection pool. On Lambda each container serves one request at a
+    # time, so keep this tiny there - max connections = concurrency x (size + overflow).
+    DB_POOL_SIZE: int = Field(default=5, ge=1)
+    DB_MAX_OVERFLOW: int = Field(default=10, ge=0)
     SQLALCHEMY_ECHO: bool = False
 
     # Security
@@ -112,6 +130,36 @@ class Settings(BaseSettings):
                 return json.loads(v)
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
+
+    @model_validator(mode="after")
+    def _assemble_database_url(self):
+        # URL.create escapes the password - RDS-generated ones routinely contain
+        # '@', '/', ':' etc. that would corrupt a hand-concatenated URL. SSL options and
+        # the connect timeout go into the URL's query string (not connect_args) so every
+        # engine built from DATABASE_URL - app, Alembic, the startup check - gets them.
+        if self.DATABASE_URL:
+            url = make_url(self.DATABASE_URL)
+        else:
+            missing = [n for n in ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD") if not getattr(self, n)]
+            if missing:
+                raise ValueError(f"Set DATABASE_URL, or all of DB_HOST/DB_NAME/DB_USER/DB_PASSWORD (missing: {', '.join(missing)})")
+            url = URL.create(
+                "postgresql",
+                username=self.DB_USER,
+                password=self.DB_PASSWORD,
+                host=self.DB_HOST,
+                port=self.DB_PORT,
+                database=self.DB_NAME,
+            )
+        if url.get_backend_name() == "postgresql":
+            opts = {
+                "sslmode": self.DB_SSLMODE,
+                "sslrootcert": self.DB_SSLROOTCERT,
+                "connect_timeout": str(self.DB_CONNECT_TIMEOUT),
+            }
+            url = url.update_query_dict({k: v for k, v in opts.items() if v and k not in url.query})
+        self.DATABASE_URL = url.render_as_string(hide_password=False)
+        return self
 
     @model_validator(mode="after")
     def _validate_production(self):

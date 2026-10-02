@@ -1,4 +1,6 @@
-
+# Local stack: Postgres + backend. The frontend is not containerised - run it with
+# `cd frontend && npm run dev` (it proxies /api/v1 to 127.0.0.1:8000); production
+# serves it from Vercel and the backend from AWS Lambda (see DEPLOY_SERVERLESS.md).
 
 services:
   postgres:
@@ -42,25 +44,6 @@ services:
       # Loopback only: put Nginx/Caddy in front. Publishing this port publicly
       # would let clients bypass the proxy and spoof X-Forwarded-For.
       - "127.0.0.1:8000:8000"
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
-        - INTERNAL_API_BASE_URL=http://backend:8000/api/v1
-        - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
-    container_name: temple_frontend
-    restart: always
-    environment:
-      - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
-      - INTERNAL_API_BASE_URL=http://backend:8000/api/v1
-      - NODE_ENV=production
-    ports:
-      - "127.0.0.1:3000:3000"
-    depends_on:
-      - backend
 
 volumes:
   postgres_data:

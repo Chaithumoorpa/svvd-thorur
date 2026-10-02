@@ -8,7 +8,9 @@ import type {
  * server-rendered (good for SEO and speed) instead of fetching after hydration.
  */
 const BASE =
-  process.env.INTERNAL_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL_SERVER || 'http://backend:8000/api/v1';
+  process.env.INTERNAL_API_BASE_URL ||
+  (process.env.NEXT_PUBLIC_API_URL ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, '')}/api/v1` : '') ||
+  'http://127.0.0.1:8000/api/v1';
 
 export const PUBLIC_REVALIDATE_SECONDS = 60;
 

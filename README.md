@@ -68,6 +68,8 @@ CI runs all of the above on every push; `development` only deploys if they pass.
 
 Production runs on AWS EC2 via Docker Compose, deployed automatically on push to `development`. See [DEPLOY_AWS.md](./DEPLOY_AWS.md) for infrastructure setup, environment variables, and the CI/CD pipeline. See [BRANCHING_STRATEGY.md](./BRANCHING_STRATEGY.md) for the branching model.
 
+The `production` branch moves this to a serverless setup - frontend on Vercel, backend on AWS Lambda, database on Amazon RDS - deployed on push to `production`. See [DEPLOY_SERVERLESS.md](./DEPLOY_SERVERLESS.md) for the setup and the cutover runbook.
+
 ## License
 
 Proprietary — see [LICENSE](./LICENSE). All rights reserved.

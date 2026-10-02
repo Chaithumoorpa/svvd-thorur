@@ -28,6 +28,42 @@ def test_production_requires_turnstile_secret():
     assert _settings(ENV="production").is_production  # a real key still boots fine
 
 
+_RDS_PARTS = dict(DATABASE_URL=None, DB_HOST="svvd.abc123.ap-south-1.rds.amazonaws.com", DB_NAME="templedb", DB_USER="templeuser")
+
+
+def test_database_url_assembled_from_parts_escapes_password():
+    """RDS-generated passwords contain URL-reserved characters; a naive f-string
+    URL would put part of the password into the host/port."""
+    from sqlalchemy.engine import make_url
+
+    s = _settings(**_RDS_PARTS, DB_PASSWORD="p@ss:w/rd#?%", DB_PORT=6543)
+    url = make_url(s.DATABASE_URL)
+    assert (url.host, url.port, url.database, url.username) == (_RDS_PARTS["DB_HOST"], 6543, "templedb", "templeuser")
+    assert url.password == "p@ss:w/rd#?%"
+
+
+def test_database_ssl_options_go_into_the_url():
+    from sqlalchemy.engine import make_url
+
+    s = _settings(**_RDS_PARTS, DB_PASSWORD="x", DB_SSLMODE="verify-full", DB_SSLROOTCERT="/certs/rds.pem")
+    assert make_url(s.DATABASE_URL).query == {
+        "sslmode": "verify-full", "sslrootcert": "/certs/rds.pem", "connect_timeout": "10",
+    }
+    # An explicit DATABASE_URL wins over the parts, and its own sslmode is kept.
+    s = _settings(DATABASE_URL="postgresql://u:p@h/db?sslmode=require", DB_HOST="ignored", DB_SSLMODE="verify-full")
+    url = make_url(s.DATABASE_URL)
+    assert url.host == "h" and url.query == {"sslmode": "require", "connect_timeout": "10"}
+    # SQLite (tests) never gets libpq options.
+    assert _settings(DB_SSLMODE="verify-full").DATABASE_URL == "sqlite://"
+
+
+def test_database_config_missing_parts_refuses_to_boot():
+    with pytest.raises(ValidationError, match="DB_PASSWORD"):
+        _settings(**_RDS_PARTS)
+    with pytest.raises(ValidationError):
+        _settings(**_RDS_PARTS, DB_PASSWORD="x", DB_SSLMODE="sometimes")
+
+
 def test_public_registration_is_off_by_default(monkeypatch):
     monkeypatch.delenv("ALLOW_PUBLIC_REGISTRATION", raising=False)  # conftest enables it for API tests
     assert _settings().ALLOW_PUBLIC_REGISTRATION is False
