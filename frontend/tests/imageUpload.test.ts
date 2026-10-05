@@ -56,6 +56,15 @@ describe('photoUploadErrorMessage', () => {
     );
   });
 
+  it('only treats a real amazonaws.com host as photo storage', () => {
+    const xml = '<Error><Code>AccessDenied</Code></Error>';
+    for (const url of ['https://evil.example/?x=.amazonaws.com', 'https://s3.amazonaws.com.evil.example/', '/api/v1/upload-url?.amazonaws.com']) {
+      expect(photoUploadErrorMessage(failed(url, 403, xml), notConfigured)).toBe(
+        'Upload failed (server error 403). Please try again, or choose a different photo.',
+      );
+    }
+  });
+
   it("passes on the backend's own explanation for a rate limit, else its status", () => {
     const limited = failed('/seva-tickets/booking/upload-url', 429, { detail: 'Too many upload attempts. Please try again later.' });
     expect(photoUploadErrorMessage(limited, notConfigured)).toBe('Too many upload attempts. Please try again later.');

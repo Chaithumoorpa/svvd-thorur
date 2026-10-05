@@ -74,6 +74,16 @@ export async function prepareImageForUpload(file: File, mode: 'always' | 'if-nee
   }
 }
 
+function isS3Url(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    // Relative URLs (our own API) resolve against a placeholder host and never match.
+    return new URL(url, 'http://localhost').hostname.endsWith('.amazonaws.com');
+  } catch {
+    return false;
+  }
+}
+
 /**
  * What to tell the person when a photo upload fails. A refusal by the server
  * names the step and code (e.g. "photo storage error 403 AccessDenied"), so a
@@ -87,7 +97,7 @@ export function photoUploadErrorMessage(err: unknown, notConfigured: string): st
   if (!isAxiosError(err)) return 'Upload failed. Please try again, or choose a different photo.';
   if (!err.response) return 'Upload failed. Check your internet connection and try again.';
   const { status, data } = err.response;
-  if ((err.config?.url ?? '').includes('.amazonaws.com')) {
+  if (isS3Url(err.config?.url)) {
     const code = typeof data === 'string' ? /<Code>([^<]+)<\/Code>/.exec(data)?.[1] : undefined;
     return `Upload failed (photo storage error ${status}${code ? ` ${code}` : ''}). You can still book without a photo.`;
   }
