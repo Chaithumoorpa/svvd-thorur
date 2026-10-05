@@ -42,14 +42,12 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 /**
- * `always`: re-encode every photo (strips metadata) - for devotee photos that
- * may be published. `if-needed`: only when the file is too big or in a format
- * the backend rejects - for staff uploads, so a crisp PNG poster stays as-is.
- * GIFs are never re-encoded (that would drop the animation).
+ * Decodes the photo and re-draws it as a fresh JPEG (max edge MAX_EDGE_PX, EXIF
+ * orientation applied). The result's bytes come from our own canvas, never the
+ * picked file, so all metadata (GPS location included) is gone, and showing
+ * it back to the visitor can't render anything but an image.
  */
-export async function prepareImageForUpload(file: File, mode: 'always' | 'if-needed'): Promise<File> {
-  if (file.type === 'image/gif' || (mode === 'if-needed' && isUploadableAsIs(file))) return file;
-
+export async function reencodeAsJpeg(file: File): Promise<File> {
   const url = URL.createObjectURL(file);
   try {
     // <img> decodes whatever this browser can display (HEIC on Safari, for one)
@@ -67,11 +65,21 @@ export async function prepareImageForUpload(file: File, mode: 'always' | 'if-nee
     ctx.drawImage(img, 0, 0, width, height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
     if (!blob) throw new UnsupportedImageError();
-    const name = `${file.name.replace(/\.[^.]*$/, '') || 'photo'}.jpg`;
-    return new File([blob], name, { type: 'image/jpeg' });
+    // The server names the stored object itself, so the picked file's name isn't needed.
+    return new File([blob], 'photo.jpg', { type: 'image/jpeg' });
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/**
+ * For staff uploads: re-encodes only when the file is too big or in a format
+ * the backend rejects, so a crisp PNG poster stays as-is. GIFs are kept as they
+ * are (re-encoding would drop the animation).
+ */
+export async function prepareImageForUpload(file: File): Promise<File> {
+  if (file.type === 'image/gif' || isUploadableAsIs(file)) return file;
+  return reencodeAsJpeg(file);
 }
 
 function isS3Url(url: string | undefined): boolean {
