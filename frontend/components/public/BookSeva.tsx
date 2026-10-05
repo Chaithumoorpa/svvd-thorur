@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { isAxiosError } from 'axios';
 import { CheckCircle2, ImagePlus, Mail } from 'lucide-react';
 import Field from '@/components/ui/Field';
 import Modal from '@/components/ui/Modal';
@@ -12,6 +11,7 @@ import { useTurnstile } from '@/hooks/useTurnstile';
 import {
   apiError, bookSeva, getSevaDay, requestBookingOtp, uploadBlessingPhoto, verifyBookingOtp,
 } from '@/lib/api';
+import { photoUploadErrorMessage } from '@/lib/imageUpload';
 import { formatDate, formatMoney, todayISO } from '@/lib/format';
 import type { Pooja, SevaTicket } from '@/lib/types';
 
@@ -133,11 +133,7 @@ export default function BookSeva({
       setPhotoKey(await uploadBlessingPhoto(file));
       setPhotoPreview(URL.createObjectURL(file));
     } catch (err) {
-      setUploadError(
-        isAxiosError(err) && err.response?.status === 503
-          ? 'Photo uploads are not set up yet. You can still book without one.'
-          : 'Upload failed. Try a smaller image.',
-      );
+      setUploadError(photoUploadErrorMessage(err, 'Photo uploads are not set up yet. You can still book without one.'));
     } finally {
       setUploading(false);
     }
@@ -254,7 +250,7 @@ export default function BookSeva({
                     <label className={`${btnGhost} cursor-pointer`}>
                       <ImagePlus className="h-4 w-4" aria-hidden="true" />
                       {uploading ? 'Uploading…' : photoKey ? 'Replace photo' : 'Add one photo'}
-                      <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading} onChange={handlePhoto} />
+                      <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={handlePhoto} />
                     </label>
                     <p className="mt-1 text-xs text-gray-500">Shown with your blessing on the seva date, once the temple has reviewed it.</p>
                     {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}

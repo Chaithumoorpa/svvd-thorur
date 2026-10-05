@@ -44,3 +44,25 @@ def test_upload_url_is_for_the_private_prefix(monkeypatch, client):
     assert r.status_code == 200
     assert r.json()["key"].startswith("blessings-pending/")
     assert r.json()["public_url"] == ""
+
+
+def test_nonstandard_jpeg_type_names_are_accepted_as_jpeg(monkeypatch):
+    """Some Android browsers/pickers report "image/jpg" for an ordinary JPEG."""
+    s, boto = _storage(monkeypatch)
+    boto.generate_presigned_post.return_value = {"url": "u", "fields": {}}
+    for reported in ("image/jpg", "IMAGE/JPEG", "image/pjpeg"):
+        upload = s.create_upload(reported, key_prefix="blessings-pending")
+        assert upload["key"].endswith(".jpg")
+        kwargs = boto.generate_presigned_post.call_args.kwargs
+        assert kwargs["Fields"] == {"Content-Type": "image/jpeg"}
+        assert {"Content-Type": "image/jpeg"} in kwargs["Conditions"]
+
+
+def test_unsupported_type_is_rejected(monkeypatch):
+    import pytest
+    from fastapi import HTTPException
+
+    s, _ = _storage(monkeypatch)
+    with pytest.raises(HTTPException) as exc:
+        s.create_upload("image/heic")
+    assert exc.value.status_code == 400

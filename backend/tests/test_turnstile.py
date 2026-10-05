@@ -40,6 +40,19 @@ def test_enabled_rejects_a_failed_challenge(monkeypatch):
     assert TurnstileService().verify("bad-token") is False
 
 
+def test_rejection_reason_is_logged(monkeypatch, caplog):
+    """Without Cloudflare's error code, an expired/reused token is indistinguishable
+    in the logs from a visitor Cloudflare actually rejected."""
+    monkeypatch.setattr("app.services.turnstile_service.settings.TURNSTILE_SECRET_KEY", "secret")
+    response = MagicMock()
+    response.json.return_value = {"success": False, "error-codes": ["timeout-or-duplicate"], "hostname": "svvdthorur.org"}
+    monkeypatch.setattr("httpx.post", MagicMock(return_value=response))
+    with caplog.at_level("WARNING", logger="app.services.turnstile_service"):
+        assert TurnstileService().verify("token") is False
+    assert "timeout-or-duplicate" in caplog.text
+    assert "secret" not in caplog.text and "token" not in caplog.text.split("rejected a token")[-1]
+
+
 def test_enabled_fails_closed_on_verification_error(monkeypatch):
     """Unlike email (best-effort, must never block), the challenge IS the
     gate - a Cloudflare outage or timeout must not let an attacker through."""
