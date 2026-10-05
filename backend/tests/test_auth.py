@@ -1,4 +1,3 @@
-import hashlib
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -234,12 +233,12 @@ def test_reset_password_invalid_token(client):
 
 
 def test_reset_password_expired_token(client, db, make_user):
-    make_user("STAFF", username="frank", password="Password123", email="frank@example.com")
+    user, _ = make_user("STAFF", username="frank", password="Password123", email="frank@example.com")
     service = AuthService(UserRepository(db))
     _, raw_token = service.request_password_reset("frank@example.com")
 
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-    record = db.query(PasswordResetToken).filter(PasswordResetToken.token_hash == token_hash).first()
+    # The user's only reset token - found by owner rather than by re-deriving its hash here.
+    record = db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).one()
     record.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
     db.commit()
 

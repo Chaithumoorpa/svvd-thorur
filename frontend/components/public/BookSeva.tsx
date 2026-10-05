@@ -75,6 +75,11 @@ export default function BookSeva({
     };
   }, [open, step, seva.id, seva.daily_slot_cap, date]);
 
+  // Free each preview's object URL once it's replaced or the form unmounts.
+  useEffect(() => () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
+
   function close() {
     setOpen(false);
     setStep('email');
@@ -130,8 +135,10 @@ export default function BookSeva({
     setUploadError('');
     setUploading(true);
     try {
-      setPhotoKey(await uploadBlessingPhoto(file));
-      setPhotoPreview(URL.createObjectURL(file));
+      const { key, photo } = await uploadBlessingPhoto(file);
+      setPhotoKey(key);
+      // Preview the re-encoded JPEG that was actually uploaded, not the picked file.
+      setPhotoPreview(URL.createObjectURL(photo));
     } catch (err) {
       setUploadError(photoUploadErrorMessage(err, 'Photo uploads are not set up yet. You can still book without one.'));
     } finally {

@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import { prepareImageForUpload } from './imageUpload';
+import { prepareImageForUpload, reencodeAsJpeg } from './imageUpload';
 import type {
   ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog, BlessingReview, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
   Donation, DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
@@ -195,26 +195,26 @@ export const getSevaDay = async (poojaId: number, date: string) =>
 export const getPersonalBlessing = async (ticketId: string) =>
   (await api.get<PersonalBlessing>(`/seva-tickets/${ticketId}/blessing`)).data;
 
-/** Presigned S3 POST upload via `endpoint`, after resizing/re-encoding the photo
- * (see lib/imageUpload.ts). Throws UnsupportedImageError if this browser can't
- * read the file at all. */
-async function uploadPhoto(endpoint: string, file: File, mode: 'always' | 'if-needed'): Promise<UploadUrlResponse> {
-  const prepared = await prepareImageForUpload(file, mode);
-  const { data } = await api.post<UploadUrlResponse>(endpoint, { content_type: prepared.type });
+/** Presigned S3 POST upload of an already-prepared photo via `endpoint`. */
+async function uploadPhoto(endpoint: string, photo: File): Promise<UploadUrlResponse> {
+  const { data } = await api.post<UploadUrlResponse>(endpoint, { content_type: photo.type });
   const form = new FormData();
   Object.entries(data.fields).forEach(([key, value]) => form.append(key, value));
-  form.append('file', prepared);
+  form.append('file', photo);
   // Plain axios, not the `api` instance: it must not carry a bearer token to S3.
   await axios.post(data.upload_url, form);
   return data;
 }
 
 /** Uploads a devotee's occasion photo straight to S3 (presigned POST, public
- * but rate limited - nobody is signed in while booking) and returns its key.
- * The object is private: it reaches the website only once staff approve it.
- * Always re-encoded, since it may be published: this strips EXIF/GPS. */
-export async function uploadBlessingPhoto(file: File): Promise<string> {
-  return (await uploadPhoto('/seva-tickets/booking/upload-url', file, 'always')).key;
+ * but rate limited - nobody is signed in while booking). The object is
+ * private: it reaches the website only once staff approve it. Always
+ * re-encoded first (strips EXIF/GPS, since it may be published); returns the
+ * stored key and that re-encoded photo, which is what the form should preview.
+ * Throws UnsupportedImageError if this browser can't read the file. */
+export async function uploadBlessingPhoto(file: File): Promise<{ key: string; photo: File }> {
+  const photo = await reencodeAsJpeg(file);
+  return { key: (await uploadPhoto('/seva-tickets/booking/upload-url', photo)).key, photo };
 }
 
 // -------------------------------------------------------------------- announcements
@@ -256,7 +256,7 @@ export const deleteGallery = async (id: number) => (await api.delete<GalleryItem
 
 /** Uploads a gallery photo straight to S3 (presigned POST) and returns its public URL. */
 export async function uploadGalleryPhoto(file: File): Promise<string> {
-  return (await uploadPhoto('/gallery/upload-url', file, 'if-needed')).public_url;
+  return (await uploadPhoto('/gallery/upload-url', await prepareImageForUpload(file))).public_url;
 }
 
 // ------------------------------------------------------------------------------- members
@@ -268,7 +268,7 @@ export const deleteMember = async (id: number) => (await api.delete<Member>(`/te
 
 /** Uploads a member's photo straight to S3 (presigned POST) and returns its public URL. */
 export async function uploadMemberPhoto(file: File): Promise<string> {
-  return (await uploadPhoto('/temple-members/upload-url', file, 'if-needed')).public_url;
+  return (await uploadPhoto('/temple-members/upload-url', await prepareImageForUpload(file))).public_url;
 }
 
 // ------------------------------------------------------------------- donors & donations

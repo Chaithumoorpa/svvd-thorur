@@ -8,6 +8,10 @@ on:
   pull_request:
     branches: [development]
 
+# Least privilege: these jobs only check out code; none writes to GitHub.
+permissions:
+  contents: read
+
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
