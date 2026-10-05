@@ -28,10 +28,11 @@ services:
       ENABLE_RATE_LIMITING: "true"
       RATE_LIMIT_PER_MINUTE: "120"
       ALEMBIC_CONFIG: alembic.prod.ini
-      # Number of reverse proxies in front of the backend that append to
-      # X-Forwarded-For. 1 = Nginx/Caddy -> backend (the documented setup).
-      # Use 2 if all traffic goes Nginx -> Next.js -> backend. Wrong value =
-      # everyone shares one rate-limit bucket (too high) or XFF can be spoofed (too low).
+      # Number of reverse proxies in front of the backend that APPEND to
+      # X-Forwarded-For. Keep 1 for Nginx -> Next.js -> backend: the Next.js
+      # /api/v1 rewrite passes the header through without adding a hop. 2 here
+      # puts every visitor in one shared rate-limit bucket (e.g. 10 blessing-photo
+      # uploads per hour for the whole site); 0 lets clients spoof their IP.
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://svvdthorur.org}
       ALLOW_PUBLIC_REGISTRATION: ${ALLOW_PUBLIC_REGISTRATION:-false}
