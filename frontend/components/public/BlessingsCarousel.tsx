@@ -7,9 +7,10 @@ import type { BlessingEntry } from '@/lib/types';
 
 const AUTO_ADVANCE_MS = 6000;
 
-/** One devotee's blessing at a time - their photo (or, if they added none,
- * a decorative card) with the blessing animation beneath it. Auto-advances unless hovered, focused, or the
- * visitor prefers reduced motion; arrows, dots, keys and swipes all work. */
+/** One devotee's blessing at a time - the Om at the top showering petals onto
+ * their photo below (or an empty space, if they added none). Auto-advances
+ * unless hovered, focused, or the visitor prefers reduced motion; arrows,
+ * dots, keys and swipes all work. */
 export default function BlessingsCarousel({ entries }: { entries: BlessingEntry[] }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -46,45 +47,39 @@ export default function BlessingsCarousel({ entries }: { entries: BlessingEntry[
         touchX.current = null;
       }}
     >
-      <div
-        role="group"
-        aria-roledescription="slide"
-        aria-label={`${index + 1} of ${count}`}
-        aria-live={paused ? 'polite' : 'off'}
-        className="relative"
-      >
-        {entry.photo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={`${index}-${entry.photo_url}`}
-            src={entry.photo_url}
-            alt={`${entry.devotee_name}'s ${entry.occasion} photo`}
-            className="mx-auto max-h-80 animate-slideIn rounded-2xl border border-amber-200 object-contain"
-          />
-        ) : (
-          <div
-            key={`${index}-none`}
-            aria-hidden="true"
-            className="mx-auto flex h-56 max-w-sm animate-slideIn items-center justify-center rounded-2xl border border-amber-200 bg-gradient-to-br from-saffron-light to-saffron font-serif text-6xl text-white"
-          >
-            ॐ
-          </div>
-        )}
-        {count > 1 && (
-          <>
-            <button type="button" onClick={() => go(index - 1)} aria-label="Previous blessing"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2 text-maroon shadow hover:bg-white">
-              <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <button type="button" onClick={() => go(index + 1)} aria-label="Next blessing"
-                    className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2 text-maroon shadow hover:bg-white">
-              <ChevronRight className="h-5 w-5" aria-hidden="true" />
-            </button>
-          </>
-        )}
-      </div>
-
-      <BlessingAnimation />
+      <BlessingAnimation>
+        <div
+          role="group"
+          aria-roledescription="slide"
+          aria-label={`${index + 1} of ${count}`}
+          aria-live={paused ? 'polite' : 'off'}
+          className="relative"
+        >
+          {entry.photo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={`${index}-${entry.photo_url}`}
+              src={entry.photo_url}
+              alt={`${entry.devotee_name}'s ${entry.occasion} photo`}
+              className="mx-auto max-h-80 animate-slideIn rounded-2xl border border-amber-200 object-contain"
+            />
+          ) : (
+            <div key={`${index}-none`} className="h-32" aria-hidden="true" />
+          )}
+          {count > 1 && (
+            <>
+              <button type="button" onClick={() => go(index - 1)} aria-label="Previous blessing"
+                      className="absolute left-0 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/90 p-2 text-maroon shadow hover:bg-white">
+                <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => go(index + 1)} aria-label="Next blessing"
+                      className="absolute right-0 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/90 p-2 text-maroon shadow hover:bg-white">
+                <ChevronRight className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </>
+          )}
+        </div>
+      </BlessingAnimation>
 
       <div className="text-center">
         <p className="font-serif text-xl text-maroon-dark">{entry.devotee_name}</p>

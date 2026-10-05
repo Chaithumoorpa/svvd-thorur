@@ -44,4 +44,30 @@ describe('photoUploadErrorMessage', () => {
     expect(photoUploadErrorMessage(disabled, notConfigured)).toBe(notConfigured);
     expect(photoUploadErrorMessage(new AxiosError('Network Error'), notConfigured)).toMatch(/internet connection/);
   });
+
+  const failed = (url: string, status: number, data: unknown) =>
+    new AxiosError('x', String(status), { url } as never, undefined, { status, data } as never);
+
+  it('names the S3 error code when storage refuses the upload', () => {
+    const xml = '<?xml version="1.0"?><Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>';
+    const err = failed('https://s3.ap-south-1.amazonaws.com/svvd-thorur-gallery', 403, xml);
+    expect(photoUploadErrorMessage(err, notConfigured)).toBe(
+      'Upload failed (photo storage error 403 AccessDenied). You can still book without a photo.',
+    );
+  });
+
+  it('only treats a real amazonaws.com host as photo storage', () => {
+    const xml = '<Error><Code>AccessDenied</Code></Error>';
+    for (const url of ['https://evil.example/?x=.amazonaws.com', 'https://s3.amazonaws.com.evil.example/', '/api/v1/upload-url?.amazonaws.com']) {
+      expect(photoUploadErrorMessage(failed(url, 403, xml), notConfigured)).toBe(
+        'Upload failed (server error 403). Please try again, or choose a different photo.',
+      );
+    }
+  });
+
+  it("passes on the backend's own explanation for a rate limit, else its status", () => {
+    const limited = failed('/seva-tickets/booking/upload-url', 429, { detail: 'Too many upload attempts. Please try again later.' });
+    expect(photoUploadErrorMessage(limited, notConfigured)).toBe('Too many upload attempts. Please try again later.');
+    expect(photoUploadErrorMessage(failed('/seva-tickets/booking/upload-url', 500, 'oops'), notConfigured)).toMatch(/server error 500/);
+  });
 });

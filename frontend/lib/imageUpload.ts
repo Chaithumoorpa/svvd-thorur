@@ -74,12 +74,35 @@ export async function prepareImageForUpload(file: File, mode: 'always' | 'if-nee
   }
 }
 
-/** What to tell the person when a photo upload fails. */
+function isS3Url(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    // Relative URLs (our own API) resolve against a placeholder host and never match.
+    return new URL(url, 'http://localhost').hostname.endsWith('.amazonaws.com');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What to tell the person when a photo upload fails. A refusal by the server
+ * names the step and code (e.g. "photo storage error 403 AccessDenied"), so a
+ * screenshot from a devotee's phone is enough to tell an S3 permission problem
+ * from a rate limit or a backend fault.
+ */
 export function photoUploadErrorMessage(err: unknown, notConfigured: string): string {
   if (err instanceof UnsupportedImageError) {
     return "This photo's format can't be opened on this device. Choose a JPG or PNG photo, or take a screenshot of it and upload that.";
   }
-  if (isAxiosError(err) && err.response?.status === 503) return notConfigured;
-  if (isAxiosError(err) && !err.response) return 'Upload failed. Check your internet connection and try again.';
-  return 'Upload failed. Please try again, or choose a different photo.';
+  if (!isAxiosError(err)) return 'Upload failed. Please try again, or choose a different photo.';
+  if (!err.response) return 'Upload failed. Check your internet connection and try again.';
+  const { status, data } = err.response;
+  if (isS3Url(err.config?.url)) {
+    const code = typeof data === 'string' ? /<Code>([^<]+)<\/Code>/.exec(data)?.[1] : undefined;
+    return `Upload failed (photo storage error ${status}${code ? ` ${code}` : ''}). You can still book without a photo.`;
+  }
+  if (status === 503) return notConfigured;
+  const detail = data && typeof data === 'object' && 'detail' in data ? (data as { detail: unknown }).detail : null;
+  if ((status === 400 || status === 429) && typeof detail === 'string') return detail;
+  return `Upload failed (server error ${status}). Please try again, or choose a different photo.`;
 }
