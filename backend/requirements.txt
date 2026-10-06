@@ -7,7 +7,7 @@ sqlalchemy==2.0.54
 psycopg2-binary==2.9.13
 pydantic==2.13.5
 pydantic-settings==2.15.0
-python-dotenv==1.2.3
+python-dotenv==1.2.4
 python-jose==3.5.0
 passlib[argon2]==1.7.4
 alembic==1.13.1
