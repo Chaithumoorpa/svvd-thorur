@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
@@ -21,6 +22,26 @@ RESET_TOKEN_TTL = timedelta(hours=1)
 # Verified when the username does not exist so both failure paths cost the same time
 # (prevents user enumeration through response timing).
 _DUMMY_HASH = hash_password("timing-equalisation-only")
+
+
+def issue_session_token(user: User, auth_time: Optional[int] = None) -> str:
+    """A signed-in session token. `auth_time` is when the password/OTP was
+    entered (now, for a fresh sign-in); refreshes carry it over unchanged so
+    a session can't be extended past SESSION_MAX_HOURS. `ver` ties the token
+    to the user's token_version - see revoke_sessions. Roles are not included:
+    the API always re-reads them from the database."""
+    return create_access_token({
+        "sub": user.username,
+        "user_id": user.id,
+        "typ": "access",
+        "ver": user.token_version or 0,
+        "auth_time": auth_time if auth_time is not None else int(time.time()),
+    })
+
+
+def revoke_sessions(user: User) -> None:
+    """Invalidates every session token issued to `user` so far (caller commits)."""
+    user.token_version = (user.token_version or 0) + 1
 
 
 class AuthService:
@@ -59,9 +80,12 @@ class AuthService:
         self.user_repository.update(user)
         return user
 
-    def create_access_token(self, user: User) -> str:
-        # Roles are informational only; the API always re-reads them from the database.
-        return create_access_token({"sub": user.username, "user_id": user.id})
+    def create_access_token(self, user: User, auth_time: Optional[int] = None) -> str:
+        return issue_session_token(user, auth_time)
+
+    def logout(self, user: User) -> None:
+        revoke_sessions(user)
+        self.user_repository.update(user)
 
     # ---- user creation -----------------------------------------------------------
     def _ensure_unique(self, username: Optional[str], email: Optional[str], exclude_id: Optional[int] = None):
@@ -134,6 +158,9 @@ class AuthService:
         if fields.get("password"):
             user.hashed_password = hash_password(fields["password"])
             user.must_change_password = True
+        # Also on deactivation: re-activating later must not bring old tokens back.
+        if deactivating or fields.get("password"):
+            revoke_sessions(user)
         return self.user_repository.update(user)
 
     def change_password(self, user: User, data: PasswordChange) -> User:
@@ -144,6 +171,7 @@ class AuthService:
 
         user.hashed_password = hash_password(data.new_password)
         user.must_change_password = False
+        revoke_sessions(user)  # signs out every other device; /auth/change-password re-issues this one
         return self.user_repository.update(user)
 
     def delete_own_account(self, user: User, password: str) -> None:
@@ -266,6 +294,7 @@ class AuthService:
 
         user.hashed_password = hash_password(new_password)
         user.must_change_password = False
+        revoke_sessions(user)
         record.used_at = now
         db.add(user)
         db.add(record)

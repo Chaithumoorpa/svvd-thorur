@@ -15,36 +15,55 @@ export * from './types';
 /**
  * Browser calls go through the Next.js rewrite (/api/v1 -> backend). Server-side calls
  * (see lib/server-api.ts) talk to the backend directly.
+ *
+ * The session itself is an HttpOnly cookie the backend sets at sign-in: the browser
+ * sends it with every /api/v1 request, and no JavaScript here can read it (so a script
+ * injected into the page couldn't steal it either). X-Requested-With is required by
+ * the backend on cookie-authenticated writes - another site can't add that header.
  */
 export const api = axios.create({
   baseURL: '/api/v1',
-  headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+  headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
 });
 
-const TOKEN_KEY = 'token';
+// Not a secret - just "this browser signed in", so the public header can skip asking
+// the server for anonymous visitors. The server's answer (getMe) is always the truth.
+const SIGNED_IN_KEY = 'signedIn';
 
-export function getStoredToken(): string | null {
+export function isProbablySignedIn(): boolean {
   try {
-    return typeof window === 'undefined' ? null : window.localStorage.getItem(TOKEN_KEY);
+    return typeof window !== 'undefined' && window.localStorage.getItem(SIGNED_IN_KEY) === '1';
   } catch {
-    return null;
+    return false;
   }
 }
 
-export function setStoredToken(token: string | null): void {
+export function markSignedIn(signedIn: boolean): void {
   try {
-    if (token) window.localStorage.setItem(TOKEN_KEY, token);
-    else window.localStorage.removeItem(TOKEN_KEY);
+    if (signedIn) window.localStorage.setItem(SIGNED_IN_KEY, '1');
+    else window.localStorage.removeItem(SIGNED_IN_KEY);
   } catch {
-    /* storage unavailable (private mode) - session simply will not persist */
+    /* storage unavailable (private mode) - the header just checks with the server */
   }
 }
 
-api.interceptors.request.use((config) => {
-  const token = getStoredToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+if (typeof window !== 'undefined') {
+  try {
+    window.localStorage.removeItem('token'); // the old readable session token, from before cookies
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** Ends the session on every device (see POST /auth/logout). Never fails. */
+export async function logout(): Promise<void> {
+  markSignedIn(false);
+  try {
+    await api.post('/auth/logout');
+  } catch {
+    /* already signed out / offline - the cookie expires on its own */
+  }
+}
 
 api.interceptors.response.use(
   (response) => response,
@@ -52,41 +71,30 @@ api.interceptors.response.use(
     const url = error.config?.url ?? '';
     // An expired/invalid session anywhere in the admin area sends the user back to sign in.
     if (error.response?.status === 401 && typeof window !== 'undefined' && !url.includes('/auth/login')) {
-      setStoredToken(null);
+      markSignedIn(false);
       if (window.location.pathname.startsWith('/admin')) window.location.href = '/login';
     }
     return Promise.reject(error);
   },
 );
 
-// Sliding session: the token itself is short-lived (ACCESS_TOKEN_EXPIRE_MINUTES on the
-// backend), but as long as the user is actually doing something, this silently exchanges
-// it for a fresh one every so often - stop being active and the token simply expires,
-// and the next request's 401 signs them out via the interceptor above. Module-scoped
-// (not a React effect) so it covers the whole site - admin and devotee pages alike -
-// with one set of listeners, regardless of which page mounted first.
+// Sliding session: the cookie is short-lived (ACCESS_TOKEN_EXPIRE_MINUTES on the
+// backend), but as long as the user is actually doing something, this silently renews
+// it every so often - stop being active and it simply expires, and the next request's
+// 401 signs them out via the interceptor above. Renewal never extends a session past
+// SESSION_MAX_HOURS from sign-in (enforced by the backend). Module-scoped (not a React
+// effect) so it covers the whole site with one set of listeners.
 const REFRESH_MIN_INTERVAL_MS = 10 * 60 * 1000;
 let lastRefreshAt = 0;
 
 function refreshSessionOnActivity() {
-  const token = getStoredToken();
-  if (!token) return;
+  if (!isProbablySignedIn()) return;
   const now = Date.now();
   if (now - lastRefreshAt < REFRESH_MIN_INTERVAL_MS) return;
   lastRefreshAt = now;
-  api
-    .post<{ access_token: string }>('/auth/refresh')
-    .then((res) => {
-      // Only apply the refreshed token if the stored token is still the exact
-      // one this call refreshed - a click that lands mid-login (e.g. signing
-      // in as a different account without a full page reload in between)
-      // could otherwise let this stale background refresh silently overwrite
-      // the session that just replaced it.
-      if (getStoredToken() === token) setStoredToken(res.data.access_token);
-    })
-    .catch(() => {
-      /* token already expired/invalid - leave it; the next real request 401s and signs out */
-    });
+  api.post('/auth/refresh').catch(() => {
+    /* already expired/ended - the next real request 401s and signs out */
+  });
 }
 
 if (typeof window !== 'undefined') {
@@ -128,18 +136,19 @@ async function page<T>(url: string, params?: Record<string, unknown>): Promise<P
  * otp_required: true (a sign-in code was just emailed) instead of a session -
  * call verifyLoginOtp next. An account with no email gets a session directly,
  * same as login always worked before two-factor existed. */
-export const login = async (username: string, password: string, turnstile_token?: string) =>
-  (await api.post<{
-    otp_required: boolean;
-    access_token?: string;
-    token_type?: string;
-    must_change_password?: boolean;
-  }>('/auth/login', { username, password, turnstile_token })).data;
+export async function login(username: string, password: string, turnstile_token?: string) {
+  const { data } = await api.post<{ otp_required: boolean; must_change_password?: boolean }>(
+    '/auth/login', { username, password, turnstile_token },
+  );
+  if (!data.otp_required) markSignedIn(true);
+  return data;
+}
 /** Step 2, only when login() returned otp_required: true. */
-export const verifyLoginOtp = async (username: string, code: string) =>
-  (await api.post<{ access_token: string; token_type: string; must_change_password: boolean }>(
-    '/auth/login/verify-otp', { username, code },
-  )).data;
+export async function verifyLoginOtp(username: string, code: string) {
+  const { data } = await api.post<{ must_change_password: boolean }>('/auth/login/verify-otp', { username, code });
+  markSignedIn(true);
+  return data;
+}
 export const forgotPassword = async (email: string, turnstile_token?: string) =>
   (await api.post<{ message: string }>('/auth/forgot-password', { email, turnstile_token })).data;
 export const forgotUsername = async (identifier: string, turnstile_token?: string) =>

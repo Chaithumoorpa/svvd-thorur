@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, LogIn, Mail } from 'lucide-react';
-import { apiError, getMe, getStoredToken, login, setStoredToken, verifyLoginOtp } from '@/lib/api';
+import { apiError, getMe, isProbablySignedIn, login, verifyLoginOtp } from '@/lib/api';
 import type { Me } from '@/lib/types';
 import { LoadingBlock, Notice } from '@/components/ui/States';
 import TurnstileWidget from '@/components/ui/TurnstileWidget';
@@ -33,9 +33,9 @@ export default function LoginPage() {
   // Already signed in - e.g. "Staff login" clicked from the public site mid-
   // session: go where a fresh sign-in would, instead of asking again. replace()
   // keeps this page out of history, so Back doesn't bounce through it. An
-  // expired token 401s here, which clears it (see lib/api.ts), and the form shows.
+  // expired session 401s here, which clears the hint (see lib/api.ts), and the form shows.
   useEffect(() => {
-    if (!getStoredToken()) {
+    if (!isProbablySignedIn()) {
       setCheckingSession(false);
       return;
     }
@@ -52,8 +52,7 @@ export default function LoginPage() {
     };
   }, []);
 
-  async function finishLogin(data: { access_token: string; must_change_password: boolean }) {
-    setStoredToken(data.access_token);
+  async function finishLogin(data: { must_change_password: boolean }) {
     if (data.must_change_password) {
       window.location.href = '/admin/change-password';
       return;
@@ -74,7 +73,7 @@ export default function LoginPage() {
         setBusy(false);
         return;
       }
-      await finishLogin({ access_token: data.access_token!, must_change_password: !!data.must_change_password });
+      await finishLogin({ must_change_password: !!data.must_change_password });
     } catch (err) {
       turnstile.reset();
       setError(apiError(err, 'Sign in failed. Please try again.'));

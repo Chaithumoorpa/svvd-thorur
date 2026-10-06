@@ -16,23 +16,24 @@ def test_login_success_and_verify(client, make_user):
     response = _login(client, "alice", "Password123")
     assert response.status_code == 200
     body = response.json()
-    assert body["token_type"] == "bearer" and body["must_change_password"] is False
+    assert body["must_change_password"] is False
+    assert "access_token" not in body  # the session is only in the HttpOnly cookie
+    assert "svvd_session=" in response.headers["set-cookie"]
 
-    verify = client.get("/api/v1/auth/verify", headers={"Authorization": f"Bearer {body['access_token']}"})
+    verify = client.get("/api/v1/auth/verify")  # the test client sends the cookie back
     assert verify.status_code == 200
     data = verify.json()
     assert data["is_admin"] is True and data["is_super_admin"] is False
     assert "content:write" in data["permissions"] and "users:manage" not in data["permissions"]
 
 
-def test_refresh_issues_a_new_usable_token(client, make_user):
+def test_refresh_issues_a_new_usable_session(client, make_user):
     _, headers = make_user("ADMIN", username="refresher")
     r = client.post("/api/v1/auth/refresh", headers=headers)
     assert r.status_code == 200
-    new_token = r.json()["access_token"]
-    assert new_token
+    assert "svvd_session=" in r.headers["set-cookie"]
 
-    verify = client.get("/api/v1/auth/verify", headers={"Authorization": f"Bearer {new_token}"})
+    verify = client.get("/api/v1/auth/verify")
     assert verify.status_code == 200
     assert verify.json()["username"] == "refresher"
 

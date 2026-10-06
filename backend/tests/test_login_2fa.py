@@ -27,10 +27,10 @@ def test_login_with_no_email_skips_otp_as_before(client, make_user):
     r = _login(client, "alice", "Password123")
     assert r.status_code == 200
     body = r.json()
-    assert body["otp_required"] is False
-    assert body["access_token"] and body["token_type"] == "bearer"
+    assert body["otp_required"] is False and "access_token" not in body
+    assert "svvd_session=" in r.headers["set-cookie"]
 
-    verify = client.get("/api/v1/auth/verify", headers={"Authorization": f"Bearer {body['access_token']}"})
+    verify = client.get("/api/v1/auth/verify")
     assert verify.status_code == 200
 
 
@@ -43,6 +43,7 @@ def test_login_with_email_requires_otp(client, make_user, monkeypatch):
     body = r.json()
     assert body["otp_required"] is True
     assert body.get("access_token") is None
+    assert "set-cookie" not in r.headers  # no session until the code is confirmed
     sent.assert_called_once()
     to_email, subject, _body = sent.call_args[0]
     assert to_email == "bob@example.com" and "sign-in code" in subject.lower()
@@ -59,9 +60,10 @@ def test_full_otp_login_round_trip(client, make_user, monkeypatch):
     step2 = client.post("/api/v1/auth/login/verify-otp", json={"username": "carol", "code": code})
     assert step2.status_code == 200, step2.text
     body = step2.json()
-    assert body["access_token"] and body["must_change_password"] is False
+    assert body["must_change_password"] is False and "access_token" not in body
+    assert "svvd_session=" in step2.headers["set-cookie"]
 
-    verify = client.get("/api/v1/auth/verify", headers={"Authorization": f"Bearer {body['access_token']}"})
+    verify = client.get("/api/v1/auth/verify")
     assert verify.status_code == 200
     assert verify.json()["username"] == "carol"
 

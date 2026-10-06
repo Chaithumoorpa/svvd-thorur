@@ -15,10 +15,11 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.core import cache as content_cache  # noqa: E402
 from app.core.database import get_db  # noqa: E402
-from app.core.security import create_access_token, hash_password  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.base import Base  # noqa: E402
 from app.models.user import User  # noqa: E402
+from app.services.auth_service import issue_session_token  # noqa: E402
 from app.utils import rate_limiter  # noqa: E402
 
 
@@ -76,7 +77,7 @@ def make_user(db):
         db.add(user)
         db.commit()
         db.refresh(user)
-        token = create_access_token({"sub": user.username, "user_id": user.id})
+        token = issue_session_token(user)
         return user, {"Authorization": f"Bearer {token}"}
 
     return _make

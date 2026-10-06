@@ -21,6 +21,9 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
     must_change_password = Column(Boolean, default=False, nullable=False)
     terms_accepted_at = Column(DateTime, nullable=True)
+    # Every session token carries this number; bumping it (logout, password
+    # change/reset, deactivation) makes all of the user's existing tokens invalid.
+    token_version = Column(Integer, default=0, server_default="0", nullable=False)
 
     # Relationships
     member = relationship("Member", back_populates="user", uselist=False)
