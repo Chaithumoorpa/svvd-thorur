@@ -45,6 +45,23 @@ PROTECTED = [
         "paid_to": "Vendor", "expense_date": "2026-01-01"}, {"SUPER_ADMIN", "ADMIN"}),
     ("POST", "/api/v1/auth/admin/users", {
         "username": "newuser", "password": "Password123", "roles": ["STAFF"]}, {"SUPER_ADMIN"}),
+    ("PUT", "/api/v1/temple/", {"name": "Test Temple"}, {"SUPER_ADMIN", "ADMIN"}),
+    ("POST", "/api/v1/temple/timings", {
+        "label": "Test", "start_time": "06:00:00", "end_time": "07:00:00"}, {"SUPER_ADMIN", "ADMIN"}),
+    ("POST", "/api/v1/gallery", {
+        "title": "x", "image_url": "https://example.com/a.jpg"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    ("POST", "/api/v1/poojas", {"name": "Test Pooja"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    ("POST", "/api/v1/festivals", {"name": "Test Festival"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    ("POST", "/api/v1/finance/income", {
+        "source_type": "MANUAL", "amount": "10", "payment_mode": "CASH"}, {"SUPER_ADMIN", "ADMIN"}),
+    ("GET", "/api/v1/finance/ledger/csv?start_date=2026-01-01&end_date=2026-01-01", None,
+     {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/finance/ledger/pdf?start_date=2026-01-01&end_date=2026-01-01", None,
+     {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/finance/reports/monthly?year=2026&month=1", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/finance/reports/monthly/pdf?year=2026&month=1", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/seva-tickets/blessing-reviews", None, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    ("POST", "/api/v1/seva-tickets/scan", {"qr_token": "does-not-exist"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
 ]
 
 
@@ -55,7 +72,11 @@ def test_route_matrix(client, make_user, method, path, body, allowed):
 
     for role in ROLES:
         _, headers = make_user(role, username=f"{role.lower()}_x")
-        response = client.request(method, path, json=body, headers=headers)
+        # a create endpoint with a unique "name" would 400 on the second allowed
+        # role to reach it in this loop (same name, already created) - not a
+        # permission failure, so give each role its own name.
+        role_body = {**body, "name": f"{body['name']} {role}"} if body and "name" in body else body
+        response = client.request(method, path, json=role_body, headers=headers)
         if role in allowed:
             assert response.status_code < 400, f"{role} should reach {method} {path}: {response.text}"
         else:

@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # every so often while there's activity (see lib/api.ts) - and simply expires after
     # this many minutes of no activity at all.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    # Hard cap on one sign-in: refreshing extends a session in ACCESS_TOKEN_EXPIRE_MINUTES
+    # steps, but never past this many hours after the password/OTP was entered.
+    SESSION_MAX_HOURS: int = Field(default=12, ge=1, le=72)
     # Reverse proxies in front of the API that append to X-Forwarded-For (Next.js rewrite = 1,
     # nginx + Next.js = 2). 0 = trust nobody. The client IP is read from the right, so a
     # client-supplied prefix cannot spoof it.
@@ -65,6 +68,11 @@ class Settings(BaseSettings):
     ENABLE_SECURITY_HEADERS: bool | None = None
     ENABLE_RATE_LIMITING: bool | None = None
     RATE_LIMIT_PER_MINUTE: int = 120
+
+    # Hard cap on request body size (every endpoint here is JSON text - no file
+    # bytes ever pass through this backend, those go straight to S3 via a
+    # presigned URL) - rejects an oversized body before it's buffered into memory.
+    MAX_REQUEST_BODY_BYTES: int = 1_000_000
 
     # Alembic
     ALEMBIC_CONFIG: str = "alembic.ini"
@@ -125,6 +133,13 @@ class Settings(BaseSettings):
             )
         if "*" in self.CORS_ORIGINS:
             raise ValueError("CORS_ORIGINS must not contain '*' in production")
+        if not self.TURNSTILE_SECRET_KEY:
+            # Unset makes TurnstileService a silent no-op (see its docstring) -
+            # fine for local dev, but in production it would mean every
+            # CAPTCHA-gated form (registration, login, forgot-password, ...)
+            # accepts every submission with no bot/abuse check at all, with
+            # nothing in the logs to say so. Refuse to boot instead.
+            raise ValueError("TURNSTILE_SECRET_KEY must be set in production")
         return self
 
     # ---- derived flags -------------------------------------------------

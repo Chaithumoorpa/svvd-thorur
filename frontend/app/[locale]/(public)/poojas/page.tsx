@@ -9,12 +9,12 @@ import { PageShell } from '@/components/public/SectionHeading';
 import { Link } from '@/i18n/navigation';
 import { formatMoney, formatTimeRange } from '@/lib/format';
 import { fetchPoojas } from '@/lib/server-api';
-import { localizedAlternates } from '@/lib/site';
+import { pageMetadata } from '@/lib/site';
 import type { Pooja } from '@/lib/types';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.poojas');
-  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/poojas') };
+  return pageMetadata('/poojas', { title: t('title'), description: t('description') });
 }
 
 const GROUPS: Array<{ id: string; titleKey: string; types: string[] }> = [

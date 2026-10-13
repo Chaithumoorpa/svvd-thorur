@@ -4,11 +4,11 @@ import { Clock, Moon, Sun } from 'lucide-react';
 import { PageShell } from '@/components/public/SectionHeading';
 import TempleTime from '@/components/public/TempleTime';
 import { fetchPoojas, fetchTimings } from '@/lib/server-api';
-import { localizedAlternates } from '@/lib/site';
+import { pageMetadata } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.timings');
-  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/timings') };
+  return pageMetadata('/timings', { title: t('title'), description: t('description') });
 }
 
 export default async function TimingsPage() {

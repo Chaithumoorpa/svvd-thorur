@@ -7,7 +7,7 @@ from app.utils.rate_limiter import get_client_ip
 
 
 def _settings(**kw):
-    base = dict(DATABASE_URL="sqlite://", SECRET_KEY="k" * 40)
+    base = dict(DATABASE_URL="sqlite://", SECRET_KEY="k" * 40, TURNSTILE_SECRET_KEY="turnstile-secret")
     return Settings(_env_file=None, **{**base, **kw})
 
 
@@ -16,6 +16,16 @@ def test_production_rejects_weak_secret():
         with pytest.raises(ValidationError):
             _settings(ENV="production", SECRET_KEY=secret)
     assert _settings(ENV="production").is_production
+
+
+def test_production_requires_turnstile_secret():
+    """A blank/unset key makes TurnstileService a silent no-op (see its
+    docstring) - in production that means every CAPTCHA-gated public form
+    accepts anything, with nothing logged to say so. Must refuse to boot."""
+    for missing in ({"TURNSTILE_SECRET_KEY": None}, {"TURNSTILE_SECRET_KEY": ""}):
+        with pytest.raises(ValidationError):
+            _settings(ENV="production", **missing)
+    assert _settings(ENV="production").is_production  # a real key still boots fine
 
 
 def test_public_registration_is_off_by_default(monkeypatch):
@@ -64,3 +74,25 @@ def test_security_headers_middleware_and_cors_methods(client):
     response = client.options("/api/v1/announcements/", headers={
         "Origin": "http://localhost:3000", "Access-Control-Request-Method": "TRACE"})
     assert response.status_code == 400  # TRACE is not an allowed method
+
+
+def test_oversized_body_rejected_before_reaching_any_route(client):
+    from app.core.config import settings
+
+    # Declared via Content-Length - rejected immediately, without needing a
+    # real route or valid JSON (the point is nothing downstream ever sees it).
+    huge = b"x" * (settings.MAX_REQUEST_BODY_BYTES + 1)
+    response = client.post(
+        "/api/v1/contacts", content=huge, headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
+
+
+def test_normal_body_is_not_rejected_by_size(client):
+    # Well under the cap - fails normal field validation (a short message), not 413,
+    # proving the size limit doesn't interfere with an ordinary request.
+    response = client.post(
+        "/api/v1/contacts",
+        json={"name": "A", "email": "a@b.com", "subject": "hi there", "message": "short"},
+    )
+    assert response.status_code == 422

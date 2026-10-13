@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, Mail, UserPlus } from 'lucide-react';
-import { apiError, login, register, setStoredToken, verifyLoginOtp } from '@/lib/api';
+import { apiError, login, register, verifyLoginOtp } from '@/lib/api';
 import { Notice } from '@/components/ui/States';
 import TurnstileWidget from '@/components/ui/TurnstileWidget';
 import { btnGhost, btnPrimary, inputCls } from '@/components/ui/styles';
@@ -18,6 +18,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [code, setCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -34,6 +35,7 @@ export default function RegisterPage() {
         password,
         email: email.trim(),
         phone: phone.trim(),
+        accept_terms: acceptTerms,
         turnstile_token: turnstile.token || undefined,
       });
       // Sign the devotee in right away rather than making them re-enter their
@@ -48,7 +50,6 @@ export default function RegisterPage() {
         setBusy(false);
         return;
       }
-      setStoredToken(data.access_token!);
       window.location.href = '/my-bookings';
     } catch (err) {
       turnstile.reset();
@@ -62,8 +63,7 @@ export default function RegisterPage() {
     setError('');
     setBusy(true);
     try {
-      const data = await verifyLoginOtp(username.trim(), code.trim());
-      setStoredToken(data.access_token);
+      await verifyLoginOtp(username.trim(), code.trim());
       window.location.href = '/my-bookings';
     } catch (err) {
       setError(apiError(err, 'Incorrect or expired code. Please try again.'));
@@ -112,7 +112,7 @@ export default function RegisterPage() {
               <button
                 type="button"
                 className={btnGhost}
-                disabled={busy}
+                disabled={busy || turnstile.blocked}
                 onClick={async () => {
                   setBusy(true);
                   setError('');
@@ -206,7 +206,23 @@ export default function RegisterPage() {
             </div>
             <p className="mt-1 text-xs text-gray-500">At least 8 characters, with a letter and a digit.</p>
           </div>
-          <button type="submit" disabled={busy || !username || !email.trim() || !phone.trim() || !password} className={`${btnPrimary} w-full`}>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox" className="mt-1" required
+              checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)}
+            />
+            <span>
+              I agree to the{' '}
+              <Link href="/legal/terms" target="_blank" className="text-red-900 hover:underline">Terms &amp; Conditions</Link>
+              {' '}and{' '}
+              <Link href="/legal/privacy-policy" target="_blank" className="text-red-900 hover:underline">Privacy Policy</Link>.
+            </span>
+          </label>
+          <button
+            type="submit"
+            disabled={busy || !username || !email.trim() || !phone.trim() || !password || !acceptTerms || turnstile.blocked}
+            className={`${btnPrimary} w-full`}
+          >
             <UserPlus className="h-4 w-4" aria-hidden="true" />
             {busy ? 'Creating account…' : 'Create account'}
           </button>
@@ -214,7 +230,7 @@ export default function RegisterPage() {
         )}
 
         <div className="mt-4 flex justify-center">
-          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} onError={turnstile.setFailed} />
         </div>
 
         {step === 'details' && (

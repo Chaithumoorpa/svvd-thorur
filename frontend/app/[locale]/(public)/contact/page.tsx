@@ -4,11 +4,11 @@ import { Mail, MapPin, MessageCircle, Phone } from 'lucide-react';
 import ContactForm from '@/components/public/ContactForm';
 import { PageShell } from '@/components/public/SectionHeading';
 import { fetchTemple } from '@/lib/server-api';
-import { isEmbeddableMap, localizedAlternates, templeAddress } from '@/lib/site';
+import { isEmbeddableMap, pageMetadata, templeAddress } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.contact');
-  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/contact') };
+  return pageMetadata('/contact', { title: t('title'), description: t('description') });
 }
 
 export default async function ContactPage() {

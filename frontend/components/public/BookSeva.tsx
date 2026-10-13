@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { isAxiosError } from 'axios';
 import { CheckCircle2, ImagePlus, Mail } from 'lucide-react';
 import Field from '@/components/ui/Field';
 import Modal from '@/components/ui/Modal';
@@ -14,6 +13,7 @@ import {
   apiError, bookSeva, confirmSevaPayment, createSevaPaymentOrder, getPaymentStatus, getSevaDay,
   requestBookingOtp, uploadBlessingPhoto, verifyBookingOtp,
 } from '@/lib/api';
+import { photoUploadErrorMessage } from '@/lib/imageUpload';
 import { formatDate, formatMoney, todayISO } from '@/lib/format';
 import { CheckoutDismissedError, openRazorpayCheckout } from '@/lib/razorpay';
 import type { Pooja, SevaTicket } from '@/lib/types';
@@ -85,6 +85,11 @@ export default function BookSeva({
     };
   }, [open, step, seva.id, seva.daily_slot_cap, date]);
 
+  // Free each preview's object URL once it's replaced or the form unmounts.
+  useEffect(() => () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
+
   function close() {
     setOpen(false);
     setStep('email');
@@ -141,14 +146,12 @@ export default function BookSeva({
     setUploadError('');
     setUploading(true);
     try {
-      setPhotoKey(await uploadBlessingPhoto(file));
-      setPhotoPreview(URL.createObjectURL(file));
+      const { key, photo } = await uploadBlessingPhoto(file);
+      setPhotoKey(key);
+      // Preview the re-encoded JPEG that was actually uploaded, not the picked file.
+      setPhotoPreview(URL.createObjectURL(photo));
     } catch (err) {
-      setUploadError(
-        isAxiosError(err) && err.response?.status === 503
-          ? 'Photo uploads are not set up yet. You can still book without one.'
-          : 'Upload failed. Try a smaller image.',
-      );
+      setUploadError(photoUploadErrorMessage(err, 'Photo uploads are not set up yet. You can still book without one.'));
     } finally {
       setUploading(false);
     }
@@ -307,7 +310,7 @@ export default function BookSeva({
                     <label className={`${btnGhost} cursor-pointer`}>
                       <ImagePlus className="h-4 w-4" aria-hidden="true" />
                       {uploading ? 'Uploading…' : photoKey ? 'Replace photo' : 'Add one photo'}
-                      <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={uploading} onChange={handlePhoto} />
+                      <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={handlePhoto} />
                     </label>
                     <p className="mt-1 text-xs text-gray-500">Shown with your blessing on the seva date, once the temple has reviewed it.</p>
                     {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
@@ -330,11 +333,11 @@ export default function BookSeva({
                 </fieldset>
               )}
               <div className="flex justify-center">
-                <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+                <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} onError={turnstile.setFailed} />
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" className={btnGhost} onClick={close}>Cancel</button>
-                <button type="submit" className={btnPrimary} disabled={busy || uploading || full || name.trim().length < 2 || mobile.replace(/\D/g, '').length < 10 || !date}>
+                <button type="submit" className={btnPrimary} disabled={busy || uploading || full || name.trim().length < 2 || mobile.replace(/\D/g, '').length < 10 || !date || turnstile.blocked}>
                   {busy
                     ? (onlinePaymentAvailable && payOnline ? 'Opening payment…' : 'Booking…')
                     : (onlinePaymentAvailable && payOnline ? `Pay ${formatMoney(seva.suggested_amount)} & book` : 'Confirm booking')}

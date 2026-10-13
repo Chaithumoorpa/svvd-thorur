@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from app.core.pagination import PageParams, page_params, paginate, set_total
@@ -185,7 +185,7 @@ def create_seva_payment_order(
     order = razorpay.create_order(pooja.suggested_amount or 0, purpose=f"Seva: {pooja.name}")
     booking = payload.model_dump(mode="json", exclude={"turnstile_token"})
     token = create_access_token(
-        {"purpose": SEVA_PAYMENT_PURPOSE, "order_id": order["order_id"], "booking": booking,
+        {"typ": "payment", "purpose": SEVA_PAYMENT_PURPOSE, "order_id": order["order_id"], "booking": booking,
          "amount_paise": order["amount_paise"]},
         expires_delta=PAYMENT_TOKEN_TTL,
     )
@@ -206,7 +206,7 @@ def confirm_seva_payment(
     is refunded and the devotee is told plainly - the temple never keeps
     money for a seva it can't actually give them."""
     claims = decode_access_token(payload.payment_token)
-    if not claims or claims.get("purpose") != SEVA_PAYMENT_PURPOSE or claims.get("order_id") != payload.razorpay_order_id:
+    if not claims or claims.get("typ") != "payment" or claims.get("purpose") != SEVA_PAYMENT_PURPOSE or claims.get("order_id") != payload.razorpay_order_id:
         raise HTTPException(status_code=400, detail="This payment session has expired. Please try again.")
     if not razorpay.verify_payment_signature(
         payload.razorpay_order_id, payload.razorpay_payment_id, payload.razorpay_signature
@@ -426,7 +426,7 @@ def print_ticket(
 @router.get("/{ticket_id}/pdf")
 def get_ticket_pdf(
     ticket_id: UUID,
-    action: str = Query("print", enum=["download", "print"]),
+    action: Literal["download", "print"] = Query("print"),
     service: SevaTicketService = Depends(get_seva_ticket_service),
     _: User = Depends(_manage),
 ):

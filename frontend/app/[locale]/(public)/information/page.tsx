@@ -2,10 +2,10 @@ import React from 'react';
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { ShieldCheck, Info, UserCheck } from 'lucide-react';
-import { localizedAlternates } from '@/lib/site';
+import { pageMetadata } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { alternates: await localizedAlternates('/information') };
+  return pageMetadata('/information');
 }
 
 export default async function InformationPage() {

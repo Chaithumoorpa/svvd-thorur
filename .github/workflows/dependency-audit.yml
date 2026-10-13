@@ -14,6 +14,10 @@ on:
       - frontend/package.json
       - frontend/package-lock.json
 
+# Least privilege: these jobs only check out code; none writes to GitHub.
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest

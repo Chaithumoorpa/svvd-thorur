@@ -3,10 +3,10 @@ import { getTranslations } from 'next-intl/server'
 import PageContainer from '@/components/PageContainer'
 import DonationForm from '@/components/public/DonationForm'
 import { Link } from '@/i18n/navigation'
-import { localizedAlternates } from '@/lib/site'
+import { pageMetadata } from '@/lib/site'
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { alternates: await localizedAlternates('/donations') }
+  return pageMetadata('/donations');
 }
 
 export default async function DonationsComingSoon() {

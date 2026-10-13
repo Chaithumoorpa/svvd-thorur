@@ -23,11 +23,13 @@ module.exports = {
           '0%': { opacity: '0', transform: 'translateX(20px)' },
           '100%': { opacity: '1', transform: 'translateX(0)' },
         },
-        petalFall: {
-          '0%': { transform: 'translateY(-10%) rotate(0deg)', opacity: '0' },
-          '10%': { opacity: '0.9' },
-          '90%': { opacity: '0.9' },
-          '100%': { transform: 'translateY(340%) rotate(200deg)', opacity: '0' },
+        // Each petal's layer covers the whole blessing card, so these % offsets are
+        // fractions of the card: petals leave the Om and drift down over the photo.
+        petalShower: {
+          '0%': { transform: 'translate(0, 0) rotate(0deg) scale(0.3)', opacity: '0' },
+          '12%': { transform: 'translate(calc(var(--dx) * 0.15), 3%) rotate(30deg) scale(1)', opacity: '1' },
+          '85%': { opacity: '0.95' },
+          '100%': { transform: 'translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1)', opacity: '0' },
         },
         glowPulse: {
           '0%, 100%': { opacity: '0.55', transform: 'scale(1)' },
@@ -36,7 +38,7 @@ module.exports = {
       },
       animation: {
         slideIn: 'slideIn 0.6s ease-out',
-        petalFall: 'petalFall 6s linear infinite',
+        petalShower: 'petalShower 5s ease-in infinite',
         glowPulse: 'glowPulse 3.5s ease-in-out infinite',
       },
     },

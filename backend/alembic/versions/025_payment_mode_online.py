@@ -1,7 +1,7 @@
 """Add ONLINE to the paymentmode enum
 
-Revision ID: 022_payment_mode_online
-Revises: 021_hide_dup_vinayaka
+Revision ID: 025_payment_mode_online
+Revises: 024_user_token_version
 Create Date: 2026-09-28
 
 Online payments (Razorpay) for donations and paid seva bookings post an
@@ -19,8 +19,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "022_payment_mode_online"
-down_revision: Union[str, None] = "021_hide_dup_vinayaka"
+revision: str = "025_payment_mode_online"
+down_revision: Union[str, None] = "024_user_token_version"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

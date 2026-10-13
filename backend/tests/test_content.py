@@ -152,6 +152,44 @@ def test_temple_profile_and_timings(client, admin, staff):
     assert client.delete(f"/api/v1/temple/timings/{tid}", headers=headers).status_code == 200
 
 
+# ---------------------------------------------------------------------- e-Hundi QR
+def test_hundi_qr_not_configured_until_vpa_set(client, admin):
+    _, headers = admin
+    client.put("/api/v1/temple/", headers=headers, json={"name": "SVVD Thorur"})
+
+    unconfigured = client.get("/api/v1/temple/hundi-qr")
+    assert unconfigured.status_code == 200
+    body = unconfigured.json()
+    assert body == {"configured": False, "upi_vpa": None, "payee_name": None, "qr_base64": None, "upi_uri": None}
+
+    bad = client.put("/api/v1/temple/", headers=headers, json={"upi_vpa": "not-a-vpa"})
+    assert bad.status_code == 422
+
+    ok = client.put("/api/v1/temple/", headers=headers, json={"upi_vpa": "svvdthorur@upi"})
+    assert ok.status_code == 200 and ok.json()["upi_vpa"] == "svvdthorur@upi"
+
+    configured = client.get("/api/v1/temple/hundi-qr").json()
+    assert configured["configured"] is True
+    assert configured["upi_vpa"] == "svvdthorur@upi"
+    assert configured["payee_name"] == "SVVD Thorur"
+    assert configured["qr_base64"]  # a non-empty base64 PNG
+    assert configured["upi_uri"] == "upi://pay?pa=svvdthorur@upi&pn=SVVD%20Thorur&cu=INR"
+
+
+def test_hundi_upi_link_for_a_bank_issued_vpa(client, admin):
+    """The temple's real Union Bank VPA (letters, digits and a hyphen) is accepted
+    and produces exactly the pay link the temple published."""
+    _, headers = admin
+    client.put("/api/v1/temple/", headers=headers, json={
+        "name": "Sri Varasidhi Vinayaka Swamy Temple", "upi_vpa": "QR916281230256-6096@unionbankofindia",
+    })
+    qr = client.get("/api/v1/temple/hundi-qr").json()
+    assert qr["upi_uri"] == (
+        "upi://pay?pa=QR916281230256-6096@unionbankofindia"
+        "&pn=Sri%20Varasidhi%20Vinayaka%20Swamy%20Temple&cu=INR"
+    )
+
+
 # ----------------------------------------------------------------------- members
 def test_members_directory(client, admin, trustee):
     _, headers = admin

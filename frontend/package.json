@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint --max-warnings=0 --dir app --dir components --dir hooks --dir lib --dir tests",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "axios": "1.20.0",
@@ -21,7 +22,8 @@
     "sharp": "0.35.5"
   },
   "devDependencies": {
-    "@types/node": "20.4.2",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "26.6.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "autoprefixer": "^10.4.14",
@@ -30,7 +32,7 @@
     "postcss": "^8.4.24",
     "tailwindcss": "^3.4.8",
     "typescript": "5.4.2",
-    "vitest": "^2.1.9"
+    "vitest": "^5.0.2"
   },
   "overrides": {
     "next": {

@@ -15,10 +15,11 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.core import cache as content_cache  # noqa: E402
 from app.core.database import get_db  # noqa: E402
-from app.core.security import create_access_token, hash_password  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.base import Base  # noqa: E402
 from app.models.user import User  # noqa: E402
+from app.services.auth_service import issue_session_token  # noqa: E402
 from app.utils import rate_limiter  # noqa: E402
 
 
@@ -47,8 +48,9 @@ def client(db):
     # limiters are process-global; reset so tests do not affect each other
     for limiter in (rate_limiter.login_limiter, rate_limiter.register_limiter,
                     rate_limiter.contact_limiter, rate_limiter.booking_limiter,
-                    rate_limiter.password_reset_limiter, rate_limiter.otp_request_limiter,
-                    rate_limiter.otp_verify_limiter, rate_limiter.blessing_photo_upload_limiter,
+                    rate_limiter.password_reset_limiter, rate_limiter.username_recovery_limiter,
+                    rate_limiter.otp_request_limiter, rate_limiter.otp_verify_limiter,
+                    rate_limiter.blessing_photo_upload_limiter,
                     rate_limiter.payment_order_limiter):
         limiter.requests.clear()
     # The content cache (app/core/cache.py) is also process-global - each test
@@ -76,7 +78,7 @@ def make_user(db):
         db.add(user)
         db.commit()
         db.refresh(user)
-        token = create_access_token({"sub": user.username, "user_id": user.id})
+        token = issue_session_token(user)
         return user, {"Authorization": f"Bearer {token}"}
 
     return _make

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { CalendarCheck, Clock, HeartHandshake } from 'lucide-react';
 import BlessingAnimation from '@/components/public/BlessingAnimation';
+import BlessingChant from '@/components/public/BlessingChant';
 import { LoadingBlock, Notice } from '@/components/ui/States';
 import { useLoad } from '@/hooks/useLoad';
 import { getPersonalBlessing } from '@/lib/api';
@@ -60,18 +61,20 @@ export default function PersonalBlessingPage() {
           <>
             <h1 className="font-serif text-xl font-bold text-maroon">Blessings on your {data.occasion}</h1>
             <p className="mt-1 text-sm text-gray-500">{data.seva_name} · {formatDate(data.seva_date)}</p>
-            {data.photo_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={data.photo_url}
-                alt={`${data.devotee_name ?? 'Devotee'}'s ${data.occasion} photo`}
-                className="mx-auto mt-4 max-h-72 rounded-2xl border border-amber-200 object-contain"
-              />
-            )}
             <div className="mt-4">
-              <BlessingAnimation />
+              <BlessingAnimation>
+                {data.photo_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={data.photo_url}
+                    alt={`${data.devotee_name ?? 'Devotee'}'s ${data.occasion} photo`}
+                    className="mx-auto max-h-72 rounded-2xl border border-amber-200 object-contain"
+                  />
+                )}
+              </BlessingAnimation>
             </div>
             <p className="mt-2 font-serif text-lg text-maroon-dark">{data.devotee_name}</p>
+            <BlessingChant />
             {data.visible_until && (
               <div className="mt-4">
                 <Notice kind="success">Open until {formatDate(data.visible_until)}</Notice>

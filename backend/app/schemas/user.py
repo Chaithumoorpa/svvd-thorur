@@ -29,7 +29,7 @@ def _validate_password(value: str) -> str:
 
 
 class UserBase(BaseModel):
-    username: str
+    username: str = Field(max_length=100)
     email: Optional[EmailStr] = None
     phone: Optional[str] = Field(default=None, max_length=20)
     is_active: Optional[bool] = True
@@ -65,13 +65,14 @@ class PublicRegister(BaseModel):
     """Self-registration: can never choose roles. Email and phone are required -
     a devotee account is only useful if the temple can reach its owner, and a
     booking's contact details already require both anyway."""
-    username: str
+    username: str = Field(max_length=100)
     email: EmailStr
     phone: str = Field(max_length=20)
     password: str
+    accept_terms: bool
     # Cloudflare Turnstile challenge token from the frontend widget - required
     # only when TURNSTILE_SECRET_KEY is configured server-side.
-    turnstile_token: Optional[str] = None
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
 
     @field_validator("username")
     @classmethod
@@ -90,6 +91,13 @@ class PublicRegister(BaseModel):
     @classmethod
     def validate_password(cls, v: str) -> str:
         return _validate_password(v)
+
+    @field_validator("accept_terms")
+    @classmethod
+    def validate_accept_terms(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError("You must agree to the Terms & Conditions and Privacy Policy to register")
+        return v
 
 
 class UserUpdate(BaseModel):
@@ -113,9 +121,12 @@ class UserUpdate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    username: str
-    password: str
-    turnstile_token: Optional[str] = None
+    """`username` accepts a username, an email address, or a mobile number -
+    whichever the account was found by, the frontend sends back the same
+    string for verify-otp below."""
+    username: str = Field(max_length=100)
+    password: str = Field(max_length=128)
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
 
 
 class UserOut(BaseModel):
@@ -129,12 +140,9 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-class TokenOut(Token):
+class SessionOut(BaseModel):
+    """A sign-in succeeded: the session itself is in the HttpOnly cookie the
+    response sets, never in the body, so page JavaScript can't read it."""
     must_change_password: bool
 
 
@@ -142,22 +150,20 @@ class LoginResponse(BaseModel):
     """Step 1 of login. An account with an email on file gets otp_required=True
     and nothing else - a sign-in code has been emailed, and POST /auth/login/
     verify-otp completes the session. An account with no email skips straight
-    to a session (the token fields below), same as login always worked before
-    this existed - there's nowhere to send a code, so there's no second factor
-    to gate on."""
+    to a session (set as a cookie, with must_change_password here), same as
+    login always worked before this existed - there's nowhere to send a code,
+    so there's no second factor to gate on."""
     otp_required: bool
-    access_token: Optional[str] = None
-    token_type: Optional[str] = None
     must_change_password: Optional[bool] = None
 
 
 class LoginOtpVerify(BaseModel):
-    username: str
-    code: str
+    username: str = Field(max_length=100)
+    code: str = Field(max_length=20)
 
 
 class PasswordChange(BaseModel):
-    current_password: str
+    current_password: str = Field(max_length=128)
     new_password: str
 
     @field_validator("new_password")
@@ -169,16 +175,23 @@ class PasswordChange(BaseModel):
 class DeleteAccountConfirm(BaseModel):
     """Requires the current password, same as changing it - a destructive,
     irreversible action deserves the same confirmation."""
-    password: str
+    password: str = Field(max_length=128)
 
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
-    turnstile_token: Optional[str] = None
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
+
+
+class UsernameRecoveryRequest(BaseModel):
+    """Unlike password reset, this takes an email OR a mobile number - there's
+    no "username" field to type here, that's the whole point."""
+    identifier: str = Field(max_length=255)
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
 
 
 class PasswordResetConfirm(BaseModel):
-    token: str
+    token: str = Field(max_length=2000)
     new_password: str
 
     @field_validator("new_password")

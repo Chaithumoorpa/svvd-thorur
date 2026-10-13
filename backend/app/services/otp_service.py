@@ -93,12 +93,14 @@ class OtpService:
     def verify_otp(self, email: str, code: str) -> str:
         email = email.strip().lower()
         self._consume_code(email, BOOKING_PURPOSE, code)
-        return create_access_token({"purpose": BOOKING_PURPOSE, "email": email}, expires_delta=BOOKING_TOKEN_TTL)
+        return create_access_token(
+            {"typ": "booking", "purpose": BOOKING_PURPOSE, "email": email}, expires_delta=BOOKING_TOKEN_TTL,
+        )
 
     @staticmethod
     def check_booking_token(token: str, email: str) -> None:
         payload = decode_access_token(token)
-        if not payload or payload.get("purpose") != BOOKING_PURPOSE \
+        if not payload or payload.get("typ") != "booking" or payload.get("purpose") != BOOKING_PURPOSE \
                 or payload.get("email") != email.strip().lower():
             raise HTTPException(status_code=400, detail="Please verify your email again")
 

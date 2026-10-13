@@ -169,6 +169,25 @@ def test_tampered_or_mismatched_payment_token_is_rejected(client, db, sent, razo
     assert garbage.status_code == 400
 
 
+def test_a_payment_token_must_be_typed_as_one(client, db, sent, razorpay):
+    """A token that only carries the right purpose (an old-format token, or
+    any other kind this API signs) is not accepted as a payment token."""
+    from app.core.security import create_access_token, decode_access_token
+
+    seva = _seva(db)
+    order = client.post("/api/v1/seva-tickets/booking/online-order",
+                        json=_order_payload(seva, _otp_token(client, sent))).json()
+    claims = decode_access_token(order["payment_token"])
+    assert claims["typ"] == "payment"
+    untyped = {k: v for k, v in claims.items() if k not in ("typ", "exp", "iat")}
+    r = client.post("/api/v1/seva-tickets/booking/online-confirm", json={
+        "payment_token": create_access_token(untyped), "razorpay_order_id": order["order_id"],
+        "razorpay_payment_id": "pay_1", "razorpay_signature": "sig_1",
+    })
+    assert r.status_code == 400
+    assert db.query(SevaTicket).count() == 0
+
+
 def test_an_unverifiable_signature_books_nothing(client, db, sent, razorpay):
     seva = _seva(db)
     token = _otp_token(client, sent)

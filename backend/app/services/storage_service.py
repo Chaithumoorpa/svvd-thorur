@@ -11,6 +11,8 @@ _ALLOWED_CONTENT_TYPES = {
     "image/webp": "webp",
     "image/gif": "gif",
 }
+# Non-standard names some browsers/pickers report for ordinary JPEGs.
+_CONTENT_TYPE_ALIASES = {"image/jpg": "image/jpeg", "image/pjpeg": "image/jpeg"}
 
 
 class StorageService:
@@ -44,6 +46,7 @@ class StorageService:
         if not self.enabled:
             raise HTTPException(status_code=503, detail="Photo uploads are not configured")
 
+        content_type = _CONTENT_TYPE_ALIASES.get(content_type.lower(), content_type.lower())
         ext = _ALLOWED_CONTENT_TYPES.get(content_type)
         if ext is None:
             raise HTTPException(

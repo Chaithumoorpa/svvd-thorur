@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { isAxiosError } from 'axios';
 import { ImageIcon, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import AdminPage, { StatusPill } from '@/components/admin/AdminPage';
 import ConfirmDialog from '@/components/admin/ConfirmDialog';
@@ -13,6 +12,7 @@ import { btnDanger, btnGhost, btnPrimary, cardCls, inputCls } from '@/components
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
 import { createGallery, deleteGallery, listAllGallery, updateGallery, uploadGalleryPhoto } from '@/lib/api';
+import { photoUploadErrorMessage } from '@/lib/imageUpload';
 import { emptyToNull } from '@/lib/format';
 import type { GalleryItem } from '@/lib/types';
 
@@ -92,11 +92,7 @@ export default function GalleryAdmin() {
       const publicUrl = await uploadGalleryPhoto(file);
       set('image_url', publicUrl);
     } catch (err) {
-      setUploadError(
-        isAxiosError(err) && err.response?.status === 503
-          ? 'Photo uploads are not set up yet. Paste an image link instead, or ask an admin to configure S3.'
-          : 'Upload failed. Try a smaller image, or paste an image link instead.',
-      );
+      setUploadError(photoUploadErrorMessage(err, 'Photo uploads are not set up yet. Paste an image link instead, or ask an admin to configure S3.'));
     } finally {
       setUploading(false);
     }
@@ -167,7 +163,7 @@ export default function GalleryAdmin() {
                     {uploading ? 'Uploading…' : 'Upload photo'}
                     <input
                       type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      accept="image/*"
                       className="hidden"
                       disabled={uploading}
                       onChange={handleFileSelect}

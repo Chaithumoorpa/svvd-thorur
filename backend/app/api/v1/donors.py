@@ -243,7 +243,7 @@ def create_donation_payment_order(
     order = razorpay.create_order(payload.amount, purpose=f"Donation: {payload.donation_type.value}")
     donation = payload.model_dump(mode="json", exclude={"turnstile_token"})
     token = create_access_token(
-        {"purpose": DONATION_PAYMENT_PURPOSE, "order_id": order["order_id"], "donation": donation},
+        {"typ": "payment", "purpose": DONATION_PAYMENT_PURPOSE, "order_id": order["order_id"], "donation": donation},
         expires_delta=PAYMENT_TOKEN_TTL,
     )
     return RazorpayOrderOut(**order, payment_token=token)
@@ -260,7 +260,7 @@ def confirm_donation_payment(
     DonationService.find_or_create_donor_by_phone) - and issues its receipt
     right away, since the money has already arrived."""
     claims = decode_access_token(payload.payment_token)
-    if not claims or claims.get("purpose") != DONATION_PAYMENT_PURPOSE or claims.get("order_id") != payload.razorpay_order_id:
+    if not claims or claims.get("typ") != "payment" or claims.get("purpose") != DONATION_PAYMENT_PURPOSE or claims.get("order_id") != payload.razorpay_order_id:
         raise HTTPException(status_code=400, detail="This payment session has expired. Please try again.")
     if not razorpay.verify_payment_signature(
         payload.razorpay_order_id, payload.razorpay_payment_id, payload.razorpay_signature
