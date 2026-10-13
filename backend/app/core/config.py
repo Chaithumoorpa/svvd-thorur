@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # every so often while there's activity (see lib/api.ts) - and simply expires after
     # this many minutes of no activity at all.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    # Hard cap on one sign-in: refreshing extends a session in ACCESS_TOKEN_EXPIRE_MINUTES
+    # steps, but never past this many hours after the password/OTP was entered.
+    SESSION_MAX_HOURS: int = Field(default=12, ge=1, le=72)
     # Reverse proxies in front of the API that append to X-Forwarded-For (Next.js rewrite = 1,
     # nginx + Next.js = 2). 0 = trust nobody. The client IP is read from the right, so a
     # client-supplied prefix cannot spoof it.

@@ -71,6 +71,9 @@ class HundiQrOut(BaseModel):
     upi_vpa: Optional[str] = None
     payee_name: Optional[str] = None
     qr_base64: Optional[str] = None
+    # The same payment link the QR encodes - a phone can open it directly
+    # ("Donate via UPI") instead of scanning its own screen.
+    upi_uri: Optional[str] = None
 
 
 class TimingBase(BaseModel):

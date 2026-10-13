@@ -11,6 +11,11 @@ SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
+# The signed-in session lives in this HttpOnly cookie (never readable by page
+# JavaScript), scoped to the API path. See app/api/v1/auth.py:_start_session.
+SESSION_COOKIE = "svvd_session"
+SESSION_COOKIE_PATH = "/api/v1"
+
 
 def hash_password(password: str) -> str:
     """Hash a plain password"""

@@ -11,7 +11,7 @@ import {
 
 import { AuthContext } from '@/components/admin/AuthContext';
 import { LoadingBlock } from '@/components/ui/States';
-import { getMe, setStoredToken, getStoredToken } from '@/lib/api';
+import { getMe, logout as endSession } from '@/lib/api';
 import type { Me, Permission } from '@/lib/types';
 
 interface NavItem {
@@ -50,10 +50,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     let cancelled = false;
     async function check() {
-      if (!getStoredToken()) {
-        router.replace('/login');
-        return;
-      }
+      // Ask the server: the session is an HttpOnly cookie this page can't inspect.
       try {
         const current = await getMe();
         if (cancelled) return;
@@ -63,10 +60,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         }
         setMe(current);
       } catch {
-        if (!cancelled) {
-          setStoredToken(null);
-          router.replace('/login');
-        }
+        if (!cancelled) router.replace('/login');
       } finally {
         if (!cancelled) setChecking(false);
       }
@@ -82,8 +76,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const can = useCallback((p: Permission) => !!me?.permissions.includes(p), [me]);
   const ctx = useMemo(() => (me ? { me, can } : null), [me, can]);
 
-  const logout = () => {
-    setStoredToken(null);
+  const logout = async () => {
+    await endSession();
     router.push('/');
   };
 

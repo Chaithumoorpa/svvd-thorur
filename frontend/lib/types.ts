@@ -55,6 +55,8 @@ export interface HundiQrInfo {
   upi_vpa: string | null;
   payee_name: string | null;
   qr_base64: string | null;
+  /** The payment link the QR encodes - opened directly by the "Donate via UPI" button. */
+  upi_uri: string | null;
 }
 
 export interface TempleTiming {

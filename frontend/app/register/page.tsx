@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, Mail, UserPlus } from 'lucide-react';
-import { apiError, login, register, setStoredToken, verifyLoginOtp } from '@/lib/api';
+import { apiError, login, register, verifyLoginOtp } from '@/lib/api';
 import { Notice } from '@/components/ui/States';
 import TurnstileWidget from '@/components/ui/TurnstileWidget';
 import { btnGhost, btnPrimary, inputCls } from '@/components/ui/styles';
@@ -50,7 +50,6 @@ export default function RegisterPage() {
         setBusy(false);
         return;
       }
-      setStoredToken(data.access_token!);
       window.location.href = '/my-bookings';
     } catch (err) {
       turnstile.reset();
@@ -64,8 +63,7 @@ export default function RegisterPage() {
     setError('');
     setBusy(true);
     try {
-      const data = await verifyLoginOtp(username.trim(), code.trim());
-      setStoredToken(data.access_token);
+      await verifyLoginOtp(username.trim(), code.trim());
       window.location.href = '/my-bookings';
     } catch (err) {
       setError(apiError(err, 'Incorrect or expired code. Please try again.'));

@@ -2,16 +2,18 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission, permissions_for
+from app.core.security import SESSION_COOKIE, SESSION_COOKIE_PATH
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import (
     DeleteAccountConfirm, LoginOtpVerify, LoginResponse, PasswordChange, PasswordResetConfirm,
-    PasswordResetRequest, PublicRegister, TokenOut, UsernameRecoveryRequest, UserCreate, UserLogin,
+    PasswordResetRequest, PublicRegister, SessionOut, UsernameRecoveryRequest, UserCreate, UserLogin,
     UserOut, UserUpdate,
 )
 from app.services.audit_service import AuditService
@@ -20,8 +22,8 @@ from app.services.email_service import EmailService
 from app.services.otp_service import OtpService
 from app.services.turnstile_service import TurnstileService
 from app.utils.dependencies import (
-    AuditContext, get_audit, get_current_user, get_db, get_otp_service, get_turnstile_service,
-    require_permission,
+    AuditContext, authenticate, get_audit, get_current_session, get_current_user, get_db, get_otp_service,
+    get_turnstile_service, require_permission, security,
 )
 from app.utils.rate_limiter import (
     enforce, get_client_ip, login_limiter, password_reset_limiter, register_limiter,
@@ -36,10 +38,31 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     return AuthService(UserRepository(db))
 
 
+def _start_session(response: Response, service: AuthService, user: User, auth_time: int | None = None) -> None:
+    """Puts a session token for `user` in an HttpOnly cookie: page JavaScript
+    can't read it, SameSite=Strict keeps other sites from sending it, and it
+    only goes to the API. Same lifetime as the token; /auth/refresh renews both."""
+    response.set_cookie(
+        SESSION_COOKIE,
+        service.create_access_token(user, auth_time),
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path=SESSION_COOKIE_PATH,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="strict",
+    )
+
+
+def _end_session(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE, path=SESSION_COOKIE_PATH, httponly=True,
+                           secure=settings.is_production, samesite="strict")
+
+
 @router.post("/login", response_model=LoginResponse)
 def login(
     payload: UserLogin,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
     otp_service: OtpService = Depends(get_otp_service),
     turnstile: TurnstileService = Depends(get_turnstile_service),
@@ -64,21 +87,18 @@ def login(
     if not user.email:
         AuditService(db).record(user, "LOGIN", "user", user.id,
                                 f"{user.username} signed in (no email on file - single factor)", request=request)
-        return LoginResponse(
-            otp_required=False,
-            access_token=service.create_access_token(user),
-            token_type="bearer",
-            must_change_password=user.must_change_password,
-        )
+        _start_session(response, service, user)
+        return LoginResponse(otp_required=False, must_change_password=user.must_change_password)
 
     otp_service.request_login_otp(user.email)
     return LoginResponse(otp_required=True)
 
 
-@router.post("/login/verify-otp", response_model=TokenOut)
+@router.post("/login/verify-otp", response_model=SessionOut)
 def verify_login_otp(
     payload: LoginOtpVerify,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
     otp_service: OtpService = Depends(get_otp_service),
     db: Session = Depends(get_db),
@@ -95,11 +115,8 @@ def verify_login_otp(
     otp_service.verify_login_otp(user.email, payload.code)
 
     AuditService(db).record(user, "LOGIN", "user", user.id, f"{user.username} signed in", request=request)
-    return {
-        "access_token": service.create_access_token(user),
-        "token_type": "bearer",
-        "must_change_password": user.must_change_password,
-    }
+    _start_session(response, service, user)
+    return SessionOut(must_change_password=user.must_change_password)
 
 
 @router.post("/register", response_model=UserOut, status_code=201)
@@ -195,26 +212,56 @@ def verify_token(current_user: User = Depends(get_current_user)):
 
 @router.post("/refresh", response_model=dict)
 def refresh_token(
-    current_user: User = Depends(get_current_user),
+    response: Response,
+    session: tuple[User, dict] = Depends(get_current_session),
     service: AuthService = Depends(get_auth_service),
 ):
-    """Issues a fresh access token for the same session, extending it another
-    ACCESS_TOKEN_EXPIRE_MINUTES from now. Requires the CURRENT token to still be
-    valid - an already-expired or revoked session cannot refresh itself. Called
-    silently by the frontend while the user is active (see lib/api.ts); an idle
-    session simply stops being refreshed and expires on schedule."""
-    return {"access_token": service.create_access_token(current_user)}
+    """Renews the session cookie, extending it another ACCESS_TOKEN_EXPIRE_MINUTES
+    from now. Requires the CURRENT session to still be valid - an expired or
+    revoked one cannot refresh itself - and keeps its original sign-in time, so
+    no amount of refreshing outlives SESSION_MAX_HOURS. Called silently by the
+    frontend while the user is active (see lib/api.ts); an idle session simply
+    stops being refreshed and expires on schedule."""
+    user, claims = session
+    _start_session(response, service, user, auth_time=claims["auth_time"])
+    return {"message": "Session refreshed"}
+
+
+@router.post("/logout", response_model=dict)
+def logout(
+    request: Request,
+    response: Response,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    service: AuthService = Depends(get_auth_service),
+    db: Session = Depends(get_db),
+):
+    """Signs the user out on every device: their token_version moves on, so
+    every token issued before - including any copy someone else holds - stops
+    working. Always clears this browser's cookie, even for an already-expired
+    session, so logging out never fails."""
+    try:
+        user, _ = authenticate(request, credentials, db)
+    except HTTPException:
+        user = None
+    if user:
+        service.logout(user)
+        AuditService(db).record(user, "LOGOUT", "user", user.id, f"{user.username} signed out", request=request)
+    _end_session(response)
+    return {"message": "Signed out"}
 
 
 @router.post("/change-password", response_model=dict)
 def change_password(
     payload: PasswordChange,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     service.change_password(current_user, payload)
+    # Every other device is now signed out; this one continues with a new session.
+    _start_session(response, service, current_user)
     AuditService(db).record(current_user, "PASSWORD_CHANGE", "user", current_user.id,
                             f"{current_user.username} changed their password", request=request)
     return {"message": "Password changed successfully"}
@@ -224,6 +271,7 @@ def change_password(
 def delete_my_account(
     payload: DeleteAccountConfirm,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -248,6 +296,7 @@ def delete_my_account(
             "If you didn't request this, please contact the temple office immediately.\n\n"
             "Thank you,\nSVVD Thorur",
         )
+    _end_session(response)
     return {"message": "Account deleted"}
 
 

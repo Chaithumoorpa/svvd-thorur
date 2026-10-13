@@ -299,11 +299,21 @@
   "hundi": {
     "title": "Online Hundi",
     "subtitle": "Offer your contribution directly to the temple's Hundi, from anywhere.",
-    "howTo": "Open any UPI app - Google Pay, PhonePe, Paytm, or BHIM - and scan the QR code above, or pay directly to the UPI ID shown.",
     "directNote": "This is an instant, direct transfer to the temple's bank account. It is not processed through this website, and no payment details pass through our servers.",
     "receiptNote": "Want a receipt for your offering? Share your name, PAN and phone number with the temple office after paying, using",
     "contactLink": "the Contact page",
     "notConfigured": "Online Hundi isn't set up yet. Please contact the temple office, or offer at the Hundi box during your visit."
+  },
+  "donate": {
+    "title": "Support the Temple / ఆలయానికి మీ సహకారం",
+    "payNow": "Donate via UPI",
+    "orScan": "Or scan this QR code from another phone",
+    "scanDesktop": "Scan this QR code with your phone's UPI app",
+    "upiId": "UPI ID",
+    "accountName": "Account name",
+    "apps": "Scan with any UPI app — GPay, PhonePe, Paytm, BHIM",
+    "qrAlt": "UPI QR code for donations to the temple",
+    "details": "Receipts and more about online offerings"
   },
   "cookieConsent": {
     "message": "This site uses only essential cookies and local storage - for sign-in and your language preference. No advertising or tracking cookies are used.",
