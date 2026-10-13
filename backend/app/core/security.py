@@ -1,6 +1,6 @@
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
-from jose import JWTError, jwt
+import jwt
 from app.core.config import settings
 
 # Password hashing (using argon2 instead of bcrypt to avoid compatibility issues)
@@ -45,5 +45,5 @@ def decode_access_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except JWTError:
+    except jwt.InvalidTokenError:
         return None
