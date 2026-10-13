@@ -44,6 +44,11 @@ export interface Temple {
   instagram_url: string | null;
   youtube_url: string | null;
   upi_vpa: string | null;
+  /** Account holder name the bank shows in a devotee's UPI app. */
+  bank_account_name: string | null;
+  registration_number: string | null;
+  pan_number: string | null;
+  eighty_g_number: string | null;
 }
 
 export type TempleUpdate = Partial<Omit<Temple, 'id'>>;
@@ -57,6 +62,10 @@ export interface HundiQrInfo {
   qr_base64: string | null;
   /** The payment link the QR encodes - opened directly by the "Donate via UPI" button. */
   upi_uri: string | null;
+  /** Printed with the QR so devotees can verify they're paying the registered temple. */
+  registration_number: string | null;
+  pan_number: string | null;
+  eighty_g_number: string | null;
 }
 
 export interface TempleTiming {

@@ -33,4 +33,7 @@ export const fetchPoojas = () => get<Pooja[]>('/poojas/', []);
 export const fetchGallery = () => get<GalleryItem[]>('/gallery/?page_size=200', []);
 export const fetchCommittee = () => get<CommitteeMember[]>('/public/committee', []);
 export const fetchHundiQr = () =>
-  get<HundiQrInfo>('/temple/hundi-qr', { configured: false, upi_vpa: null, payee_name: null, qr_base64: null, upi_uri: null });
+  get<HundiQrInfo>('/temple/hundi-qr', {
+    configured: false, upi_vpa: null, payee_name: null, qr_base64: null, upi_uri: null,
+    registration_number: null, pan_number: null, eighty_g_number: null,
+  });

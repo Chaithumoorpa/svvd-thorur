@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.core.cache import cached, invalidate
@@ -51,6 +51,16 @@ def get_hundi_qr(response: Response, service: TempleService = Depends(get_temple
     return cached("temple:hundi_qr", service.get_hundi_qr)
 
 
+@router.get("/hundi-qr/print.png", response_class=Response,
+            responses={200: {"content": {"image/png": {}}}, 404: {"description": "No UPI ID set"}})
+def get_hundi_qr_print(service: TempleService = Depends(get_temple_service)):
+    """The e-Hundi QR at poster resolution (~1040px), for the printable poster."""
+    png = cached("temple:hundi_qr_print", service.hundi_qr_print_png)
+    if not png:
+        raise HTTPException(status_code=404, detail="Online Hundi is not set up")
+    return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=60"})
+
+
 # ---- admin ----------------------------------------------------------------------------
 @router.put("", response_model=TempleOut)
 def update_temple(
@@ -63,7 +73,7 @@ def update_temple(
     audit.log("UPDATE", "temple", temple.id, "Updated temple profile",
               payload.model_dump(exclude_unset=True, exclude={"history"}))
     invalidate("temple:profile")
-    invalidate("temple:hundi_qr")
+    invalidate("temple:hundi_qr")  # also drops temple:hundi_qr_print (prefix match)
     return temple
 
 
