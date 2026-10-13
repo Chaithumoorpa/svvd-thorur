@@ -49,7 +49,10 @@ class TempleService:
             return HundiQrOut(configured=False)
 
         payee_name = temple.name
-        upi_uri = f"upi://pay?pa={quote(vpa)}&pn={quote(payee_name)}&cu=INR&tn={quote('Hundi Donation')}"
+        # Plain pay-to-VPA intent (payee, name, currency): what every UPI app
+        # accepts for a bank-issued temple VPA, with no amount so the devotee
+        # chooses their own offering.
+        upi_uri = f"upi://pay?pa={quote(vpa, safe='@')}&pn={quote(payee_name)}&cu=INR"
 
         qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=4)
         qr.add_data(upi_uri)
@@ -62,6 +65,7 @@ class TempleService:
             upi_vpa=vpa,
             payee_name=payee_name,
             qr_base64=base64.b64encode(buffered.getvalue()).decode(),
+            upi_uri=upi_uri,
         )
 
     # ---- timings -------------------------------------------------------------------

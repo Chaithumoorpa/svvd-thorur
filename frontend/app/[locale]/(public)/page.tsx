@@ -3,11 +3,12 @@ import { getTranslations } from 'next-intl/server';
 import TempleTime from '@/components/public/TempleTime';
 import { CalendarDays, Clock, HandHeart, MapPin, Megaphone, Sparkles } from 'lucide-react';
 import DeityCarousel from '@/components/DeityCarousel';
+import DonateUpi from '@/components/public/DonateUpi';
 import JsonLd from '@/components/public/JsonLd';
 import SectionHeading from '@/components/public/SectionHeading';
 import { Link } from '@/i18n/navigation';
 import { formatDate, parseDate } from '@/lib/format';
-import { fetchHome } from '@/lib/server-api';
+import { fetchHome, fetchHundiQr } from '@/lib/server-api';
 import { SITE_URL, pageMetadata, templeAddress, templeName } from '@/lib/site';
 
 
@@ -18,10 +19,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const { temple, timings, announcements, festivals, poojas } = await fetchHome();
+  const [{ temple, timings, announcements, festivals, poojas }, hundiQr] = await Promise.all([fetchHome(), fetchHundiQr()]);
   const name = templeName(temple);
   const address = templeAddress(temple);
-  const [t, tCommon] = await Promise.all([getTranslations('home'), getTranslations('common')]);
+  const [t, tCommon, tDonate] = await Promise.all([
+    getTranslations('home'), getTranslations('common'), getTranslations('donate'),
+  ]);
 
   const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',
@@ -46,7 +49,8 @@ export default async function HomePage() {
 
   const waysToParticipate = [
     { href: '/poojas', icon: Sparkles, title: t('bookSevaTitle'), text: t('bookSevaText') },
-    { href: '/donations', icon: HandHeart, title: t('supportTempleTitle'), text: t('supportTempleText') },
+    // Straight to the working UPI donation page once the temple's UPI ID is set.
+    { href: hundiQr.configured ? '/hundi' : '/donations', icon: HandHeart, title: t('supportTempleTitle'), text: t('supportTempleText') },
     { href: '/contact', icon: CalendarDays, title: t('planVisitTitle'), text: t('planVisitText') },
   ];
 
@@ -157,6 +161,17 @@ export default async function HomePage() {
           </Link>
         </div>
       </section>
+
+      {hundiQr.configured && (
+        <section aria-labelledby="donate-heading" className="bg-white py-14">
+          <div className="mx-auto max-w-xl px-4">
+            <DonateUpi qr={hundiQr} />
+            <p className="mt-4 text-center text-sm">
+              <Link href="/hundi" className="font-medium text-maroon hover:underline">{tDonate('details')}</Link>
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* Ways to help */}
       <section aria-label={t('waysToParticipate')} className="mx-auto grid max-w-6xl gap-6 px-4 py-14 md:grid-cols-3">
