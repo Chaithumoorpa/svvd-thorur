@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { Smartphone } from 'lucide-react';
+import { BadgeCheck, ShieldCheck, Smartphone } from 'lucide-react';
 import type { HundiQrInfo } from '@/lib/types';
 
 /**
@@ -52,6 +52,30 @@ export default async function DonateUpi({ qr, showHeading = true }: { qr: HundiQ
           </div>
         </dl>
         <p className="text-xs text-gray-500">{t('apps')}</p>
+
+        {qr.payee_name && (
+          <div className="w-full max-w-md rounded-xl border border-green-200 bg-green-50 p-3 text-left text-sm text-green-900">
+            <p className="flex items-center gap-1.5 font-semibold">
+              <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" /> {t('verifyTitle')}
+            </p>
+            <p className="mt-1">{t.rich('verifyName', { name: qr.payee_name, b: (chunks) => <strong>{chunks}</strong> })}</p>
+            <p className="mt-1 text-green-800">{t('neverAsk')}</p>
+          </div>
+        )}
+
+        {(qr.registration_number || qr.pan_number || qr.eighty_g_number) && (
+          <div className="w-full max-w-md rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-left text-sm">
+            <p className="flex items-center gap-1.5 font-semibold text-maroon">
+              <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" /> {t('officialDetails')}
+            </p>
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+              {qr.registration_number && (<><dt className="text-gray-500">{t('regNo')}</dt><dd className="font-mono font-medium text-gray-800">{qr.registration_number}</dd></>)}
+              {qr.pan_number && (<><dt className="text-gray-500">{t('pan')}</dt><dd className="font-mono font-medium text-gray-800">{qr.pan_number}</dd></>)}
+              {qr.eighty_g_number && (<><dt className="text-gray-500">{t('eightyG')}</dt><dd className="break-all font-mono font-medium text-gray-800">{qr.eighty_g_number}</dd></>)}
+            </dl>
+            {qr.eighty_g_number && <p className="mt-2 text-xs text-gray-600">{t('eightyGNote')}</p>}
+          </div>
+        )}
       </div>
     </div>
   );

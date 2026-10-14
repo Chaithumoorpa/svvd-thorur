@@ -6,8 +6,12 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.finance import (
-    ExpenseCategory, ExpenseTransaction, IncomeSourceType, IncomeTransaction,
+    ExpenseCategory, ExpenseStatus, ExpenseTransaction, IncomeSourceType, IncomeTransaction,
 )
+
+# Everywhere money is totalled (summary, ledger, exports, monthly report) only
+# approved expenses count - pending, rejected and voided ones are not spending.
+_COUNTED = ExpenseTransaction.status == ExpenseStatus.APPROVED
 
 
 def _start(d: date) -> datetime:
@@ -53,7 +57,7 @@ class FinanceRepository:
     @staticmethod
     def expense_query(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None,
                       category: Optional[ExpenseCategory] = None):
-        query = db.query(ExpenseTransaction)
+        query = db.query(ExpenseTransaction).filter(_COUNTED)
         if start_date:
             query = query.filter(ExpenseTransaction.expense_date >= start_date)
         if end_date:
@@ -78,7 +82,7 @@ class FinanceRepository:
 
     @staticmethod
     def get_expense_summary(db: Session):
-        return db.query(ExpenseTransaction.category, func.sum(ExpenseTransaction.amount)) \
+        return db.query(ExpenseTransaction.category, func.sum(ExpenseTransaction.amount)).filter(_COUNTED) \
             .group_by(ExpenseTransaction.category).order_by(ExpenseTransaction.category).all()
 
     @staticmethod
@@ -90,7 +94,7 @@ class FinanceRepository:
 
     @staticmethod
     def get_total_expenses(db: Session, before_date: Optional[date] = None) -> Decimal:
-        query = db.query(func.sum(ExpenseTransaction.amount))
+        query = db.query(func.sum(ExpenseTransaction.amount)).filter(_COUNTED)
         if before_date:
             query = query.filter(ExpenseTransaction.expense_date < before_date)
         return Decimal(query.scalar() or 0)

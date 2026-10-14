@@ -41,6 +41,15 @@ class Temple(Base):
     # e-Hundi: the temple's own UPI ID, used only to generate a QR code for
     # direct devotee-to-temple payments - never touched by this backend.
     upi_vpa = Column(String(100), nullable=True)
+    # The account holder name the bank shows in a devotee's UPI app when they
+    # pay upi_vpa - printed so devotees can check they are paying the temple.
+    bank_account_name = Column(String(150), nullable=True)
+
+    # Official identifiers (public on the Hundi page and printed poster, so a
+    # devotee can verify the temple is a registered body)
+    registration_number = Column(String(100), nullable=True)  # trust / endowments registration
+    pan_number = Column(String(10), nullable=True)
+    eighty_g_number = Column(String(100), nullable=True)      # 80G approval / URN
 
     # Status
     is_active = Column(Boolean, default=True, nullable=False)

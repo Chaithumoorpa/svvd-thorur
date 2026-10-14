@@ -302,7 +302,8 @@
     "directNote": "This is an instant, direct transfer to the temple's bank account. It is not processed through this website, and no payment details pass through our servers.",
     "receiptNote": "Want a receipt for your offering? Share your name, PAN and phone number with the temple office after paying, using",
     "contactLink": "the Contact page",
-    "notConfigured": "Online Hundi isn't set up yet. Please contact the temple office, or offer at the Hundi box during your visit."
+    "notConfigured": "Online Hundi isn't set up yet. Please contact the temple office, or offer at the Hundi box during your visit.",
+    "printPoster": "Print this QR as a poster"
   },
   "donate": {
     "title": "Support the Temple / ఆలయానికి మీ సహకారం",
@@ -313,7 +314,15 @@
     "accountName": "Account name",
     "apps": "Scan with any UPI app — GPay, PhonePe, Paytm, BHIM",
     "qrAlt": "UPI QR code for donations to the temple",
-    "details": "Receipts and more about online offerings"
+    "details": "Receipts and more about online offerings",
+    "verifyTitle": "Check before you pay",
+    "verifyName": "Your UPI app should show the name <b>{name}</b>. If it shows any other name, don't pay.",
+    "neverAsk": "The temple never asks for offerings over a phone call or to a personal UPI number.",
+    "officialDetails": "Official details",
+    "regNo": "Registration no.",
+    "pan": "PAN",
+    "eightyG": "80G approval no.",
+    "eightyGNote": "Offerings are eligible for tax deduction under Section 80G of the Income Tax Act. Ask the temple office for an 80G receipt."
   },
   "cookieConsent": {
     "message": "This site uses only essential cookies and local storage - for sign-in and your language preference. No advertising or tracking cookies are used.",
@@ -321,5 +330,15 @@
     "accept": "Accept",
     "decline": "Decline",
     "managePreferences": "Cookie preferences"
+  },
+  "hundiPoster": {
+    "title": "e-Hundi",
+    "scanTitle": "Scan & offer with any UPI app",
+    "office": "Temple office",
+    "website": "Website",
+    "printedOn": "Printed on {date}",
+    "print": "Print poster",
+    "printHint": "Print on A4 with 'Fit to page' and 'Background graphics' turned on.",
+    "metaTitle": "e-Hundi poster"
   }
 }
