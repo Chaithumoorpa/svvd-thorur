@@ -685,3 +685,39 @@ export interface BlessingReview {
   review_status: ReviewStatus;
   photo_preview_url: string | null;
 }
+
+// ------------------------------------------------------------------------------ analytics
+export interface NamedAmount { name: string; amount: number }
+export interface NamedCount { name: string; count: number }
+
+export interface FinanceAnalytics {
+  months: Array<{ month: string; income: number; expenses: number; net: number }>;
+  totals: { income: number; expenses: number; net: number };
+  previous: { income: number; expenses: number; net: number };
+  income_by_source: NamedAmount[];
+  expense_by_category: NamedAmount[];
+  payment_modes: Array<{ mode: string; count: number; amount: number }>;
+  top_payees: Array<{ name: string; count: number; amount: number }>;
+  donations: { count: number; total: number; donors: number; average: number };
+}
+
+export interface InventoryAnalytics {
+  stock_by_category: NamedAmount[];
+  consumption: Array<{ month: string; used: number; written_off: number; donated_in: number }>;
+  top_used: Array<{ item_name: string; unit: string; quantity: string; value: number }>;
+}
+
+export interface AuditAnalytics {
+  days: number;
+  totals: { events: number; active_users: number; logins: number; failed_logins: number; deletions: number; off_hours: number };
+  per_day: Array<{ date: string; count: number }>;
+  by_hour: number[];
+  by_actor: Array<{ name: string; count: number; deletions: number }>;
+  by_action: NamedCount[];
+  by_entity: NamedCount[];
+  failed_login_ips: NamedCount[];
+  sensitive: Array<{
+    id: number; created_at: string; actor: string | null; action: string; entity_type: string;
+    summary: string | null; ip_address: string | null; off_hours: boolean;
+  }>;
+}

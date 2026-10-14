@@ -82,6 +82,10 @@ PROTECTED = [
     ("GET", "/api/v1/inventory/festival-costs", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
     ("POST", "/api/v1/inventory/items", {"name": "Ghee", "kind": "CONSUMABLE", "category": "Pooja", "unit": "kg"},
      {"SUPER_ADMIN", "ADMIN"}),
+    # analytics
+    ("GET", "/api/v1/analytics/finance", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/analytics/inventory", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("GET", "/api/v1/analytics/audit", None, {"SUPER_ADMIN"}),
 ]
 
 
