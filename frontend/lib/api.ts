@@ -469,6 +469,9 @@ export const getMySignatureImage = async () =>
 export const listSignatures = async () => (await api.get<SignatureStatus[]>('/letters/signatures')).data;
 export const uploadSignature = async (memberId: number, file: File) =>
   (await api.put<SignatureStatus>(`/letters/signatures/${memberId}`, { image: await imageAsDataUrl(file) })).data;
+/** Super Admin: which login signs letters as this member (null unlinks). */
+export const linkMemberLogin = async (memberId: number, userId: number | null) =>
+  (await api.put<SignatureStatus>(`/letters/signatures/${memberId}/login`, { user_id: userId })).data;
 export const removeSignature = async (memberId: number) => (await api.delete(`/letters/signatures/${memberId}`)).data;
 export const getSignatureImage = async (memberId: number) =>
   (await api.get<Blob>(`/letters/signatures/${memberId}.png`, { responseType: 'blob' })).data;

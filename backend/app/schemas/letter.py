@@ -142,8 +142,13 @@ class SignatureStatus(BaseModel):
     position: Optional[str] = None
     is_active: bool
     has_login: bool
+    linked_username: Optional[str] = None
     has_signature: bool
     uploaded_at: Optional[datetime] = None
+
+
+class LoginLinkIn(BaseModel):
+    user_id: Optional[int] = None   # None unlinks
 
 
 class SealStatus(BaseModel):

@@ -7,11 +7,13 @@ import {
 } from 'lucide-react';
 import {
   apiError, createLetter, deleteLetter, getLetterPdf, getLetterTemplates, getMySignature, getSeal, getSealImage,
-  getSignatureImage, letterAction, listLetters, listSignatures, markSignatoryInk, openBlobInNewTab, removeSeal,
+  getSignatureImage, letterAction, linkMemberLogin, listLetters, listSignatures, listUsers, markSignatoryInk,
+  openBlobInNewTab, removeSeal,
   removeSignature, revokeLetter, updateLetter, uploadSeal, uploadSignature,
 } from '@/lib/api';
 import type {
-  Letter, LetterInput, LetterKind, LetterStatus, LetterTemplate, Paged, SealStatus, SignatoryRole, SignatureStatus,
+  AppUser, Letter, LetterInput, LetterKind, LetterStatus, LetterTemplate, Paged, SealStatus, SignatoryRole,
+  SignatureStatus,
 } from '@/lib/types';
 import { useAuth } from '@/components/admin/AuthContext';
 import AdminPage from '@/components/admin/AdminPage';
@@ -406,7 +408,77 @@ function UploadButton({ label, onFile, busy }: { label: string; onFile: (f: File
   );
 }
 
+function LinkLoginDialog({ member, members, onDone, onClose }: {
+  member: SignatureStatus; members: SignatureStatus[]; onDone: () => void; onClose: () => void;
+}) {
+  const [users, setUsers] = useState<AppUser[] | null>(null);
+  const [choice, setChoice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const takenBy = useMemo(() => new Map(
+    members.filter((m) => m.linked_username && m.member_id !== member.member_id).map((m) => [m.linked_username as string, m.name]),
+  ), [members, member.member_id]);
+
+  useEffect(() => {
+    listUsers(1, 200).then((p) => setUsers(p.items.filter((u) => u.is_active))).catch((err) => setError(apiError(err)));
+  }, []);
+
+  async function save(userId: number | null) {
+    setBusy(true);
+    setError('');
+    try {
+      await linkMemberLogin(member.member_id, userId);
+      onDone();
+    } catch (err) {
+      setError(apiError(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={`Login for ${member.name}`} onClose={onClose}>
+      <div className="space-y-4 text-sm">
+        <p className="text-gray-600">
+          The linked login signs letters as <strong>{member.name}</strong>, from <span className="font-mono">/sign-letters</span>.
+          Link the member&apos;s <em>own</em> account only. The member is emailed about the change.
+        </p>
+        {member.linked_username && (
+          <p className="rounded-lg bg-amber-50 p-3 text-amber-900">
+            Currently linked to <strong>{member.linked_username}</strong>. Changing or removing it also removes the
+            signature on file - a new one must be uploaded.
+          </p>
+        )}
+        {users === null && !error ? <LoadingBlock /> : (
+          <Field label="Login account" hint="Create the account first on the Users page if it doesn't exist.">
+            <select className={inputCls} value={choice} onChange={(e) => setChoice(e.target.value)}>
+              <option value="">Choose a login…</option>
+              {(users ?? []).map((u) => (
+                <option key={u.id} value={u.id} disabled={takenBy.has(u.username) || u.username === member.linked_username}>
+                  {u.username}{u.email ? ` (${u.email})` : ''}{takenBy.has(u.username) ? ` - linked to ${takenBy.get(u.username)}` : ''}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {error && <Notice kind="error">{error}</Notice>}
+        <div className="flex flex-wrap justify-end gap-2">
+          {member.linked_username && (
+            <button type="button" className={`${btnDanger} mr-auto`} disabled={busy} onClick={() => save(null)}>Unlink</button>
+          )}
+          <button type="button" className={btnGhost} onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="button" className={btnPrimary} disabled={busy || !choice} onClick={() => save(Number(choice))}>
+            {busy ? 'Saving…' : 'Link login'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function SignaturesPanel({ members, onMembers }: { members: SignatureStatus[]; onMembers: () => void }) {
+  const { can } = useAuth();
+  const canLink = can('users:manage');
+  const [linking, setLinking] = useState<SignatureStatus | null>(null);
   const [seal, setSeal] = useState<SealStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -461,7 +533,14 @@ function SignaturesPanel({ members, onMembers }: { members: SignatureStatus[]; o
                 <div className="min-w-[10rem] flex-1">
                   <p className="font-medium text-gray-900">{m.name}{!m.is_active && <span className="ml-1 text-xs text-gray-400">(inactive)</span>}</p>
                   <p className="text-xs text-gray-500">
-                    {m.position ?? '-'} · {m.has_login ? 'has a login - signs online' : 'no login - signs printed letters in ink'}
+                    {m.position ?? '-'} · {m.linked_username
+                      ? <>signs online as <span className="font-mono">{m.linked_username}</span></>
+                      : 'no login - signs printed letters in ink'}
+                    {canLink && (
+                      <button type="button" className="ml-2 font-medium text-red-900 hover:underline" onClick={() => setLinking(m)}>
+                        {m.linked_username ? 'Change login' : 'Link login'}
+                      </button>
+                    )}
                   </p>
                 </div>
                 <div className="flex h-14 w-44 items-center justify-center rounded border border-dashed border-gray-200 bg-gray-50">
@@ -481,6 +560,10 @@ function SignaturesPanel({ members, onMembers }: { members: SignatureStatus[]; o
         )}
       </section>
 
+      {linking && (
+        <LinkLoginDialog member={linking} members={members} onClose={() => setLinking(null)}
+          onDone={() => { setLinking(null); onMembers(); }} />
+      )}
       {removing && (
         <ConfirmDialog
           title={removing === 'seal' ? 'Remove the seal?' : `Remove ${removing.name}'s signature?`}

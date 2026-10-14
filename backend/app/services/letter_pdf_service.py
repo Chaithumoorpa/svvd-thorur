@@ -28,6 +28,8 @@ MARGIN = 20 * mm
 FOOTER_H = 30 * mm
 SIG_H = 15 * mm
 SEAL_MAX = 30 * mm
+WIDE_SEAL_RATIO = 1.6          # wider than this (width / height) = a rectangular stamp
+WIDE_SEAL_W, WIDE_SEAL_H = 56 * mm, 24 * mm
 
 S = {
     "meta": _style("lmeta", fontSize=10, leading=13),
@@ -87,25 +89,39 @@ def _signature_cell(slot, width: float, issued: bool) -> List:
     return cell
 
 
+def _seal(png: bytes) -> Image:
+    """A round/square seal prints about 30 mm across, the size of a real one. A long
+    rectangular rubber stamp (name and address lines) prints at its real width - about
+    55 mm - so its text stays readable."""
+    img = Image(BytesIO(png))
+    if img.imageWidth >= img.imageHeight * WIDE_SEAL_RATIO:
+        return _image(png, WIDE_SEAL_W, WIDE_SEAL_H)
+    return _image(png, SEAL_MAX, SEAL_MAX)
+
+
 def _signature_rows(slots, width: float, issued: bool, seal: Optional[Image]) -> Table:
-    """Up to three signers per row; the seal, when there is one, sits in the first row's left cell."""
+    """Up to three signers per row; the seal, when there is one, sits in the first row's
+    left cell - a column wide enough for it - with two signers beside it."""
     per_row = 3 if seal is None else 2
+    seal_col = 0 if seal is None else max(width / 3, seal.drawWidth + 4 * mm)
+    signer_w = (width - seal_col) / per_row
     rows, first = [], True
     for start in range(0, len(slots), per_row):
         chunk = slots[start:start + per_row]
-        cells = [_signature_cell(s, width / 3, issued) for s in chunk]
+        cells = [_signature_cell(s, signer_w, issued) for s in chunk]
         cells += [""] * (per_row - len(chunk))
         if seal is not None:
             cells = ([seal] if first else [""]) + cells
         rows.append(cells)
         first = False
-    table = Table(rows, colWidths=[width / 3] * len(rows[0]))
+    table = Table(rows, colWidths=([seal_col] if seal is not None else []) + [signer_w] * per_row)
     table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("LEFTPADDING", (0, 0), (-1, -1), 2),
         ("RIGHTPADDING", (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        *([("VALIGN", (0, 0), (0, 0), "MIDDLE")] if seal is not None else []),
     ]))
     return table
 
@@ -173,7 +189,7 @@ def generate_letter_pdf(letter: OfficialLetter, temple: Optional[Temple],
 
     seal = None
     if issued and letter.seal_image is not None:
-        seal = _image(letter.seal_image.data, SEAL_MAX, SEAL_MAX)
+        seal = _seal(letter.seal_image.data)
     signers = [s for s in letter.signatories if s.role == SignatoryRole.SIGNATORY]
     attestors = [s for s in letter.signatories if s.role == SignatoryRole.ATTESTOR]
     if signers:

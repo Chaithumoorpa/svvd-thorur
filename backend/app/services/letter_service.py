@@ -283,13 +283,46 @@ class LetterService:
         return {r[0] for r in rows}
 
     def signature_statuses(self) -> List[dict]:
-        members = self.db.query(Member).order_by(Member.is_active.desc(), Member.sort_order, Member.name).all()
+        members = (self.db.query(Member).options(joinedload(Member.user))
+                   .order_by(Member.is_active.desc(), Member.sort_order, Member.name).all())
         latest = dict(self.db.query(LetterImage.member_id, func.max(LetterImage.created_at)).filter(
             LetterImage.kind == LetterImageKind.SIGNATURE, LetterImage.retired_at.is_(None)
         ).group_by(LetterImage.member_id).all())
         return [{"member_id": m.id, "name": m.name, "position": m.position, "is_active": m.is_active,
-                 "has_login": m.user_id is not None, "has_signature": m.id in latest,
-                 "uploaded_at": latest.get(m.id)} for m in members]
+                 "has_login": m.user_id is not None, "linked_username": m.user.username if m.user else None,
+                 "has_signature": m.id in latest, "uploaded_at": latest.get(m.id)} for m in members]
+
+    def link_login(self, member: Member, user_id: Optional[int], actor: User) -> Tuple[Optional[str], Optional[str]]:
+        """Link (or unlink) the login that signs letters as this member. Returns the
+        (previous, new) usernames. Moving the link away from a login retires the stored
+        signature, so whoever holds the new login can't sign with a signature that was
+        put on file for someone else - a fresh one has to be uploaded (which emails the
+        member again)."""
+        if member.user_id == user_id:
+            raise HTTPException(status_code=409, detail="Nothing to change")
+        user = None
+        if user_id is not None:
+            user = self.db.get(User, user_id)
+            if not user or not user.is_active:
+                raise HTTPException(status_code=400, detail="Choose an active login")
+            other = self.db.query(Member).filter(Member.user_id == user_id, Member.id != member.id).first()
+            if other:
+                raise HTTPException(status_code=409, detail=f"That login is already linked to {other.name}")
+        previous = member.user.username if member.user else None
+        if member.user_id is not None:
+            self.retire_image(LetterImageKind.SIGNATURE, member.id, commit=False)
+        member.user_id = user_id
+        self.db.commit()
+        self.db.refresh(member)
+        if user:
+            body = (f"{actor.username} linked the login '{user.username}' to the committee member record of "
+                    f"{member.name} at {self._temple_name()}.\n\nThat login can now sign temple letters as "
+                    f"{member.name}, at {settings.FRONTEND_BASE_URL}/sign-letters.\n\n"
+                    "If this is wrong, contact the temple office immediately.")
+            self._mail_member(member, "Your login was linked for signing temple letters", body)
+            if user.email and user.email != member.email:
+                self.email.send(user.email, "Your login was linked for signing temple letters", body)
+        return previous, user.username if user else None
 
     def seal_status(self) -> dict:
         seal = self.current_image(LetterImageKind.SEAL)
