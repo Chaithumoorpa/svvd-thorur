@@ -727,7 +727,7 @@ export interface AuditAnalytics {
 // ---------------------------------------------------------------------------- official letters
 export type LetterKind =
   | 'GENERAL' | 'APPOINTMENT' | 'MEMBERSHIP_CERTIFICATE' | 'SERVICE_CERTIFICATE' | 'TO_WHOM_IT_MAY_CONCERN'
-  | 'DONATION_ACKNOWLEDGEMENT' | 'NOC' | 'INVITATION';
+  | 'DONATION_ACKNOWLEDGEMENT' | 'NOC' | 'INVITATION' | 'POWER_OF_ATTORNEY' | 'RESOLUTION' | 'AUTHORISATION';
 export type LetterStatus = 'DRAFT' | 'AWAITING_SIGNATURES' | 'ISSUED' | 'REVOKED';
 export type SignatoryRole = 'SIGNATORY' | 'ATTESTOR';
 export type SignatoryStatus = 'PENDING' | 'SIGNED' | 'PAPER' | 'DECLINED';

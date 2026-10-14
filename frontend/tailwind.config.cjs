@@ -9,10 +9,12 @@ module.exports = {
     extend: {
       colors: {
         templeGold: '#efb538ff',
+        templeGoldDark: '#8a5a00', // gold for text on light backgrounds (5:1+)
         templeWhite: '#F5F1E8',
         templeDark: '#0B1220',
         maroon: { DEFAULT: '#7a1c1c', dark: '#5a1010', light: '#a83232' },
-        saffron: { DEFAULT: '#d97a1f', light: '#f2b45a' },
+        // dark: the shade for text and for buttons with white text - DEFAULT is under 4.5:1 on light backgrounds
+        saffron: { DEFAULT: '#d97a1f', light: '#f2b45a', dark: '#a3530e' },
         cream: '#fbf6ec',
       },
       fontFamily: {

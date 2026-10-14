@@ -21,7 +21,7 @@ export default async function DonateUpi({ qr, showHeading = true }: { qr: HundiQ
         {qr.upi_uri && (
           <a
             href={qr.upi_uri}
-            className="inline-flex w-full max-w-xs items-center justify-center gap-2 rounded-full bg-saffron px-6 py-3.5 text-lg font-bold text-white shadow transition hover:bg-saffron-light hover:text-maroon-dark md:hidden"
+            className="inline-flex w-full max-w-xs items-center justify-center gap-2 rounded-full bg-saffron-dark px-6 py-3.5 text-lg font-bold text-white shadow transition hover:bg-saffron-light hover:text-maroon-dark md:hidden"
           >
             <Smartphone className="h-5 w-5" aria-hidden="true" /> {t('payNow')}
           </a>
@@ -40,18 +40,18 @@ export default async function DonateUpi({ qr, showHeading = true }: { qr: HundiQ
         </figure>
         <dl className="space-y-2 text-sm">
           <div>
-            <dt className="text-gray-500">{t('upiId')}</dt>
+            <dt className="text-gray-600">{t('upiId')}</dt>
             <dd className="select-all break-words font-mono text-base font-semibold text-maroon">
               {/* Wrap a long UPI ID after the @ rather than mid-word on narrow phones. */}
               {qr.upi_vpa?.split('@').map((part, i) => (i ? <span key={i}>@<wbr />{part}</span> : part))}
             </dd>
           </div>
           <div>
-            <dt className="text-gray-500">{t('accountName')}</dt>
+            <dt className="text-gray-600">{t('accountName')}</dt>
             <dd className="font-semibold text-gray-800">{qr.payee_name}</dd>
           </div>
         </dl>
-        <p className="text-xs text-gray-500">{t('apps')}</p>
+        <p className="text-xs text-gray-600">{t('apps')}</p>
 
         {qr.payee_name && (
           <div className="w-full max-w-md rounded-xl border border-green-200 bg-green-50 p-3 text-left text-sm text-green-900">
@@ -69,9 +69,9 @@ export default async function DonateUpi({ qr, showHeading = true }: { qr: HundiQ
               <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" /> {t('officialDetails')}
             </p>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-              {qr.registration_number && (<><dt className="text-gray-500">{t('regNo')}</dt><dd className="font-mono font-medium text-gray-800">{qr.registration_number}</dd></>)}
-              {qr.pan_number && (<><dt className="text-gray-500">{t('pan')}</dt><dd className="font-mono font-medium text-gray-800">{qr.pan_number}</dd></>)}
-              {qr.eighty_g_number && (<><dt className="text-gray-500">{t('eightyG')}</dt><dd className="break-all font-mono font-medium text-gray-800">{qr.eighty_g_number}</dd></>)}
+              {qr.registration_number && (<><dt className="text-gray-600">{t('regNo')}</dt><dd className="font-mono font-medium text-gray-800">{qr.registration_number}</dd></>)}
+              {qr.pan_number && (<><dt className="text-gray-600">{t('pan')}</dt><dd className="font-mono font-medium text-gray-800">{qr.pan_number}</dd></>)}
+              {qr.eighty_g_number && (<><dt className="text-gray-600">{t('eightyG')}</dt><dd className="break-all font-mono font-medium text-gray-800">{qr.eighty_g_number}</dd></>)}
             </dl>
             {qr.eighty_g_number && <p className="mt-2 text-xs text-gray-600">{t('eightyGNote')}</p>}
           </div>

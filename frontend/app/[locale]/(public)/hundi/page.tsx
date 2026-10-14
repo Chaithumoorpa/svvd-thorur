@@ -33,7 +33,7 @@ export default async function HundiPage() {
           </div>
         </div>
       ) : (
-        <p className="rounded-xl border border-dashed border-amber-300 bg-white p-8 text-center text-gray-500">
+        <p className="rounded-xl border border-dashed border-amber-300 bg-white p-8 text-center text-gray-600">
           <QrCode className="mx-auto mb-2 h-8 w-8 text-amber-300" aria-hidden="true" />
           {t('notConfigured')}
         </p>

@@ -278,6 +278,8 @@ class AuthService:
                 f"You can sign in here: {settings.FRONTEND_BASE_URL}/login\n\n"
                 "If you didn't request this, you can safely ignore this email.\n\n"
                 "Thank you,\nSVVD Thorur",
+                code=user.username, cta=("Sign in", f"{settings.FRONTEND_BASE_URL}/login"),
+                heading="Your username",
             )
 
     def reset_password(self, token: str, new_password: str) -> None:

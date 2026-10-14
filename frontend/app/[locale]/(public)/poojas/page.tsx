@@ -35,7 +35,7 @@ function PoojaCard({ p }: { p: Pooja }) {
           {p.is_paid ? formatMoney(p.suggested_amount) : t('free')}
         </span>
       </div>
-      {time && <p className="mt-1 flex items-start gap-1.5 text-sm text-gray-500"><Clock className="mt-0.5 h-3.5 w-3.5 flex-none" aria-hidden="true" /><span><TempleTime start={p.start_time} end={p.end_time} yourTimeLabel={tCommon('yourTime')} stacked /></span></p>}
+      {time && <p className="mt-1 flex items-start gap-1.5 text-sm text-gray-600"><Clock className="mt-0.5 h-3.5 w-3.5 flex-none" aria-hidden="true" /><span><TempleTime start={p.start_time} end={p.end_time} yourTimeLabel={tCommon('yourTime')} stacked /></span></p>}
       {p.description && <p className="mt-3 text-sm leading-relaxed text-gray-700">{p.description}</p>}
       <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-4">
         <BookSeva seva={p} />
@@ -79,7 +79,7 @@ export default async function PoojasPage({ searchParams }: { searchParams: Promi
       {groups.length === 0 && other.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-amber-300 bg-white p-12 text-center">
           <Sparkles className="mx-auto mb-3 h-10 w-10 text-amber-200" aria-hidden="true" />
-          <p className="text-gray-500">{t('empty')}</p>
+          <p className="text-gray-600">{t('empty')}</p>
         </div>
       ) : (
         <div className="space-y-12">

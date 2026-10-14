@@ -87,7 +87,7 @@ export default function BlessingsCarousel({ entries }: { entries: BlessingEntry[
       </div>
 
       {count > 1 && (
-        <div className="flex justify-center gap-2">
+        <div className="flex justify-center">
           {entries.map((e, i) => (
             <button
               key={i}
@@ -95,8 +95,10 @@ export default function BlessingsCarousel({ entries }: { entries: BlessingEntry[
               onClick={() => go(i)}
               aria-label={`Show ${e.devotee_name}'s blessing`}
               aria-current={i === index}
-              className={`h-2.5 w-2.5 rounded-full transition ${i === index ? 'bg-maroon' : 'bg-amber-200 hover:bg-saffron'}`}
-            />
+              className="group flex h-6 w-6 items-center justify-center rounded-full"
+            >
+              <span className={`block h-2.5 w-2.5 rounded-full transition ${i === index ? 'bg-maroon' : 'bg-amber-300 group-hover:bg-saffron'}`} />
+            </button>
           ))}
         </div>
       )}

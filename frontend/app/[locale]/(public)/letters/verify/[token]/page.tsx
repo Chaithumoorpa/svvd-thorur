@@ -77,7 +77,7 @@ export default async function VerifyLetterPage({ params }: { params: Promise<{ l
         <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[10rem_1fr]">
           {rows.map(([label, value]) => (
             <div key={label} className="contents">
-              <dt className="font-medium text-gray-500">{label}</dt>
+              <dt className="font-medium text-gray-600">{label}</dt>
               <dd className="break-words text-gray-900">{value}</dd>
             </div>
           ))}
@@ -93,7 +93,7 @@ export default async function VerifyLetterPage({ params }: { params: Promise<{ l
                     <span className="font-semibold text-gray-900">{s.name}</span>
                     {s.designation && <span className="text-gray-600"> · {s.designation}</span>}
                   </span>
-                  <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                  <span className="inline-flex items-center gap-1 text-xs text-gray-600">
                     <PenLine className="h-3.5 w-3.5" aria-hidden="true" />
                     {s.method === 'digital' && s.signed_at ? t('digital', { date: istDate(s.signed_at, locale) }) : t('ink')}
                   </span>

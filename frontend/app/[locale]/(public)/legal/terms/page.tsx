@@ -25,7 +25,7 @@ export default async function TermsPage() {
   return (
     <PageContainer>
       <h1 className="text-3xl font-serif font-semibold text-templeDark">Terms &amp; Conditions</h1>
-      <p className="mt-2 text-sm text-gray-500">Last updated: 29 September 2026</p>
+      <p className="mt-2 text-sm text-gray-600">Last updated: 29 September 2026</p>
       <p className="mt-4 text-gray-700">
         Welcome to the official website of {fullName} (&quot;Temple&quot;, &quot;we&quot;, &quot;us&quot;, or
         &quot;our&quot;). This website is operated to provide devotees and visitors with information about

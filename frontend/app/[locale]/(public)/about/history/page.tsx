@@ -29,7 +29,7 @@ export default async function HistoryPage() {
       ) : (
         <div className="rounded-2xl border border-dashed border-amber-300 bg-white p-12 text-center">
           <BookOpen className="mx-auto mb-3 h-10 w-10 text-amber-200" aria-hidden="true" />
-          <p className="text-gray-500">{t('empty')}</p>
+          <p className="text-gray-600">{t('empty')}</p>
         </div>
       )}
     </PageShell>

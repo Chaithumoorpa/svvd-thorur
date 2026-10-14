@@ -86,7 +86,7 @@ export default function BlessingChant({ src = CHANT_SRC }: { src?: string }) {
               ? <><Pause className="h-4 w-4" aria-hidden="true" /> Pause Veda Ashirvachanam</>
               : <><Play className="h-4 w-4" aria-hidden="true" /> Play Veda Ashirvachanam</>}
           </button>
-          {state === 'waiting' && <p className="text-xs text-gray-500">Tap anywhere to hear the blessing chant.</p>}
+          {state === 'waiting' && <p className="text-xs text-gray-600">Tap anywhere to hear the blessing chant.</p>}
         </>
       )}
     </div>

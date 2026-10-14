@@ -179,6 +179,7 @@ def forgot_password(
             "If you didn't request this, you can safely ignore this email - your password "
             "will not change.\n\n"
             "Thank you,\nSVVD Thorur",
+            cta=("Reset password", link), heading="Reset your password", tone="alert",
         )
     return {"message": "If that email is registered, a reset link has been sent."}
 
@@ -313,6 +314,7 @@ def delete_my_account(
             "link between them and this account has been removed.\n\n"
             "If you didn't request this, please contact the temple office immediately.\n\n"
             "Thank you,\nSVVD Thorur",
+            heading="Your account has been deleted", tone="alert",
         )
     _end_session(response)
     return {"message": "Account deleted"}
@@ -352,6 +354,7 @@ def create_user_admin(
             f"If the link expires, use \"Forgot password?\" at {settings.FRONTEND_BASE_URL}/login\n\n"
             "If you weren't expecting this account, please contact the temple office.\n\n"
             "Thank you,\nSVVD Thorur",
+            cta=("Set your password", link), heading="Welcome to the temple admin portal",
         )
     return user
 
@@ -377,6 +380,7 @@ def update_user_admin(
             f"If the link expires, use \"Forgot password?\" at {settings.FRONTEND_BASE_URL}/login\n\n"
             "If you weren't expecting this, please contact the temple office immediately.\n\n"
             "Thank you,\nSVVD Thorur",
+            cta=("Set a new password", link), heading="Your password was reset", tone="alert",
         )
     return user
 

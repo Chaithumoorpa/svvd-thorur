@@ -24,7 +24,7 @@ export default function GalleryGrid({ items }: { items: GalleryItem[] }) {
     return (
       <div className="rounded-2xl border border-dashed border-amber-300 bg-white p-12 text-center">
         <ImageIcon className="mx-auto mb-3 h-12 w-12 text-amber-200" aria-hidden="true" />
-        <p className="text-gray-500">Photographs will be added soon.</p>
+        <p className="text-gray-600">Photographs will be added soon.</p>
       </div>
     );
   }
