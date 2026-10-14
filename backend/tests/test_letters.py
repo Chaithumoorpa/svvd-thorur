@@ -252,3 +252,45 @@ def test_other_users_cannot_see_or_sign(client, admin, signer, make_user):
     assert r.status_code == 403
     # drafts are not verifiable
     assert client.get("/api/v1/letters/verify/not-a-real-token-123").status_code == 404
+
+
+def test_linking_a_login_is_super_admin_only_and_retires_the_old_signature(client, admin, super_admin, offline,
+                                                                          signer, make_user, db, mails):
+    _, admin_h = admin
+    _, root_h = super_admin
+    member, _ = signer
+    new_user, new_h = make_user("STAFF", username="lakshmi", email="lakshmi@example.com")
+    url = f"/api/v1/letters/signatures/{offline.id}/login"
+    assert client.put(url, headers=admin_h, json={"user_id": new_user.id}).status_code == 403
+
+    r = client.put(url, headers=root_h, json={"user_id": new_user.id})
+    assert r.status_code == 200 and r.json()["linked_username"] == "lakshmi" and r.json()["has_login"]
+    assert any(m[0] == "lakshmi@example.com" and "linked" in m[1] for m in mails)
+    assert client.get("/api/v1/letters/mine", headers=new_h).json()["member_id"] == offline.id
+    log = db.query(AuditLog).filter(AuditLog.action == "LINK_LOGIN").one()
+    assert log.changes == {"from": None, "to": "lakshmi"}
+
+    # one login per member; same link again is a no-op error
+    taken = client.put(url, headers=root_h, json={"user_id": member.user_id})
+    assert taken.status_code == 409 and "K. Ramaiah" in taken.json()["detail"]
+    assert client.put(url, headers=root_h, json={"user_id": new_user.id}).status_code == 409
+
+    # moving the link away retires the signature uploaded for the previous login
+    client.put("/api/v1/letters/mine/signature", headers=new_h, json={"image": _photo()})
+    r = client.put(url, headers=root_h, json={"user_id": None})
+    assert r.json()["has_signature"] is False and r.json()["linked_username"] is None
+
+
+def test_wide_rubber_stamp_prints_at_full_width(client, admin, signer):
+    from app.services.letter_pdf_service import WIDE_SEAL_W, _seal
+    from reportlab.lib.units import mm
+    wide = base64.b64decode(_photo(ink=(80, 40, 125), size=(1600, 320), fmt="PNG").split(",", 1)[1])
+    png, *_ = clean_mark(wide, LetterImageKind.SEAL)
+    img = _seal(png)
+    assert img.drawWidth > 45 * mm and img.drawWidth <= WIDE_SEAL_W + 0.01
+    ring = Image.new("RGB", (500, 500), (238, 236, 232))
+    ImageDraw.Draw(ring).ellipse((40, 40, 460, 460), outline=(90, 40, 130), width=14)
+    buf = BytesIO()
+    ring.save(buf, format="PNG")
+    png, *_ = clean_mark(buf.getvalue(), LetterImageKind.SEAL)
+    assert _seal(png).drawWidth <= 30 * mm + 0.01
