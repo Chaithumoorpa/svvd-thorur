@@ -40,6 +40,12 @@ QTY = sa.Numeric(14, 3)
 MONEY = sa.Numeric(12, 2)
 
 
+def _timestamps():
+    """created_at / updated_at, which app.models.base.Base gives every table."""
+    return (sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+            sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()))
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     for value in NEW_CATEGORIES:
@@ -74,7 +80,7 @@ def upgrade() -> None:
         sa.Column("category", expense_category, nullable=False),
         sa.Column("amount", MONEY, nullable=False),
         sa.Column("updated_by", sa.Integer(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("updated_at", sa.DateTime(), nullable=True),
+        *_timestamps(),
         sa.UniqueConstraint("month", "category", name="uq_expense_budget_month_category"),
     )
 
@@ -101,8 +107,7 @@ def upgrade() -> None:
         sa.Column("photo_key", sa.String(255), nullable=True),
         sa.Column("last_verified_on", sa.Date(), nullable=True),
         sa.Column("created_by", sa.Integer(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(), nullable=True),
+        *_timestamps(),
     )
     op.create_table(
         "stock_movements",
@@ -127,7 +132,7 @@ def upgrade() -> None:
         sa.Column("festival_id", sa.Integer(), sa.ForeignKey("festivals.id", ondelete="SET NULL"),
                   nullable=True, index=True),
         sa.Column("created_by", sa.Integer(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        *_timestamps(),
     )
     op.create_table(
         "asset_verifications",
@@ -139,7 +144,7 @@ def upgrade() -> None:
         sa.Column("weight_grams", sa.Numeric(12, 3), nullable=True),
         sa.Column("notes", sa.String(500), nullable=True),
         sa.Column("verified_by", sa.Integer(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        *_timestamps(),
     )
 
 

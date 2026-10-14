@@ -7,12 +7,9 @@ the item's history always explains its current stock.
 """
 import enum
 
-from sqlalchemy import (
-    Boolean, Column, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text,
-)
+from sqlalchemy import Boolean, Column, Date, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 
 from app.models.base import Base
 from app.models.types import MONEY_PRECISION, MONEY_SCALE
@@ -68,8 +65,6 @@ class InventoryItem(Base):
     last_verified_on = Column(Date, nullable=True)
 
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=True)
 
     movements = relationship("StockMovement", back_populates="item", cascade="all, delete-orphan",
                              order_by="StockMovement.id.desc()")
@@ -101,7 +96,6 @@ class StockMovement(Base):
     festival_id = Column(Integer, ForeignKey("festivals.id", ondelete="SET NULL"), nullable=True, index=True)
 
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now(), nullable=False)
 
     item = relationship("InventoryItem", back_populates="movements")
 
@@ -117,4 +111,3 @@ class AssetVerification(Base):
     weight_grams = Column(Numeric(12, 3), nullable=True)  # as weighed on the day
     notes = Column(String(500), nullable=True)
     verified_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now(), nullable=False)
