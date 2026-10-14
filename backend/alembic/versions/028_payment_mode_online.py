@@ -1,7 +1,7 @@
 """Add ONLINE to the paymentmode enum
 
-Revision ID: 027_payment_mode_online
-Revises: 026_expenses_inventory
+Revision ID: 028_payment_mode_online
+Revises: 027_official_letters
 Create Date: 2026-09-28
 
 Online payments (Razorpay) for donations and paid seva bookings post an
@@ -19,8 +19,8 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "027_payment_mode_online"
-down_revision: Union[str, None] = "026_expenses_inventory"
+revision: str = "028_payment_mode_online"
+down_revision: Union[str, None] = "027_official_letters"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

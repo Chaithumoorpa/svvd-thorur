@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { Calendar, Heart, Image as ImageIcon, Mail, Megaphone, Package, Receipt, Sparkles, Ticket, Users } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
 import { useAuth } from '@/components/admin/AuthContext';
-import { ErrorBlock, LoadingBlock } from '@/components/ui/States';
+import { ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
 import { cardCls } from '@/components/ui/styles';
 import { useLoad } from '@/hooks/useLoad';
-import { getDashboardStats, getRecentActivity } from '@/lib/api';
+import { getDashboardStats, getMySignature, getRecentActivity } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import type { Permission } from '@/lib/types';
 
@@ -24,6 +24,7 @@ export default function AdminDashboard() {
   const { me, can } = useAuth();
   const stats = useLoad(getDashboardStats, []);
   const activity = useLoad(async () => (can('audit:read') ? getRecentActivity() : []), []);
+  const toSign = useLoad(getMySignature, []);
 
   if (stats.loading) return <LoadingBlock label="Loading dashboard…" />;
   if (stats.error || !stats.data) return <ErrorBlock message={stats.error ?? 'No data'} onRetry={stats.reload} />;
@@ -45,6 +46,14 @@ export default function AdminDashboard() {
 
   return (
     <AdminPage title={`Namaste, ${me.username}`} description={me.last_login ? `Last sign-in: ${formatDateTime(me.last_login)}` : 'Welcome to the temple admin.'}>
+      {!!toSign.data?.pending.length && (
+        <div className="mb-4">
+          <Notice kind="info">
+            {toSign.data.pending.length === 1 ? 'A letter is' : `${toSign.data.pending.length} letters are`} waiting for your
+            signature. <Link href="/sign-letters" className="font-semibold underline">Review and sign</Link>
+          </Notice>
+        </div>
+      )}
       <section aria-label="Overview" className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {visible.map(({ label, href, value, icon: Icon, hint }) => (
           <Link key={label} href={href} className={`${cardCls} p-4 transition hover:border-amber-400 hover:shadow`}>

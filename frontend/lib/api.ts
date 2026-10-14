@@ -7,6 +7,7 @@ import type {
   Festival, FestivalCost, FestivalInput, FinanceSummary, InventoryItem, InventoryItemInput, InventorySummary, ItemKind,
   MovementType, PaymentMode, StockMovement, FinanceAnalytics, InventoryAnalytics, AuditAnalytics,
   GalleryInput, GalleryItem, HomePayload, HundiQrInfo, IncomeInput, LedgerEntry, Me, Member, MemberInput,
+  Letter, LetterInput, LetterStatus, LetterTemplate, MySignature, SealStatus, SignatureStatus,
   Paged, PaymentStatusInfo, PersonalBlessing, Pooja, PoojaInput, RazorpayConfirmInput, RazorpayOrder,
   SevaBookingOnlineInput, SevaCalendarDay, SevaDay, SevaPaymentOrderInput, SevaTicket,
   Temple, TempleTiming,
@@ -428,11 +429,75 @@ export const getInventoryAnalytics = async (months: number) =>
 export const getAuditAnalytics = async (days: number) =>
   (await api.get<AuditAnalytics>('/analytics/audit', { params: { days } })).data;
 
+// ---------------------------------------------------------------------------- official letters
+/** A signature/seal photo goes to the server as a data URL: re-drawn as a JPEG first (any
+ * format the browser can open, at most 2048 px, no EXIF), then cleaned server-side into a
+ * transparent mark. */
+export async function imageAsDataUrl(file: File): Promise<string> {
+  const jpeg = await reencodeAsJpeg(file);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(jpeg);
+  });
+}
+export const listLetters = (p = 1, filters: { status?: LetterStatus; q?: string } = {}, pageSize = 25) =>
+  page<Letter>('/letters', { page: p, page_size: pageSize, ...filters });
+export const getLetter = async (id: number) => (await api.get<Letter>(`/letters/${id}`)).data;
+export const getLetterTemplates = async () => (await api.get<LetterTemplate[]>('/letters/templates')).data;
+export const createLetter = async (data: LetterInput) => (await api.post<Letter>('/letters', data)).data;
+export const updateLetter = async (id: number, data: LetterInput) => (await api.put<Letter>(`/letters/${id}`, data)).data;
+export const deleteLetter = async (id: number) => (await api.delete(`/letters/${id}`)).data;
+export const letterAction = async (id: number, action: 'send' | 'recall' | 'issue') =>
+  (await api.post<Letter>(`/letters/${id}/${action}`)).data;
+export const revokeLetter = async (id: number, reason: string) =>
+  (await api.post<Letter>(`/letters/${id}/revoke`, { reason })).data;
+export const markSignatoryInk = async (id: number, signatoryId: number) =>
+  (await api.post<Letter>(`/letters/${id}/signatories/${signatoryId}/paper`)).data;
+export const signLetter = async (id: number, password: string) =>
+  (await api.post<Letter>(`/letters/${id}/sign`, { password })).data;
+export const declineLetter = async (id: number, reason: string) =>
+  (await api.post<Letter>(`/letters/${id}/decline`, { reason })).data;
+export const getLetterPdf = async (id: number) =>
+  (await api.get<Blob>(`/letters/${id}/pdf`, { responseType: 'blob' })).data;
+export const getMySignature = async () => (await api.get<MySignature>('/letters/mine')).data;
+export const uploadMySignature = async (file: File) =>
+  (await api.put<MySignature>('/letters/mine/signature', { image: await imageAsDataUrl(file) })).data;
+export const getMySignatureImage = async () =>
+  (await api.get<Blob>('/letters/mine/signature.png', { responseType: 'blob' })).data;
+export const listSignatures = async () => (await api.get<SignatureStatus[]>('/letters/signatures')).data;
+export const uploadSignature = async (memberId: number, file: File) =>
+  (await api.put<SignatureStatus>(`/letters/signatures/${memberId}`, { image: await imageAsDataUrl(file) })).data;
+export const removeSignature = async (memberId: number) => (await api.delete(`/letters/signatures/${memberId}`)).data;
+export const getSignatureImage = async (memberId: number) =>
+  (await api.get<Blob>(`/letters/signatures/${memberId}.png`, { responseType: 'blob' })).data;
+export const getSeal = async () => (await api.get<SealStatus>('/letters/seal')).data;
+export const uploadSeal = async (file: File) =>
+  (await api.put<SealStatus>('/letters/seal', { image: await imageAsDataUrl(file) })).data;
+export const removeSeal = async () => (await api.delete('/letters/seal')).data;
+export const getSealImage = async () => (await api.get<Blob>('/letters/seal.png', { responseType: 'blob' })).data;
+
 // ---------------------------------------------------------------------------- dashboard
 export const getDashboardStats = async () => (await api.get<DashboardStats>('/meta/stats')).data;
 export const getRecentActivity = async () => (await api.get<ActivityItem[]>('/meta/activity')).data;
 export const listAuditLogs = (p = 1, filters: { entity_type?: string; action?: string } = {}, pageSize = 50) =>
   page<AuditLog>('/audit-logs/', { page: p, page_size: pageSize, ...filters });
+
+/** Show a PDF (or any blob) in a new tab. The tab is opened during the click, before the
+ * download finishes, so pop-up blockers allow it. */
+export async function openBlobInNewTab(load: () => Promise<Blob>): Promise<void> {
+  const tab = window.open('', '_blank');
+  try {
+    const url = URL.createObjectURL(await load());
+    if (tab) tab.location.href = url;
+    else window.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (err) {
+    tab?.close();
+    throw err;
+  }
+}
 
 /** Save a Blob response as a file download. */
 export function saveBlob(blob: Blob, filename: string): void {

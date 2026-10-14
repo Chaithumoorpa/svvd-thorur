@@ -20,6 +20,8 @@ export type Permission =
   | 'inventory:read'
   | 'inventory:write'
   | 'inventory:manage'
+  | 'letters:read'
+  | 'letters:write'
   | 'users:manage'
   | 'audit:read';
 
@@ -762,4 +764,120 @@ export interface AuditAnalytics {
     id: number; created_at: string; actor: string | null; action: string; entity_type: string;
     summary: string | null; ip_address: string | null; off_hours: boolean;
   }>;
+}
+
+// ---------------------------------------------------------------------------- official letters
+export type LetterKind =
+  | 'GENERAL' | 'APPOINTMENT' | 'MEMBERSHIP_CERTIFICATE' | 'SERVICE_CERTIFICATE' | 'TO_WHOM_IT_MAY_CONCERN'
+  | 'DONATION_ACKNOWLEDGEMENT' | 'NOC' | 'INVITATION';
+export type LetterStatus = 'DRAFT' | 'AWAITING_SIGNATURES' | 'ISSUED' | 'REVOKED';
+export type SignatoryRole = 'SIGNATORY' | 'ATTESTOR';
+export type SignatoryStatus = 'PENDING' | 'SIGNED' | 'PAPER' | 'DECLINED';
+
+export interface LetterSignatory {
+  id: number;
+  member_id: number | null;
+  name: string;
+  designation: string | null;
+  role: SignatoryRole;
+  status: SignatoryStatus;
+  signed_at: string | null;
+  decline_reason: string | null;
+  has_login: boolean;
+  has_signature: boolean;
+}
+
+export interface Letter {
+  id: number;
+  reference_number: string | null;
+  kind: LetterKind;
+  status: LetterStatus;
+  letter_date: string;
+  subject: string;
+  recipient_name: string | null;
+  recipient_address: string | null;
+  salutation: string | null;
+  body: string;
+  closing: string | null;
+  include_seal: boolean;
+  created_at: string;
+  created_by_name: string | null;
+  sent_at: string | null;
+  issued_at: string | null;
+  revoked_at: string | null;
+  revoke_reason: string | null;
+  verify_url: string | null;
+  signatories: LetterSignatory[];
+}
+
+export interface LetterInput {
+  kind: LetterKind;
+  letter_date: string;
+  subject: string;
+  recipient_name?: string | null;
+  recipient_address?: string | null;
+  salutation?: string | null;
+  body: string;
+  closing?: string | null;
+  include_seal: boolean;
+  signatories: Array<{ member_id: number; role: SignatoryRole; designation?: string | null }>;
+}
+
+export interface LetterTemplate {
+  kind: LetterKind;
+  label: string;
+  certificate_title: string | null;
+  subject: string;
+  salutation: string;
+  body: string;
+  closing: string;
+}
+
+export interface SignatureStatus {
+  member_id: number;
+  name: string;
+  position: string | null;
+  is_active: boolean;
+  has_login: boolean;
+  has_signature: boolean;
+  uploaded_at: string | null;
+}
+
+export interface SealStatus {
+  has_seal: boolean;
+  uploaded_at: string | null;
+}
+
+export interface PendingSignature {
+  letter_id: number;
+  signatory_id: number;
+  role: SignatoryRole;
+  subject: string;
+  kind: LetterKind;
+  letter_date: string;
+  recipient_name: string | null;
+  sent_at: string | null;
+  requested_by: string | null;
+}
+
+export interface MySignature {
+  member_id: number | null;
+  member_name: string | null;
+  has_signature: boolean;
+  uploaded_at: string | null;
+  pending: PendingSignature[];
+}
+
+export interface LetterVerification {
+  reference_number: string;
+  status: 'ISSUED' | 'REVOKED';
+  kind_label: string;
+  subject: string;
+  recipient_name: string | null;
+  letter_date: string;
+  issued_at: string;
+  revoked_at: string | null;
+  revoke_reason: string | null;
+  temple_name: string;
+  signatories: Array<{ name: string; designation: string | null; role: SignatoryRole; method: 'digital' | 'ink'; signed_at: string | null }>;
 }

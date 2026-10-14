@@ -1,7 +1,7 @@
 """income_transactions.received_by is now nullable
 
-Revision ID: 028_income_received_by_nullable
-Revises: 027_payment_mode_online
+Revision ID: 029_income_received_by_nullable
+Revises: 028_payment_mode_online
 Create Date: 2026-09-28
 
 An online (Razorpay) payment for a donation or a seva ticket is collected
@@ -14,8 +14,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "028_income_received_by_nullable"
-down_revision: Union[str, None] = "027_payment_mode_online"
+revision: str = "029_income_received_by_nullable"
+down_revision: Union[str, None] = "028_payment_mode_online"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

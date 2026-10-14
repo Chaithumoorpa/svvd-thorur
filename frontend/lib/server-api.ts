@@ -1,5 +1,6 @@
 import type {
-  CommitteeMember, Festival, GalleryItem, HomePayload, HundiQrInfo, Pooja, Temple, TempleTiming, Announcement,
+  CommitteeMember, Festival, GalleryItem, HomePayload, HundiQrInfo, LetterVerification, Pooja, Temple, TempleTiming,
+  Announcement,
 } from './types';
 
 /**
@@ -37,3 +38,18 @@ export const fetchHundiQr = () =>
     configured: false, upi_vpa: null, payee_name: null, qr_base64: null, upi_uri: null,
     registration_number: null, pan_number: null, eighty_g_number: null,
   });
+
+/** A letter's public verification record. 'not-found' only when the server says no issued letter
+ * matches; 'unavailable' when it couldn't be asked - never tell a recipient a genuine letter is
+ * fake because of an outage. Never cached: a revocation must show at once. */
+export async function fetchLetterVerification(token: string): Promise<LetterVerification | 'not-found' | 'unavailable'> {
+  try {
+    const res = await fetch(`${BASE}/letters/verify/${encodeURIComponent(token)}`, {
+      cache: 'no-store', headers: { Accept: 'application/json' },
+    });
+    if (res.status === 404) return 'not-found';
+    return res.ok ? ((await res.json()) as LetterVerification) : 'unavailable';
+  } catch {
+    return 'unavailable';
+  }
+}

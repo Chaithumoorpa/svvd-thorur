@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  BarChart3, Banknote, Calendar, Church, Clock, HandHeart, Heart, History,
+  BarChart3, Banknote, Calendar, Church, Clock, FileSignature, HandHeart, Heart, History,
   Image as ImageIcon, LayoutDashboard, LogOut, Mail, Megaphone, Menu, Package, Receipt, ShieldCheck, Sparkles,
   Ticket, Users, X,
 } from 'lucide-react';
@@ -36,6 +36,7 @@ const NAV: NavItem[] = [
   { name: 'Messages', href: '/admin/messages', icon: Mail, permission: 'messages:manage', group: 'Temple' },
   { name: 'Members', href: '/admin/members', icon: Users, permission: 'members:read', group: 'Temple' },
   { name: 'Inventory', href: '/admin/inventory', icon: Package, permission: 'inventory:read', group: 'Temple' },
+  { name: 'Letters', href: '/admin/letters', icon: FileSignature, permission: 'letters:read', group: 'Temple' },
   { name: 'Donors', href: '/admin/donors', icon: Heart, permission: 'donors:read', group: 'Finance' },
   { name: 'Donations', href: '/admin/donations', icon: HandHeart, permission: 'donations:read', group: 'Finance' },
   { name: 'Finance', href: '/admin/finance', icon: Banknote, permission: 'finance:read', group: 'Finance' },
