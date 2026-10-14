@@ -1,6 +1,6 @@
 import enum
 import uuid
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Text, Date, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Text, Date, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.models.base import Base
@@ -27,6 +27,21 @@ class ExpenseCategory(str, enum.Enum):
     MAINTENANCE = "MAINTENANCE"
     FESTIVAL = "FESTIVAL"
     OTHER = "OTHER"
+    POOJA_SUPPLIES = "POOJA_SUPPLIES"  # ghee, oil, camphor, flowers, kumkum...
+    ANNADANAM = "ANNADANAM"            # prasadam / free-meal provisions
+    UTILITIES = "UTILITIES"            # electricity, water, phone, internet
+    CONSTRUCTION = "CONSTRUCTION"      # building works, repairs beyond routine maintenance
+    ASSETS = "ASSETS"                  # vessels, ornaments, furniture, equipment
+
+
+class ExpenseStatus(str, enum.Enum):
+    """Only APPROVED expenses count anywhere money is totalled (summary,
+    ledger, reports, budgets). Expenses an admin enters are approved on entry;
+    ones staff submit wait for an admin."""
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    VOID = "VOID"
 
 class IncomeTransaction(Base):
     __tablename__ = "income_transactions"
@@ -51,6 +66,39 @@ class ExpenseTransaction(Base):
     amount = Column(Numeric(MONEY_PRECISION, MONEY_SCALE), nullable=False)
     payment_mode = Column(Enum(PaymentMode), nullable=False, index=True)
     paid_to = Column(String(255), nullable=False)
-    approved_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     expense_date = Column(Date, default=func.current_date(), nullable=False)
     notes = Column(Text, nullable=True)
+
+    status = Column(Enum(ExpenseStatus), nullable=False, default=ExpenseStatus.APPROVED,
+                    server_default=ExpenseStatus.APPROVED.value, index=True)
+    submitted_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    decided_at = Column(DateTime, nullable=True)     # approved / rejected at
+    rejection_reason = Column(String(500), nullable=True)
+    voided_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    voided_at = Column(DateTime, nullable=True)
+    void_reason = Column(String(500), nullable=True)
+    # Private S3 key of the bill / receipt photo or PDF (receipts/expense-bills/...)
+    bill_key = Column(String(255), nullable=True)
+    # Lets a festival's full cost be totalled (with the stock it used)
+    festival_id = Column(Integer, ForeignKey("festivals.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime, default=func.now(), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+    @property
+    def has_bill(self) -> bool:
+        return bool(self.bill_key)
+
+
+class ExpenseBudget(Base):
+    """Monthly spending limit for one expense category."""
+    __tablename__ = "expense_budgets"
+    __table_args__ = (UniqueConstraint("month", "category", name="uq_expense_budget_month_category"),)
+
+    id = Column(Integer, primary_key=True)
+    month = Column(Date, nullable=False, index=True)  # always the 1st of the month
+    category = Column(Enum(ExpenseCategory), nullable=False)
+    amount = Column(Numeric(MONEY_PRECISION, MONEY_SCALE), nullable=False)
+    updated_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=True)
