@@ -9,6 +9,11 @@ from pydantic import (
 from app.schemas.common import OptionalSafeUrl, blank_to_none
 
 Name150 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=150)]
+# Registration / 80G numbers as printed on the certificates: letters, digits and
+# the usual separators (e.g. "AAATS1234F/05/24-25/T-0123/80G", "123/2015").
+OfficialNumber = Annotated[str, StringConstraints(
+    strip_whitespace=True, min_length=2, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9 /.\-()]*$",
+)]
 
 
 class TempleUpdate(BaseModel):
@@ -31,12 +36,18 @@ class TempleUpdate(BaseModel):
     instagram_url: OptionalSafeUrl = None
     youtube_url: OptionalSafeUrl = None
     upi_vpa: Optional[str] = Field(default=None, max_length=100, pattern=r"^[\w.\-]{2,100}@[a-zA-Z0-9.]{2,64}$")
+    bank_account_name: Optional[Name150] = None
+    registration_number: Optional[OfficialNumber] = None
+    pan_number: Optional[str] = Field(default=None, pattern=r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+    eighty_g_number: Optional[OfficialNumber] = None
 
     @model_validator(mode="before")
     @classmethod
     def _blank_strings(cls, data):
         if isinstance(data, dict):
-            return {k: blank_to_none(v) for k, v in data.items()}
+            data = {k: blank_to_none(v) for k, v in data.items()}
+            if isinstance(data.get("pan_number"), str):
+                data["pan_number"] = data["pan_number"].strip().upper()
         return data
 
 
@@ -61,6 +72,10 @@ class TempleOut(BaseModel):
     instagram_url: Optional[str] = None
     youtube_url: Optional[str] = None
     upi_vpa: Optional[str] = None
+    bank_account_name: Optional[str] = None
+    registration_number: Optional[str] = None
+    pan_number: Optional[str] = None
+    eighty_g_number: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -69,11 +84,18 @@ class HundiQrOut(BaseModel):
     direct devotee-to-temple transfer, never processed by this backend."""
     configured: bool
     upi_vpa: Optional[str] = None
+    # The bank account holder name the devotee's UPI app will show (falls back
+    # to the temple's name when Admin -> Temple Info doesn't set one).
     payee_name: Optional[str] = None
     qr_base64: Optional[str] = None
     # The same payment link the QR encodes - a phone can open it directly
     # ("Donate via UPI") instead of scanning its own screen.
     upi_uri: Optional[str] = None
+    # Shown with the QR (and on its printed poster) so a devotee can check
+    # they are paying the registered temple.
+    registration_number: Optional[str] = None
+    pan_number: Optional[str] = None
+    eighty_g_number: Optional[str] = None
 
 
 class TimingBase(BaseModel):

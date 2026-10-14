@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
-import { QrCode } from 'lucide-react';
+import { Printer, QrCode } from 'lucide-react';
 import DonateUpi from '@/components/public/DonateUpi';
 import { PageShell } from '@/components/public/SectionHeading';
 import { Link } from '@/i18n/navigation';
@@ -24,6 +24,11 @@ export default async function HundiPage() {
             <p className="rounded-lg bg-amber-50 p-3 text-gray-600">{t('directNote')}</p>
             <p className="text-gray-600">
               {t('receiptNote')} <Link href="/contact" className="font-medium text-maroon hover:underline">{t('contactLink')}</Link>.
+            </p>
+            <p>
+              <Link href="/hundi-poster" className="inline-flex items-center gap-1.5 font-medium text-maroon hover:underline">
+                <Printer className="h-4 w-4" aria-hidden="true" /> {t('printPoster')}
+              </Link>
             </p>
           </div>
         </div>

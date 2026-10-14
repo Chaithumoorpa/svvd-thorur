@@ -160,7 +160,9 @@ def test_hundi_qr_not_configured_until_vpa_set(client, admin):
     unconfigured = client.get("/api/v1/temple/hundi-qr")
     assert unconfigured.status_code == 200
     body = unconfigured.json()
-    assert body == {"configured": False, "upi_vpa": None, "payee_name": None, "qr_base64": None, "upi_uri": None}
+    assert body == {"configured": False, "upi_vpa": None, "payee_name": None, "qr_base64": None, "upi_uri": None,
+                    "registration_number": None, "pan_number": None, "eighty_g_number": None}
+    assert client.get("/api/v1/temple/hundi-qr/print.png").status_code == 404
 
     bad = client.put("/api/v1/temple/", headers=headers, json={"upi_vpa": "not-a-vpa"})
     assert bad.status_code == 422
@@ -188,6 +190,63 @@ def test_hundi_upi_link_for_a_bank_issued_vpa(client, admin):
         "upi://pay?pa=QR916281230256-6096@unionbankofindia"
         "&pn=Sri%20Varasidhi%20Vinayaka%20Swamy%20Temple&cu=INR"
     )
+
+
+def test_trust_details_are_validated_and_shown_with_the_hundi_qr(client, admin):
+    """The bank account name becomes the UPI payee name, and the registration,
+    PAN and 80G numbers travel with the QR so the page and poster can print them."""
+    _, headers = admin
+    assert client.put("/api/v1/temple/", headers=headers, json={"pan_number": "ABC123"}).status_code == 422
+    assert client.put("/api/v1/temple/", headers=headers,
+                      json={"registration_number": "<script>"}).status_code == 422
+
+    r = client.put("/api/v1/temple/", headers=headers, json={
+        "name": "SVVD Thorur", "upi_vpa": "svvdthorur@upi",
+        "bank_account_name": "Sri Varasidhi Vinayaka Devasthanam",
+        "registration_number": "123/2015", "pan_number": " aaats1234f ",
+        "eighty_g_number": "AAATS1234FF20231",
+    })
+    assert r.status_code == 200, r.text
+    assert r.json()["pan_number"] == "AAATS1234F"
+
+    qr = client.get("/api/v1/temple/hundi-qr").json()
+    assert qr["payee_name"] == "Sri Varasidhi Vinayaka Devasthanam"
+    assert qr["upi_uri"] == "upi://pay?pa=svvdthorur@upi&pn=Sri%20Varasidhi%20Vinayaka%20Devasthanam&cu=INR"
+    assert (qr["registration_number"], qr["pan_number"], qr["eighty_g_number"]) == (
+        "123/2015", "AAATS1234F", "AAATS1234FF20231")
+
+    # Clearing a field (blank in the admin form) removes it again.
+    client.put("/api/v1/temple/", headers=headers, json={"eighty_g_number": ""})
+    assert client.get("/api/v1/temple/hundi-qr").json()["eighty_g_number"] is None
+
+
+def test_hundi_qr_has_the_logo_and_still_decodes(client, admin):
+    import base64
+    import io
+
+    from PIL import Image
+
+    _, headers = admin
+    client.put("/api/v1/temple/", headers=headers, json={
+        "name": "SVVD Thorur", "upi_vpa": "QR916281230256-6096@unionbankofindia"})
+    qr = client.get("/api/v1/temple/hundi-qr").json()
+    web = Image.open(io.BytesIO(base64.b64decode(qr["qr_base64"]))).convert("RGB")
+
+    r = client.get("/api/v1/temple/hundi-qr/print.png")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    poster = Image.open(io.BytesIO(r.content)).convert("RGB")
+    assert poster.width > web.width >= 400  # print size is larger than the web size
+
+    # The centre carries the logo (coloured pixels), not just black/white modules.
+    cx, cy = web.width // 2, web.height // 2
+    centre = web.crop((cx - 20, cy - 20, cx + 20, cy + 20)).getcolors(4000)
+    assert any(abs(r_ - b_) > 40 for _, (r_, g_, b_) in centre)
+
+    cv2 = __import__("pytest").importorskip("cv2")
+    import numpy as np
+    for img in (web, poster, web.resize((220, 220))):
+        decoded, _, _ = cv2.QRCodeDetector().detectAndDecode(cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR))
+        assert decoded == qr["upi_uri"]
 
 
 # ----------------------------------------------------------------------- members
