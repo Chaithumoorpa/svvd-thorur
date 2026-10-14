@@ -58,6 +58,15 @@ def _end_session(response: Response) -> None:
                            secure=settings.is_production, samesite="strict")
 
 
+def _record_failed_login(db: Session, request: Request, identifier: str, why: str) -> None:
+    """Failed sign-ins go to the audit log (with the IP) so repeated guessing
+    shows up in the audit analytics. The identifier is what was typed -
+    trimmed, since someone may type a password into the wrong box."""
+    shown = (identifier or "").strip()[:40]
+    AuditService(db).record(None, "LOGIN_FAILED", "user", None, f"Failed sign-in for '{shown}': {why}",
+                            request=request, actor_username=shown or None)
+
+
 @router.post("/login", response_model=LoginResponse)
 def login(
     payload: UserLogin,
@@ -82,7 +91,12 @@ def login(
     if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
         raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
 
-    user = service.authenticate_user(payload)
+    try:
+        user = service.authenticate_user(payload)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            _record_failed_login(db, request, payload.username, "wrong password or unknown account")
+        raise
 
     if not user.email:
         AuditService(db).record(user, "LOGIN", "user", user.id,
@@ -112,7 +126,11 @@ def verify_login_otp(
     if not user or not user.email:
         raise HTTPException(status_code=400, detail="Invalid sign-in attempt. Please start again.")
 
-    otp_service.verify_login_otp(user.email, payload.code)
+    try:
+        otp_service.verify_login_otp(user.email, payload.code)
+    except HTTPException:
+        _record_failed_login(db, request, user.username, "wrong or expired sign-in code")
+        raise
 
     AuditService(db).record(user, "LOGIN", "user", user.id, f"{user.username} signed in", request=request)
     _start_session(response, service, user)

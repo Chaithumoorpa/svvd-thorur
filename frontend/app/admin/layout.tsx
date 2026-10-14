@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Banknote, Calendar, Church, Clock, HandHeart, Heart, History,
+  BarChart3, Banknote, Calendar, Church, Clock, HandHeart, Heart, History,
   Image as ImageIcon, LayoutDashboard, LogOut, Mail, Megaphone, Menu, Package, Receipt, ShieldCheck, Sparkles,
   Ticket, Users, X,
 } from 'lucide-react';
@@ -25,6 +25,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, permission: 'dashboard:view', group: 'Overview' },
+  { name: 'Analytics', href: '/admin/analytics', icon: BarChart3, permission: ['finance:read', 'inventory:read', 'audit:read'], group: 'Overview' },
   { name: 'Temple Info', href: '/admin/temple', icon: Church, permission: 'temple:write', group: 'Website' },
   { name: 'Timings', href: '/admin/timings', icon: Clock, permission: 'temple:write', group: 'Website' },
   { name: 'Announcements', href: '/admin/announcements', icon: Megaphone, permission: 'content:write', group: 'Website' },
