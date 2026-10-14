@@ -42,16 +42,17 @@ class StorageService:
             "s3", region_name=self.region, endpoint_url=f"https://s3.{self.region}.amazonaws.com"
         )
 
-    def create_upload(self, content_type: str, key_prefix: str = "gallery") -> dict:
+    def create_upload(self, content_type: str, key_prefix: str = "gallery", allow_pdf: bool = False) -> dict:
         if not self.enabled:
             raise HTTPException(status_code=503, detail="Photo uploads are not configured")
 
         content_type = _CONTENT_TYPE_ALIASES.get(content_type.lower(), content_type.lower())
-        ext = _ALLOWED_CONTENT_TYPES.get(content_type)
+        ext = _ALLOWED_CONTENT_TYPES.get(content_type) or ("pdf" if allow_pdf and content_type == "application/pdf" else None)
         if ext is None:
+            kinds = "JPEG, PNG, WEBP, GIF or PDF" if allow_pdf else "JPEG, PNG, WEBP, or GIF"
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported image type '{content_type}'. Use JPEG, PNG, WEBP, or GIF.",
+                detail=f"Unsupported file type '{content_type}'. Use {kinds}.",
             )
 
         key = f"{key_prefix}/{uuid.uuid4().hex}.{ext}"

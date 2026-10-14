@@ -16,6 +16,10 @@ export type Permission =
   | 'donations:write'
   | 'finance:read'
   | 'finance:write'
+  | 'expenses:submit'
+  | 'inventory:read'
+  | 'inventory:write'
+  | 'inventory:manage'
   | 'users:manage'
   | 'audit:read';
 
@@ -391,6 +395,8 @@ export interface DashboardStats {
   seva_tickets_today: number;
   pending_messages: number;
   upcoming_festivals: number;
+  pending_expenses: number;
+  low_stock_items: number;
 }
 
 export interface ActivityItem {
@@ -423,7 +429,10 @@ export interface HomePayload {
 }
 
 export type IncomeSource = 'SEVA' | 'DONATION' | 'HUNDI' | 'MANUAL';
-export type ExpenseCategory = 'SALARY' | 'MATERIAL' | 'MAINTENANCE' | 'FESTIVAL' | 'OTHER';
+export type ExpenseCategory =
+  | 'POOJA_SUPPLIES' | 'ANNADANAM' | 'FESTIVAL' | 'SALARY' | 'UTILITIES' | 'MAINTENANCE'
+  | 'CONSTRUCTION' | 'ASSETS' | 'MATERIAL' | 'OTHER';
+export type ExpenseStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'VOID';
 
 export interface FinanceSummary {
   total_income: number;
@@ -459,6 +468,158 @@ export interface ExpenseInput {
   paid_to: string;
   expense_date: string;
   notes?: string | null;
+  bill_key?: string | null;
+  festival_id?: number | null;
+}
+
+export interface Expense {
+  id: string;
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
+  payment_mode: PaymentMode;
+  paid_to: string;
+  expense_date: string;
+  notes: string | null;
+  status: ExpenseStatus;
+  submitted_by: number | null;
+  approved_by: number | null;
+  decided_at: string | null;
+  rejection_reason: string | null;
+  voided_at: string | null;
+  void_reason: string | null;
+  has_bill: boolean;
+  festival_id: number | null;
+  created_at: string | null;
+  submitted_by_name?: string | null;
+  approved_by_name?: string | null;
+  festival_name?: string | null;
+  /** Set when this expense was created by an inventory purchase. */
+  inventory_item_id?: number | null;
+}
+
+export interface BudgetStatusLine {
+  category: ExpenseCategory;
+  budget: number | null;
+  spent: number;
+  pending: number;
+  remaining: number | null;
+  percent_used: number | null;
+  over_budget: boolean;
+}
+
+export interface BudgetStatus {
+  month: string;
+  lines: BudgetStatusLine[];
+  total_budget: number;
+  total_spent: number;
+  total_pending: number;
+}
+
+// ------------------------------------------------------------------------------ inventory
+export type ItemKind = 'CONSUMABLE' | 'ASSET';
+export type AssetCondition = 'GOOD' | 'NEEDS_REPAIR' | 'DAMAGED' | 'MISSING';
+export type MovementType = 'PURCHASE' | 'DONATION_IN' | 'USAGE' | 'ADJUSTMENT' | 'WRITE_OFF';
+
+/** Quantities are exact decimals sent as strings ("2.500"). */
+export interface InventoryItem {
+  id: number;
+  name: string;
+  kind: ItemKind;
+  category: string;
+  unit: string;
+  quantity: string;
+  reorder_level: string | null;
+  avg_unit_cost: string;
+  location: string | null;
+  notes: string | null;
+  is_active: boolean;
+  material: string | null;
+  weight_grams: string | null;
+  estimated_value: number | null;
+  acquired_on: string | null;
+  identification: string | null;
+  condition: AssetCondition | null;
+  has_photo: boolean;
+  last_verified_on: string | null;
+  low_stock: boolean;
+  stock_value: number;
+}
+
+export interface InventoryItemInput {
+  name?: string;
+  kind?: ItemKind;
+  category?: string;
+  unit?: string;
+  reorder_level?: string | null;
+  location?: string | null;
+  notes?: string | null;
+  material?: string | null;
+  weight_grams?: string | null;
+  estimated_value?: string | null;
+  acquired_on?: string | null;
+  identification?: string | null;
+  condition?: AssetCondition | null;
+  photo_key?: string | null;
+  opening_quantity?: string;
+  opening_unit_cost?: string | null;
+  is_active?: boolean;
+}
+
+export interface StockMovement {
+  id: number;
+  item_id: number;
+  item_name: string | null;
+  unit: string | null;
+  type: MovementType;
+  quantity: string;
+  balance_after: string;
+  unit_cost: string | null;
+  total_value: number | null;
+  movement_date: string;
+  notes: string | null;
+  expense_id: string | null;
+  expense_status: ExpenseStatus | null;
+  vendor: string | null;
+  donor_name: string | null;
+  donor_phone: string | null;
+  receipt_number: string | null;
+  pooja_id: number | null;
+  pooja_name: string | null;
+  festival_id: number | null;
+  festival_name: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+export interface AssetVerification {
+  id: number;
+  item_id: number;
+  verified_on: string;
+  condition: AssetCondition;
+  weight_grams: string | null;
+  notes: string | null;
+  verified_by_name: string | null;
+  weight_mismatch: boolean;
+}
+
+export interface FestivalCost {
+  festival_id: number;
+  festival_name: string;
+  festival_date: string | null;
+  stock_used_value: number;
+  expenses_total: number;
+  total_cost: number;
+  items: Array<{ item_name: string; unit: string; quantity: string; value: number }>;
+}
+
+export interface InventorySummary {
+  consumables: number;
+  valuables: number;
+  low_stock: number;
+  stock_value: number;
+  valuables_value: number;
+  valuables_unverified: number;
 }
 
 export interface VisitorStats {

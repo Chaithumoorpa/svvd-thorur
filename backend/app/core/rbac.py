@@ -29,7 +29,11 @@ class Permission(str, Enum):
     DONATIONS_READ = "donations:read"
     DONATIONS_WRITE = "donations:write"
     FINANCE_READ = "finance:read"
-    FINANCE_WRITE = "finance:write"
+    FINANCE_WRITE = "finance:write"        # income, approve/void expenses, budgets
+    EXPENSES_SUBMIT = "expenses:submit"    # enter an expense that waits for approval
+    INVENTORY_READ = "inventory:read"
+    INVENTORY_WRITE = "inventory:write"    # record purchases, donations in kind, usage
+    INVENTORY_MANAGE = "inventory:manage"  # items & valuables register, adjustments, write-offs, verification
     USERS_MANAGE = "users:manage"
     AUDIT_READ = "audit:read"
 
@@ -40,6 +44,7 @@ _ADMIN: Set[Permission] = {
     _P.DASHBOARD_VIEW, _P.CONTENT_WRITE, _P.TEMPLE_WRITE, _P.MESSAGES_MANAGE, _P.TICKETS_MANAGE,
     _P.MEMBERS_READ, _P.MEMBERS_WRITE, _P.DONORS_READ, _P.DONORS_WRITE,
     _P.DONATIONS_READ, _P.DONATIONS_WRITE, _P.FINANCE_READ, _P.FINANCE_WRITE,
+    _P.EXPENSES_SUBMIT, _P.INVENTORY_READ, _P.INVENTORY_WRITE, _P.INVENTORY_MANAGE,
 }
 
 ROLE_PERMISSIONS = {
@@ -47,9 +52,13 @@ ROLE_PERMISSIONS = {
     Role.ADMIN.value: _ADMIN,
     Role.TRUSTEE.value: {
         _P.DASHBOARD_VIEW, _P.MEMBERS_READ, _P.DONORS_READ, _P.DONATIONS_READ, _P.FINANCE_READ,
+        _P.INVENTORY_READ,
     },
+    # Staff run the day-to-day: they can spend (pending an admin's approval)
+    # and keep stock moving, but not approve money or change the valuables register.
     Role.STAFF.value: {
         _P.DASHBOARD_VIEW, _P.CONTENT_WRITE, _P.MESSAGES_MANAGE, _P.TICKETS_MANAGE,
+        _P.EXPENSES_SUBMIT, _P.INVENTORY_READ, _P.INVENTORY_WRITE,
     },
     Role.GENERAL_USER.value: set(),
 }

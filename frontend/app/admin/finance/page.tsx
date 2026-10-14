@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useState } from 'react';
 import { ArrowDownCircle, ArrowUpCircle, FileDown, Plus } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
@@ -11,16 +12,16 @@ import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/St
 import { btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
-import { addExpense, addIncome, exportLedger, getFinanceSummary, getLedger, getMonthlyReportPdf, saveBlob } from '@/lib/api';
+import { addIncome, exportLedger, getFinanceSummary, getLedger, getMonthlyReportPdf, saveBlob } from '@/lib/api';
 import { emptyToNull, formatDate, formatMoney, todayISO } from '@/lib/format';
-import type { ExpenseCategory, IncomeSource, PaymentMode } from '@/lib/types';
+import { shortCategory } from '@/lib/labels';
+import type { IncomeSource, PaymentMode } from '@/lib/types';
 
 const PAGE_SIZE = 25;
 const MODES: PaymentMode[] = ['CASH', 'UPI', 'BANK', 'CHEQUE'];
 // SEVA/DONATION income is recorded automatically from ticket bookings and
 // donation entries - manual entry only covers what has no other source.
 const SOURCES: IncomeSource[] = ['HUNDI', 'MANUAL'];
-const CATEGORIES: ExpenseCategory[] = ['SALARY', 'MATERIAL', 'MAINTENANCE', 'FESTIVAL', 'OTHER'];
 const label = (v: string) => v.charAt(0) + v.slice(1).toLowerCase();
 
 export default function FinanceAdmin() {
@@ -32,9 +33,8 @@ export default function FinanceAdmin() {
   const summary = useLoad(getFinanceSummary, []);
   const ledger = useLoad(() => getLedger(page, start, end, PAGE_SIZE), [page, start, end]);
   const action = useAction();
-  const [modal, setModal] = useState<'income' | 'expense' | null>(null);
+  const [modal, setModal] = useState<'income' | null>(null);
   const [income, setIncome] = useState({ source_type: 'HUNDI' as IncomeSource, amount: '', payment_mode: 'CASH' as PaymentMode, notes: '' });
-  const [expense, setExpense] = useState({ category: 'MATERIAL' as ExpenseCategory, description: '', amount: '', payment_mode: 'CASH' as PaymentMode, paid_to: '', expense_date: todayISO(), notes: '' });
   const [reportMonth, setReportMonth] = useState(todayISO().slice(0, 7));
 
   const refresh = () => {
@@ -56,20 +56,6 @@ export default function FinanceAdmin() {
     }
   }
 
-  async function submitExpense(e: React.FormEvent) {
-    e.preventDefault();
-    const ok = await action.run(
-      () => addExpense({ category: expense.category, description: expense.description.trim(), amount: Number(expense.amount), payment_mode: expense.payment_mode, paid_to: expense.paid_to.trim(), expense_date: expense.expense_date, notes: emptyToNull(expense.notes) }),
-      'Expense recorded.',
-    );
-    if (ok) {
-      setModal(null);
-      setExpense({ ...expense, description: '', amount: '', paid_to: '', notes: '' });
-      setPage(1);
-      refresh();
-    }
-  }
-
   async function download(kind: 'csv' | 'pdf') {
     if (!start || !end) return action.setError('Choose both a start and an end date to export.');
     const blob = await action.run(() => exportLedger(kind, start, end));
@@ -86,13 +72,13 @@ export default function FinanceAdmin() {
   return (
     <AdminPage
       title="Finance"
-      description="Income, expenses and the temple ledger. Donations and paid seva tickets appear here automatically."
+      description="Income, approved expenses and the temple ledger. Donations and paid seva tickets appear here automatically."
       actions={
         canWrite && (
           <>
-            <button type="button" className={btnGhost} onClick={() => { action.clear(); setModal('expense'); }}>
+            <Link href="/admin/expenses?new=1" className={btnGhost}>
               <ArrowUpCircle className="h-4 w-4 text-red-700" aria-hidden="true" /> Add expense
-            </button>
+            </Link>
             <button type="button" className={btnPrimary} onClick={() => { action.clear(); setModal('income'); }}>
               <Plus className="h-4 w-4" aria-hidden="true" /> Add income
             </button>
@@ -119,9 +105,12 @@ export default function FinanceAdmin() {
               )}
             </div>
             <div className={`${cardCls} p-4`}>
-              <h2 className="mb-2 text-sm font-semibold text-gray-700">Expenses by category</h2>
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-700">Expenses by category</h2>
+                <Link href="/admin/expenses" className="text-xs text-red-900 hover:underline">Expenses &amp; budgets →</Link>
+              </div>
               {Object.keys(s.expense_by_category).length === 0 ? <p className="text-sm text-gray-400">Nothing yet.</p> : (
-                <dl className="space-y-1 text-sm">{Object.entries(s.expense_by_category).map(([k, v]) => <div key={k} className="flex justify-between"><dt className="text-gray-600">{label(k)}</dt><dd className="font-medium">{formatMoney(v)}</dd></div>)}</dl>
+                <dl className="space-y-1 text-sm">{Object.entries(s.expense_by_category).map(([k, v]) => <div key={k} className="flex justify-between"><dt className="text-gray-600">{shortCategory(k)}</dt><dd className="font-medium">{formatMoney(v)}</dd></div>)}</dl>
               )}
             </div>
           </section>
@@ -169,7 +158,7 @@ export default function FinanceAdmin() {
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1 font-medium text-gray-900">
                           {e.type === 'INCOME' ? <ArrowDownCircle className="h-4 w-4 text-green-600" aria-label="Income" /> : <ArrowUpCircle className="h-4 w-4 text-red-600" aria-label="Expense" />}
-                          {label(e.category_or_source)}
+                          {e.type === 'EXPENSE' ? shortCategory(e.category_or_source) : label(e.category_or_source)}
                         </span>
                         <div className="text-xs text-gray-500">{e.description}</div>
                       </td>
@@ -201,23 +190,6 @@ export default function FinanceAdmin() {
         </Modal>
       )}
 
-      {modal === 'expense' && (
-        <Modal title="Add expense" onClose={() => setModal(null)}>
-          <form onSubmit={submitExpense} className="space-y-4">
-            {action.error && <Notice kind="error">{action.error}</Notice>}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Category"><select className={inputCls} value={expense.category} onChange={(e) => setExpense({ ...expense, category: e.target.value as ExpenseCategory })}>{CATEGORIES.map((x) => <option key={x} value={x}>{label(x)}</option>)}</select></Field>
-              <Field label="Payment mode"><select className={inputCls} value={expense.payment_mode} onChange={(e) => setExpense({ ...expense, payment_mode: e.target.value as PaymentMode })}>{MODES.map((x) => <option key={x} value={x}>{x}</option>)}</select></Field>
-              <Field label="Amount (₹)" required><input type="number" min="0.01" step="0.01" inputMode="decimal" className={inputCls} value={expense.amount} onChange={(e) => setExpense({ ...expense, amount: e.target.value })} /></Field>
-              <Field label="Date" required><input type="date" className={inputCls} max={todayISO()} value={expense.expense_date} onChange={(e) => setExpense({ ...expense, expense_date: e.target.value })} /></Field>
-            </div>
-            <Field label="Description" required><input className={inputCls} maxLength={255} value={expense.description} onChange={(e) => setExpense({ ...expense, description: e.target.value })} /></Field>
-            <Field label="Paid to" required><input className={inputCls} maxLength={255} value={expense.paid_to} onChange={(e) => setExpense({ ...expense, paid_to: e.target.value })} /></Field>
-            <Field label="Notes"><input className={inputCls} maxLength={2000} value={expense.notes} onChange={(e) => setExpense({ ...expense, notes: e.target.value })} /></Field>
-            <div className="flex justify-end gap-2"><button type="button" className={btnGhost} onClick={() => setModal(null)}>Cancel</button><button type="submit" className={btnPrimary} disabled={action.busy || !(Number(expense.amount) > 0) || expense.description.trim().length < 2 || expense.paid_to.trim().length < 2}>{action.busy ? 'Saving…' : 'Save expense'}</button></div>
-          </form>
-        </Modal>
-      )}
     </AdminPage>
   );
 }

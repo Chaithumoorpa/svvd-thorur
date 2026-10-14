@@ -49,6 +49,16 @@ jobs:
           CORS_ORIGINS: https://svvdthorur.org
           TURNSTILE_SECRET_KEY: ci-only-throwaway-turnstile-key
         run: alembic -c alembic.prod.ini upgrade head
+      # ...and that they create every column the models use (pytest's SQLite
+      # schema comes from the models, so it can't notice a missing one).
+      - name: Check the migrated schema matches the models
+        env:
+          ENV: production
+          DATABASE_URL: postgresql://templeuser:templepass@localhost:5432/templedb
+          SECRET_KEY: ci-only-throwaway-secret-key-0123456789abcdef
+          CORS_ORIGINS: https://svvdthorur.org
+          TURNSTILE_SECRET_KEY: ci-only-throwaway-turnstile-key
+        run: python -m app.cli.check_schema
       - run: pytest
 
   frontend-checks:
