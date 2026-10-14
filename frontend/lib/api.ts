@@ -5,7 +5,7 @@ import type {
   BudgetStatus, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
   Donation, DonationInput, DonationOrderInput, Donor, DonorInput, Expense, ExpenseCategory, ExpenseInput, ExpenseStatus,
   Festival, FestivalCost, FestivalInput, FinanceSummary, InventoryItem, InventoryItemInput, InventorySummary, ItemKind,
-  MovementType, PaymentMode, StockMovement,
+  MovementType, PaymentMode, StockMovement, FinanceAnalytics, InventoryAnalytics, AuditAnalytics,
   GalleryInput, GalleryItem, HomePayload, HundiQrInfo, IncomeInput, LedgerEntry, Me, Member, MemberInput,
   Paged, PaymentStatusInfo, PersonalBlessing, Pooja, PoojaInput, RazorpayConfirmInput, RazorpayOrder,
   SevaBookingOnlineInput, SevaCalendarDay, SevaDay, SevaPaymentOrderInput, SevaTicket,
@@ -419,6 +419,14 @@ export const exportLedger = async (kind: 'csv' | 'pdf', startDate: string, endDa
   (await api.get<Blob>(`/finance/ledger/${kind}`, { params: { start_date: startDate, end_date: endDate }, responseType: 'blob' })).data;
 export const getMonthlyReportPdf = async (year: number, month: number) =>
   (await api.get<Blob>('/finance/reports/monthly/pdf', { params: { year, month }, responseType: 'blob' })).data;
+
+// ---------------------------------------------------------------------------- analytics
+export const getFinanceAnalytics = async (months: number) =>
+  (await api.get<FinanceAnalytics>('/analytics/finance', { params: { months } })).data;
+export const getInventoryAnalytics = async (months: number) =>
+  (await api.get<InventoryAnalytics>('/analytics/inventory', { params: { months } })).data;
+export const getAuditAnalytics = async (days: number) =>
+  (await api.get<AuditAnalytics>('/analytics/audit', { params: { days } })).data;
 
 // ---------------------------------------------------------------------------- dashboard
 export const getDashboardStats = async () => (await api.get<DashboardStats>('/meta/stats')).data;

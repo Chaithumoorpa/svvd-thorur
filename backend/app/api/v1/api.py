@@ -1,13 +1,14 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
-    announcement, audit, auth, contact, donors, expenses, festival, finance, gallery, inventory, members,
+    analytics, announcement, audit, auth, contact, donors, expenses, festival, finance, gallery, inventory, members,
     meta, payments, pooja, public, seva_tickets, stats, temple,
 )
 
 api_router = APIRouter(prefix="/api/v1")
 
 api_router.include_router(meta.router)
+api_router.include_router(analytics.router)
 api_router.include_router(public.router)
 api_router.include_router(auth.router)
 api_router.include_router(temple.router)
