@@ -1,8 +1,11 @@
 import axios, { AxiosError } from 'axios';
 import { prepareImageForUpload, reencodeAsJpeg } from './imageUpload';
 import type {
-  ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog, BlessingReview, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
-  Donation, DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
+  ActivityItem, Announcement, AnnouncementInput, AppUser, AssetCondition, AssetVerification, AuditLog, BlessingReview,
+  BudgetStatus, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
+  Donation, DonationInput, Donor, DonorInput, Expense, ExpenseCategory, ExpenseInput, ExpenseStatus, Festival,
+  FestivalCost, FestivalInput, FinanceSummary, InventoryItem, InventoryItemInput, InventorySummary, ItemKind,
+  MovementType, PaymentMode, StockMovement,
   GalleryInput, GalleryItem, HomePayload, HundiQrInfo, IncomeInput, LedgerEntry, Me, Member, MemberInput,
   Paged, PersonalBlessing, Pooja, PoojaInput, SevaBookingOnlineInput, SevaCalendarDay, SevaDay, SevaTicket,
   Temple, TempleTiming,
@@ -324,7 +327,79 @@ export const getFinanceSummary = async () => (await api.get<FinanceSummary>('/fi
 export const getLedger = (p = 1, startDate?: string, endDate?: string, pageSize = 25) =>
   page<LedgerEntry>('/finance/ledger', { page: p, page_size: pageSize, start_date: startDate || undefined, end_date: endDate || undefined });
 export const addIncome = async (data: IncomeInput) => (await api.post('/finance/income', data)).data;
-export const addExpense = async (data: ExpenseInput) => (await api.post('/finance/expense', data)).data;
+
+// ----------------------------------------------------------------------------- expenses
+export interface ExpenseFilters {
+  status?: ExpenseStatus; category?: ExpenseCategory; start_date?: string; end_date?: string;
+  festival_id?: number; mine?: boolean; q?: string;
+}
+export const listExpenses = (p = 1, filters: ExpenseFilters = {}, pageSize = 25) =>
+  page<Expense>('/finance/expenses', { page: p, page_size: pageSize, ...filters });
+export const createExpense = async (data: ExpenseInput) => (await api.post<Expense>('/finance/expenses', data)).data;
+export const updateExpense = async (id: string, data: Partial<ExpenseInput> & { reason?: string | null }) =>
+  (await api.patch<Expense>(`/finance/expenses/${id}`, data)).data;
+export const approveExpense = async (id: string) => (await api.post<Expense>(`/finance/expenses/${id}/approve`)).data;
+export const rejectExpense = async (id: string, reason: string) =>
+  (await api.post<Expense>(`/finance/expenses/${id}/reject`, { reason })).data;
+export const voidExpense = async (id: string, reason: string) =>
+  (await api.post<Expense>(`/finance/expenses/${id}/void`, { reason })).data;
+export const getExpenseBill = async (id: string) =>
+  (await api.get<{ url: string; content_type: string }>(`/finance/expenses/${id}/bill`)).data;
+export const getBudgetStatus = async (month: string) =>
+  (await api.get<BudgetStatus>('/finance/budgets', { params: { month } })).data;
+export const setBudgets = async (month: string, lines: Array<{ category: ExpenseCategory; amount: number }>) =>
+  (await api.put<BudgetStatus>(`/finance/budgets/${month}`, { lines })).data;
+export const copyBudgets = async (month: string, fromMonth: string) =>
+  (await api.post<BudgetStatus>(`/finance/budgets/${month}/copy-from/${fromMonth}`)).data;
+
+/** A bill photo is shrunk and stripped of EXIF like any photo; a PDF goes up as is. */
+export async function uploadExpenseBill(file: File): Promise<string> {
+  const prepared = file.type === 'application/pdf' ? file : await prepareImageForUpload(file);
+  return (await uploadPhoto('/finance/expenses/bill-upload-url', prepared)).key;
+}
+
+// ---------------------------------------------------------------------------- inventory
+export const getInventorySummary = async () => (await api.get<InventorySummary>('/inventory/summary')).data;
+export const listInventoryItems = async (filters: { kind?: ItemKind; low_stock?: boolean; q?: string; include_inactive?: boolean } = {}) =>
+  (await api.get<InventoryItem[]>('/inventory/items', { params: filters })).data;
+export const listInventoryCategories = async () => (await api.get<string[]>('/inventory/categories')).data;
+export const createInventoryItem = async (data: InventoryItemInput) =>
+  (await api.post<InventoryItem>('/inventory/items', data)).data;
+export const updateInventoryItem = async (id: number, data: InventoryItemInput) =>
+  (await api.patch<InventoryItem>(`/inventory/items/${id}`, data)).data;
+export const deleteInventoryItem = async (id: number) => (await api.delete(`/inventory/items/${id}`)).data;
+export const getInventoryPhoto = async (id: number) => (await api.get<{ url: string }>(`/inventory/items/${id}/photo`)).data;
+export async function uploadInventoryPhoto(file: File): Promise<string> {
+  return (await uploadPhoto('/inventory/items/photo-upload-url', await prepareImageForUpload(file))).key;
+}
+export const listStockMovements = (p = 1, filters: { item_id?: number; type?: MovementType; festival_id?: number } = {}, pageSize = 25) =>
+  page<StockMovement>('/inventory/movements', { page: p, page_size: pageSize, ...filters });
+export const recordPurchase = async (data: {
+  item_id: number; quantity: string; total_cost: string; vendor: string; payment_mode: PaymentMode;
+  movement_date: string; notes?: string | null; bill_key?: string | null; expense_category?: ExpenseCategory | null;
+}) => (await api.post<StockMovement>('/inventory/purchases', data)).data;
+export const recordDonationInKind = async (data: {
+  item_id: number; quantity: string; donor_name: string; donor_phone?: string | null; donor_address?: string | null;
+  estimated_value?: string | null; movement_date: string; notes?: string | null;
+}) => (await api.post<StockMovement>('/inventory/donations-in', data)).data;
+export const recordUsage = async (data: {
+  item_id: number; quantity: string; movement_date: string; pooja_id?: number | null; festival_id?: number | null;
+  notes?: string | null;
+}) => (await api.post<StockMovement>('/inventory/usage', data)).data;
+export const recordAdjustment = async (data: {
+  item_id: number; counted_quantity: string; reason: string; movement_date: string; notes?: string | null;
+}) => (await api.post<StockMovement>('/inventory/adjustments', data)).data;
+export const recordWriteOff = async (data: {
+  item_id: number; quantity: string; reason: string; movement_date: string; notes?: string | null;
+}) => (await api.post<StockMovement>('/inventory/write-offs', data)).data;
+export const downloadInKindReceipt = async (movementId: number) =>
+  (await api.get<Blob>(`/inventory/movements/${movementId}/receipt`, { responseType: 'blob' })).data;
+export const verifyAsset = async (itemId: number, data: {
+  verified_on: string; condition: AssetCondition; weight_grams?: string | null; notes?: string | null;
+}) => (await api.post<AssetVerification>(`/inventory/items/${itemId}/verifications`, data)).data;
+export const listAssetVerifications = async (itemId: number) =>
+  (await api.get<AssetVerification[]>(`/inventory/items/${itemId}/verifications`)).data;
+export const getFestivalCosts = async () => (await api.get<FestivalCost[]>('/inventory/festival-costs')).data;
 export const exportLedger = async (kind: 'csv' | 'pdf', startDate: string, endDate: string) =>
   (await api.get<Blob>(`/finance/ledger/${kind}`, { params: { start_date: startDate, end_date: endDate }, responseType: 'blob' })).data;
 export const getMonthlyReportPdf = async (year: number, month: number) =>

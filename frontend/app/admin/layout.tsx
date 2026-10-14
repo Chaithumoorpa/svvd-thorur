@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Banknote, Calendar, Church, Clock, HandHeart, Heart, History,
-  Image as ImageIcon, LayoutDashboard, LogOut, Mail, Megaphone, Menu, ShieldCheck, Sparkles,
+  Image as ImageIcon, LayoutDashboard, LogOut, Mail, Megaphone, Menu, Package, Receipt, ShieldCheck, Sparkles,
   Ticket, Users, X,
 } from 'lucide-react';
 
@@ -18,7 +18,8 @@ interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  permission?: Permission;
+  /** Shown to anyone holding this permission (or any one of these). */
+  permission?: Permission | Permission[];
   group: string;
 }
 
@@ -33,9 +34,11 @@ const NAV: NavItem[] = [
   { name: 'Seva Tickets', href: '/admin/seva-tickets', icon: Ticket, permission: 'tickets:manage', group: 'Temple' },
   { name: 'Messages', href: '/admin/messages', icon: Mail, permission: 'messages:manage', group: 'Temple' },
   { name: 'Members', href: '/admin/members', icon: Users, permission: 'members:read', group: 'Temple' },
+  { name: 'Inventory', href: '/admin/inventory', icon: Package, permission: 'inventory:read', group: 'Temple' },
   { name: 'Donors', href: '/admin/donors', icon: Heart, permission: 'donors:read', group: 'Finance' },
   { name: 'Donations', href: '/admin/donations', icon: HandHeart, permission: 'donations:read', group: 'Finance' },
   { name: 'Finance', href: '/admin/finance', icon: Banknote, permission: 'finance:read', group: 'Finance' },
+  { name: 'Expenses', href: '/admin/expenses', icon: Receipt, permission: ['expenses:submit', 'finance:read'], group: 'Finance' },
   { name: 'Users', href: '/admin/users', icon: ShieldCheck, permission: 'users:manage', group: 'Administration' },
   { name: 'Audit Log', href: '/admin/audit', icon: History, permission: 'audit:read', group: 'Administration' },
 ];
@@ -90,9 +93,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
   if (!ctx || !me) return null;
 
-  const visible = NAV.filter((item) => !item.permission || can(item.permission));
+  const permitted = (item?: NavItem) =>
+    !item?.permission || (Array.isArray(item.permission) ? item.permission.some(can) : can(item.permission));
+  const visible = NAV.filter((item) => permitted(item));
   const current = NAV.find((item) => (item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)));
-  const allowed = pathname.startsWith('/admin/change-password') || !current?.permission || can(current.permission);
+  const allowed = pathname.startsWith('/admin/change-password') || permitted(current);
   const hasAnyAccess = can('dashboard:view');
   const groups = Array.from(new Set(visible.map((i) => i.group)));
 
