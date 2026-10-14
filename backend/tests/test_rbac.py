@@ -14,6 +14,12 @@ def test_permission_matrix():
     assert Permission.DONORS_WRITE not in permissions_for(["TRUSTEE"])
     assert Permission.CONTENT_WRITE in permissions_for(["STAFF"])
     assert Permission.FINANCE_READ not in permissions_for(["STAFF"])
+    # staff can spend (pending approval) and move stock, not approve or manage valuables
+    assert {Permission.EXPENSES_SUBMIT, Permission.INVENTORY_WRITE} <= permissions_for(["STAFF"])
+    assert Permission.FINANCE_WRITE not in permissions_for(["STAFF"])
+    assert Permission.INVENTORY_MANAGE not in permissions_for(["STAFF"])
+    assert Permission.INVENTORY_READ in permissions_for(["TRUSTEE"])
+    assert Permission.INVENTORY_WRITE not in permissions_for(["TRUSTEE"])
     assert permissions_for(["GENERAL_USER"]) == set()
     assert permissions_for(["NOT_A_ROLE"]) == set()
     assert permissions_for(None) == set()
@@ -62,6 +68,20 @@ PROTECTED = [
     ("GET", "/api/v1/finance/reports/monthly/pdf?year=2026&month=1", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
     ("GET", "/api/v1/seva-tickets/blessing-reviews", None, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
     ("POST", "/api/v1/seva-tickets/scan", {"qr_token": "does-not-exist"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    # expenses + budgets
+    ("POST", "/api/v1/finance/expenses", {
+        "category": "OTHER", "description": "Flowers", "amount": "10", "payment_mode": "CASH",
+        "paid_to": "Vendor", "expense_date": "2026-01-01"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    ("GET", "/api/v1/finance/expenses", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("GET", "/api/v1/finance/budgets?month=2026-01", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("PUT", "/api/v1/finance/budgets/2026-01", {"lines": []}, {"SUPER_ADMIN", "ADMIN"}),
+    # inventory
+    ("GET", "/api/v1/inventory/items", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("GET", "/api/v1/inventory/summary", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("GET", "/api/v1/inventory/movements", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("GET", "/api/v1/inventory/festival-costs", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("POST", "/api/v1/inventory/items", {"name": "Ghee", "kind": "CONSUMABLE", "category": "Pooja", "unit": "kg"},
+     {"SUPER_ADMIN", "ADMIN"}),
 ]
 
 
