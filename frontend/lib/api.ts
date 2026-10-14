@@ -3,12 +3,13 @@ import { prepareImageForUpload, reencodeAsJpeg } from './imageUpload';
 import type {
   ActivityItem, Announcement, AnnouncementInput, AppUser, AssetCondition, AssetVerification, AuditLog, BlessingReview,
   BudgetStatus, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
-  Donation, DonationInput, Donor, DonorInput, Expense, ExpenseCategory, ExpenseInput, ExpenseStatus, Festival,
-  FestivalCost, FestivalInput, FinanceSummary, InventoryItem, InventoryItemInput, InventorySummary, ItemKind,
+  Donation, DonationInput, DonationOrderInput, Donor, DonorInput, Expense, ExpenseCategory, ExpenseInput, ExpenseStatus,
+  Festival, FestivalCost, FestivalInput, FinanceSummary, InventoryItem, InventoryItemInput, InventorySummary, ItemKind,
   MovementType, PaymentMode, StockMovement, FinanceAnalytics, InventoryAnalytics, AuditAnalytics,
   GalleryInput, GalleryItem, HomePayload, HundiQrInfo, IncomeInput, LedgerEntry, Me, Member, MemberInput,
   Letter, LetterInput, LetterStatus, LetterTemplate, MySignature, SealStatus, SignatureStatus,
-  Paged, PersonalBlessing, Pooja, PoojaInput, SevaBookingOnlineInput, SevaCalendarDay, SevaDay, SevaTicket,
+  Paged, PaymentStatusInfo, PersonalBlessing, Pooja, PoojaInput, RazorpayConfirmInput, RazorpayOrder,
+  SevaBookingOnlineInput, SevaCalendarDay, SevaDay, SevaPaymentOrderInput, SevaTicket,
   Temple, TempleTiming,
   TempleTimingInput, TempleUpdate, TicketStatus, UploadUrlResponse, UserCreateInput,
   UserUpdateInput, VisitorStats,
@@ -195,6 +196,20 @@ export const requestBookingOtp = async (email: string) =>
 export const verifyBookingOtp = async (email: string, code: string) =>
   (await api.post<{ booking_token: string }>('/seva-tickets/booking/verify-otp', { email, code })).data;
 export const bookSeva = async (data: SevaBookingOnlineInput) => (await api.post<SevaTicket>('/seva-tickets/', data)).data;
+
+// --------------------------------------------------------------------------- payments
+/** Whether Razorpay is configured - check before showing a "pay online" option
+ * or the public donation form, so a temple that hasn't set it up yet shows the
+ * existing offline paths instead of a form that would fail. */
+export const getPaymentStatus = async () => (await api.get<PaymentStatusInfo>('/payments/status')).data;
+export const createSevaPaymentOrder = async (data: SevaPaymentOrderInput) =>
+  (await api.post<RazorpayOrder>('/seva-tickets/booking/online-order', data)).data;
+export const confirmSevaPayment = async (data: RazorpayConfirmInput) =>
+  (await api.post<SevaTicket>('/seva-tickets/booking/online-confirm', data)).data;
+export const createDonationOrder = async (data: DonationOrderInput) =>
+  (await api.post<RazorpayOrder>('/donations/public/order', data)).data;
+export const confirmDonationPayment = async (data: RazorpayConfirmInput) =>
+  (await api.post<Donation>('/donations/public/confirm', data)).data;
 
 // ------------------------------------------------------------ seva calendar & blessings
 /** Every day from `start` to `end` (YYYY-MM-DD, inclusive) with the seva's

@@ -354,6 +354,52 @@ configured but verification errors out (Cloudflare unreachable, timeout) -
 see `TurnstileService`'s docstring for why that's the right default here,
 unlike the SES/S3 integrations above which always fail open.
 
+## 9. Online payments (Razorpay)
+
+A donor can pay online from the Donations page, and a devotee can pay a
+paid seva's fee online instead of at the counter, once
+[Razorpay](https://razorpay.com) is configured. Inert until then - both
+forms fall back to their existing offline paths (donations stays
+"coming soon", seva booking offers only "pay at counter") rather than
+showing a form that would fail:
+
+1. Sign up at https://dashboard.razorpay.com and complete KYC (needed
+   before it can settle real payments to your bank account; test-mode
+   keys work immediately without KYC, for trying this out first).
+2. **Settings → API Keys** gives you a **Key Id** (public) and a **Key
+   Secret** (keep private) - generate a *Live* pair once KYC is done, or a
+   *Test* pair to try it with Razorpay's test cards first.
+3. Add both to the server's `.env` (same file as step 4 above):
+   ```bash
+   echo "RAZORPAY_KEY_ID=<key id>" >> .env
+   echo "RAZORPAY_KEY_SECRET=<key secret>" >> .env
+   ```
+4. Restart the backend (no frontend rebuild needed - the key id is fetched
+   from `GET /api/v1/payments/status` and per payment order, not baked in
+   at build time):
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+   ```
+
+How it works: the backend creates a Razorpay order for the exact amount
+(a seva's own fee, or the donor's entered amount - never trusted from the
+client beyond that point), the browser opens Razorpay's own Checkout
+overlay, and only once Razorpay confirms the payment does the backend
+create the actual donation or seva ticket record, with `payment_mode`/
+`source` marked `ONLINE`. If a seva's last slot is taken by someone else
+while a devotee is mid-checkout, the payment is automatically refunded and
+they're told so - see `RazorpayService.refund_payment` and
+`confirm_seva_payment`'s docstring.
+
+**Not yet built:** a Razorpay webhook for reconciliation. If a devotee
+completes payment but closes the browser before the confirm step runs
+(rare - the confirm call happens immediately after Razorpay's own success
+callback), Razorpay will show the payment as captured on your dashboard
+but no ticket/donation will exist on the site. Recommended before relying
+on this at scale: add a webhook (Razorpay dashboard → **Webhooks**) that
+re-plays `payment.captured` events against a reconciliation endpoint, so
+an abandoned-tab payment still gets recorded.
+
 ## Updating the deployed site
 
 Normally automatic: every push to `development` triggers CI/CD (see below),
