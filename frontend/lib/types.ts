@@ -797,6 +797,7 @@ export interface SignatureStatus {
   position: string | null;
   is_active: boolean;
   has_login: boolean;
+  linked_username: string | null;
   has_signature: boolean;
   uploaded_at: string | null;
 }

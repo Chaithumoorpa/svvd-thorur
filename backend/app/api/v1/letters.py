@@ -12,7 +12,8 @@ from app.models.letter import LetterImageKind, LetterStatus
 from app.models.user import User
 from app.repositories.temple_repo import TempleRepository
 from app.schemas.letter import (
-    ImageIn, LetterIn, LetterOut, LetterTemplate, LetterVerification, MySignature, ReasonIn, SealStatus, SignIn,
+    ImageIn, LetterIn, LetterOut, LetterTemplate, LetterVerification, LoginLinkIn, MySignature, ReasonIn, SealStatus,
+    SignIn,
     SignatureStatus,
 )
 from app.services.letter_pdf_service import generate_letter_pdf
@@ -24,6 +25,8 @@ router = APIRouter(prefix="/letters", tags=["letters"])
 
 _read = require_permission(Permission.LETTERS_READ)
 _write = require_permission(Permission.LETTERS_WRITE)
+# Which login signs as which member is an identity decision: Super Admin only.
+_link = require_permission(Permission.LETTERS_WRITE, Permission.USERS_MANAGE)
 _NO_STORE = {"Cache-Control": "no-store, private"}
 
 
@@ -97,6 +100,17 @@ def remove_signature(member_id: int, service: LetterService = Depends(get_letter
     if service.retire_image(LetterImageKind.SIGNATURE, member.id):
         audit.log("REMOVE_SIGNATURE", "member", member.id, f"Removed signature of {member.name}")
     return Response(status_code=204)
+
+
+@router.put("/signatures/{member_id}/login", response_model=SignatureStatus)
+def link_login(member_id: int, payload: LoginLinkIn, service: LetterService = Depends(get_letter_service),
+               audit: AuditContext = Depends(get_audit), user: User = Depends(_link)):
+    member = service.get_member(member_id)
+    before, after = service.link_login(member, payload.user_id, user)
+    summary = (f"Linked login '{after}' to member {member.name}" if after
+               else f"Unlinked login '{before}' from member {member.name}")
+    audit.log("LINK_LOGIN", "member", member.id, summary, {"from": before, "to": after})
+    return next(s for s in service.signature_statuses() if s["member_id"] == member.id)
 
 
 @router.get("/signatures/{member_id}.png", dependencies=[Depends(_write)])
