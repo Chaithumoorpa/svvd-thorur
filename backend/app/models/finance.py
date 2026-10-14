@@ -82,8 +82,7 @@ class ExpenseTransaction(Base):
     bill_key = Column(String(255), nullable=True)
     # Lets a festival's full cost be totalled (with the stock it used)
     festival_id = Column(Integer, ForeignKey("festivals.id", ondelete="SET NULL"), nullable=True, index=True)
-    created_at = Column(DateTime, default=func.now(), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), server_default=func.now(), onupdate=func.now(), nullable=False)
+    # created_at / updated_at come from Base, like every table
 
 
     @property
@@ -101,4 +100,3 @@ class ExpenseBudget(Base):
     category = Column(Enum(ExpenseCategory), nullable=False)
     amount = Column(Numeric(MONEY_PRECISION, MONEY_SCALE), nullable=False)
     updated_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=True)
