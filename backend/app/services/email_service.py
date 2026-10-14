@@ -92,9 +92,15 @@ class EmailService:
         try:
             client = boto3.client("ses", region_name=self.region)
             if attachments:
-                client.send_raw_email(Source=self.source, Destinations=[to_email],
-                                      RawMessage={"Data": self._raw(to_email, subject, body, html, attachments)})
-                return True
+                try:
+                    client.send_raw_email(Source=self.source, Destinations=[to_email],
+                                          RawMessage={"Data": self._raw(to_email, subject, body, html, attachments)})
+                    return True
+                except Exception:
+                    # e.g. the server's IAM role allows ses:SendEmail but not ses:SendRawEmail -
+                    # the message itself matters more than the PDF, so send it without.
+                    logger.warning("Sending %s with attachments failed; retrying without them: %s",
+                                   log_label, subject, exc_info=True)
             client.send_email(
                 Source=self.source,
                 Destination={"ToAddresses": [to_email]},

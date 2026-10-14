@@ -106,3 +106,14 @@ def test_attachments_go_as_a_raw_mime_message_with_the_pdf(monkeypatch):
     assert "ATTACHED TO THIS EMAIL" in html and "Ticket_SV-1.pdf" in html
     assert "Please do not reply to this email" in html
     assert "do not reply" in parts["text/plain"].get_payload(decode=True).decode()
+
+
+def test_attachment_failure_still_delivers_the_message(monkeypatch):
+    _configured(monkeypatch)
+    with patch("app.services.email_service.boto3.client") as mock_boto:
+        ses_client = MagicMock()
+        ses_client.send_raw_email.side_effect = Exception("AccessDenied: ses:SendRawEmail")
+        mock_boto.return_value = ses_client
+        ok = EmailService().send("devotee@example.com", "Booking confirmed", "Ticket SV-1",
+                                 attachments=[("Ticket_SV-1.pdf", b"%PDF")])
+    assert ok is True and ses_client.send_email.called
