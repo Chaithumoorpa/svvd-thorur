@@ -17,8 +17,8 @@ export default function SectionHeading({ title, subtitle, href, linkLabel = 'Vie
       {subtitle && <p className="mx-auto mt-2 max-w-2xl text-gray-600">{subtitle}</p>}
       {align === 'center' && <Ornament className="mt-3" />}
       {href && (
-        <Link href={href} className="mt-3 inline-block text-sm font-semibold text-saffron hover:underline">
-          {linkLabel} →
+        <Link href={href} className="mt-3 inline-block text-sm font-semibold text-saffron-dark hover:underline">
+          {linkLabel} <span aria-hidden="true">→</span><span className="sr-only"> - {title}</span>
         </Link>
       )}
     </div>

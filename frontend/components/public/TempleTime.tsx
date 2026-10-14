@@ -57,7 +57,7 @@ export default function TempleTime({
   day,
   yourTimeLabel = 'your time',
   stacked = false,
-  localClassName = 'text-xs font-normal text-gray-500',
+  localClassName = 'text-xs font-normal text-gray-600',
 }: {
   start: string | null | undefined;
   end?: string | null;

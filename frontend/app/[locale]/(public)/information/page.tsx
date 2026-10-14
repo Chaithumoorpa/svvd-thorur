@@ -17,7 +17,7 @@ export default async function InformationPage() {
             <div className="space-y-12">
                 <section>
                     <div className="flex items-center gap-3 mb-4">
-                        <UserCheck className="text-templeGold w-6 h-6" />
+                        <UserCheck className="text-templeGoldDark w-6 h-6" />
                         <h2 className="text-2xl font-bold text-templeDark">{t('dressCode.heading')}</h2>
                     </div>
                     <p className="text-gray-600 mb-4">
@@ -37,24 +37,24 @@ export default async function InformationPage() {
 
                 <section>
                     <div className="flex items-center gap-3 mb-4">
-                        <ShieldCheck className="text-templeGold w-6 h-6" />
+                        <ShieldCheck className="text-templeGoldDark w-6 h-6" />
                         <h2 className="text-2xl font-bold text-templeDark">{t('rules.heading')}</h2>
                     </div>
                     <ul className="space-y-4">
                         <li className="flex gap-3 text-gray-600">
-                            <span className="text-templeGold font-bold">•</span>
+                            <span className="text-templeGoldDark font-bold">•</span>
                             {t('rules.photography')}
                         </li>
                         <li className="flex gap-3 text-gray-600">
-                            <span className="text-templeGold font-bold">•</span>
+                            <span className="text-templeGoldDark font-bold">•</span>
                             {t('rules.phones')}
                         </li>
                         <li className="flex gap-3 text-gray-600">
-                            <span className="text-templeGold font-bold">•</span>
+                            <span className="text-templeGoldDark font-bold">•</span>
                             {t('rules.silence')}
                         </li>
                         <li className="flex gap-3 text-gray-600">
-                            <span className="text-templeGold font-bold">•</span>
+                            <span className="text-templeGoldDark font-bold">•</span>
                             {t('rules.food')}
                         </li>
                     </ul>
@@ -62,7 +62,7 @@ export default async function InformationPage() {
 
                 <section>
                     <div className="flex items-center gap-3 mb-4">
-                        <Info className="text-templeGold w-6 h-6" />
+                        <Info className="text-templeGoldDark w-6 h-6" />
                         <h2 className="text-2xl font-bold text-templeDark">{t('facilities.heading')}</h2>
                     </div>
                     <p className="text-gray-600">

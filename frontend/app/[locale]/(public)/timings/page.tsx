@@ -31,16 +31,16 @@ export default async function TimingsPage() {
                 </div>
                 <p className={`text-3xl font-bold ${dark ? 'text-saffron-light' : 'text-gray-900'}`}>
                   <TempleTime start={timing.start_time} end={timing.end_time} yourTimeLabel={tCommon('yourTime')} stacked
-                              localClassName={`mt-1 text-sm font-normal ${dark ? 'text-amber-100/80' : 'text-gray-500'}`} />
+                              localClassName={`mt-1 text-sm font-normal ${dark ? 'text-amber-100/80' : 'text-gray-600'}`} />
                 </p>
-                <p className={`mt-1 text-sm ${dark ? 'text-amber-100/80' : 'text-gray-500'}`}>{timing.days}</p>
+                <p className={`mt-1 text-sm ${dark ? 'text-amber-100/80' : 'text-gray-600'}`}>{timing.days}</p>
                 {timing.note && <p className={`mt-3 text-sm ${dark ? 'text-amber-50' : 'text-gray-700'}`}>{timing.note}</p>}
               </section>
             );
           })}
         </div>
       ) : (
-        <p className="rounded-xl border border-dashed border-amber-300 bg-white p-8 text-center text-gray-500">
+        <p className="rounded-xl border border-dashed border-amber-300 bg-white p-8 text-center text-gray-600">
           <Clock className="mx-auto mb-2 h-8 w-8 text-amber-300" aria-hidden="true" />
           {t('empty')}
         </p>
