@@ -2,7 +2,7 @@
 signature / seal images that go on them. See app.models.letter for the rules."""
 import logging
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
 from fastapi import HTTPException
@@ -28,6 +28,7 @@ from app.services.letter_templates import LABELS, PLACEHOLDER, template_for
 logger = logging.getLogger(__name__)
 
 REFERENCE_PREFIX = "SVVD"
+IST_OFFSET = timedelta(hours=5, minutes=30)
 _EDITABLE = ("kind", "letter_date", "subject", "recipient_name", "recipient_address", "salutation", "body",
              "closing", "include_seal")
 _DONE = (SignatoryStatus.SIGNED, SignatoryStatus.PAPER)
@@ -179,7 +180,7 @@ class LetterService:
         self.db.commit()
         self._mail_member(slot.member, f"You signed: {letter.subject}", (
             f"Your signature was placed on a letter of {self._temple_name()} as {self._as(slot)}.\n\n"
-            f"Subject: {letter.subject}\nSigned: {slot.signed_at:%d-%m-%Y %H:%M} UTC from {slot.signed_ip or 'unknown IP'}\n\n"
+            f"Subject: {letter.subject}\nSigned on: {slot.signed_at + IST_OFFSET:%d-%m-%Y at %I:%M %p} IST\n\n"
             "If this was not you, contact the temple office immediately and change your password."),
             tone="alert")
         return self.get(letter.id), slot

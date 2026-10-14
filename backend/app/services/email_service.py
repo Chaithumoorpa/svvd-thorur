@@ -1,10 +1,14 @@
 import logging
-from typing import Optional, Tuple
+from email.message import EmailMessage
+from typing import List, Optional, Tuple
 
 import boto3
 
 from app.core.config import settings
-from app.services.email_template import TEMPLE_NAME, Tone, render_email
+from app.services.email_template import NO_REPLY_TEXT, TEMPLE_NAME, Tone, render_email
+
+# (file name, PDF bytes) - every attachment the site sends is a PDF it generated
+Attachment = Tuple[str, bytes]
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +45,7 @@ class EmailService:
 
     def send(self, to_email: str, subject: str, body: str, *, heading: Optional[str] = None,
              code: Optional[str] = None, cta: Optional[Tuple[str, str]] = None, tone: Tone = "normal",
-             image: Optional[str] = None) -> bool:
+             image: Optional[str] = None, attachments: Optional[List[Attachment]] = None) -> bool:
         """Best-effort mail to an arbitrary recipient (a devotee, a new admin user, ...).
         A no-op (logged, not raised) if SES isn't configured or there's no recipient -
         never blocks the action that triggered it. Returns whether the mail was
@@ -54,12 +58,15 @@ class EmailService:
         if not to_email:
             logger.info("Skipping email (no recipient address): %s", subject)
             return False
-        html = render_email(subject, body, heading=heading, code=code, cta=cta, tone=tone, image=image)
-        return self._send(to_email, subject, f"{body}\n\n{self._footer()}", html, log_label="email")
+        html = render_email(subject, body, heading=heading, code=code, cta=cta, tone=tone, image=image,
+                            attachments=[name for name, _ in attachments or []])
+        return self._send(to_email, subject, f"{body}\n\n{self._footer()}", html, log_label="email",
+                          attachments=attachments)
 
     def _footer(self) -> str:
         return (
             "--\n"
+            f"{NO_REPLY_TEXT}\n"
             "This is an automated message from svvdthorur.org. Privacy Policy: "
             f"{settings.FRONTEND_BASE_URL}/legal/privacy-policy"
         )
@@ -71,9 +78,23 @@ class EmailService:
         addr = self.from_email or ""
         return addr if "<" in addr else f'"{TEMPLE_NAME}" <{addr}>'
 
-    def _send(self, to_email: str, subject: str, body: str, html: str, log_label: str) -> bool:
+    def _raw(self, to_email: str, subject: str, body: str, html: str, attachments: List[Attachment]) -> bytes:
+        msg = EmailMessage()
+        msg["Subject"], msg["From"], msg["To"] = subject, self.source, to_email
+        msg.set_content(body)
+        msg.add_alternative(html, subtype="html")
+        for name, data in attachments:
+            msg.add_attachment(data, maintype="application", subtype="pdf", filename=name)
+        return msg.as_bytes()
+
+    def _send(self, to_email: str, subject: str, body: str, html: str, log_label: str,
+              attachments: Optional[List[Attachment]] = None) -> bool:
         try:
             client = boto3.client("ses", region_name=self.region)
+            if attachments:
+                client.send_raw_email(Source=self.source, Destinations=[to_email],
+                                      RawMessage={"Data": self._raw(to_email, subject, body, html, attachments)})
+                return True
             client.send_email(
                 Source=self.source,
                 Destination={"ToAddresses": [to_email]},

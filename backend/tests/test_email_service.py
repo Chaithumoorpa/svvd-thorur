@@ -85,3 +85,24 @@ def test_admin_notifications_are_labelled(monkeypatch):
         EmailService().notify_admin("New donation", "Donor: Sita\nAmount: Rs. 1001")
         _, html = _sent(ses_client)
     assert "TEMPLE ADMIN NOTIFICATION" in html and ">Sita</td>" in html
+
+
+def test_attachments_go_as_a_raw_mime_message_with_the_pdf(monkeypatch):
+    import email
+    _configured(monkeypatch)
+    with patch("app.services.email_service.boto3.client") as mock_boto:
+        ses_client = MagicMock()
+        mock_boto.return_value = ses_client
+        EmailService().send("devotee@example.com", "Booking confirmed", "Your ticket is attached.",
+                            attachments=[("Ticket_SV-1.pdf", b"%PDF-1.4 test")])
+        ses_client.send_email.assert_not_called()
+        raw = ses_client.send_raw_email.call_args.kwargs["RawMessage"]["Data"]
+    msg = email.message_from_bytes(raw)
+    parts = {p.get_content_type(): p for p in msg.walk()}
+    assert {"text/plain", "text/html", "application/pdf"} <= set(parts)
+    assert parts["application/pdf"].get_filename() == "Ticket_SV-1.pdf"
+    assert parts["application/pdf"].get_payload(decode=True) == b"%PDF-1.4 test"
+    html = parts["text/html"].get_payload(decode=True).decode()
+    assert "ATTACHED TO THIS EMAIL" in html and "Ticket_SV-1.pdf" in html
+    assert "Please do not reply to this email" in html
+    assert "do not reply" in parts["text/plain"].get_payload(decode=True).decode()

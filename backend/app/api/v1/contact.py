@@ -2,6 +2,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
+from app.core.config import settings
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.models.contact import ContactStatus
@@ -88,8 +89,8 @@ def update_contact_message(
             f"Your message to Sri Varasidhi Vinayaka Swamy Devasthanam (subject: \"{message.subject}\") "
             f"has been {verb}.\n\n"
             f"{reply_body}"
-            "If you have any further questions, please reply to this email or use the "
-            "Contact form on our website again.\n\n"
+            "If you have any further questions, please use the Contact form on our website again "
+            f"({settings.FRONTEND_BASE_URL}/contact).\n\n"
             "Thank you,\nSVVD Thorur",
         )
     return message

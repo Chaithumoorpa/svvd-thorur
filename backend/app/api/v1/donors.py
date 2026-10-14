@@ -186,9 +186,28 @@ def generate_receipt(
     audit: AuditContext = Depends(get_audit),
     _: User = Depends(_write_donations),
 ):
-    """Issue (or return the already issued) receipt number for a donation."""
+    """Issue (or return the already issued) receipt number for a donation. The
+    first time, a donor with an email address also gets the receipt PDF by email."""
+    already_issued = bool(service.get(donation_id).receipt_number)
     donation = service.issue_receipt(donation_id)
     audit.log("RECEIPT", "donation", donation_id, f"Issued receipt {donation.receipt_number}")
+    donor = donation.donor
+    if not already_issued and donor and donor.email:
+        pdf = DonationReceiptService.generate_receipt_pdf(donation, TempleRepository(service.db).get_active())
+        EmailService().send(
+            donor.email,
+            f"Donation receipt {donation.receipt_number}",
+            f"Dear {donor.name},\n\n"
+            "Thank you for your generous donation to Sri Varasidhi Vinayaka Swamy Devasthanam. Your "
+            "receipt is attached for your records.\n\n"
+            f"Receipt number: {donation.receipt_number}\n"
+            f"Amount: Rs. {donation.amount}\n"
+            f"Date: {donation.donated_on:%d-%m-%Y}\n\n"
+            "May Sri Varasidhi Vinayaka Swamy bless you and your family.\n\n"
+            "Thank you,\nSVVD Thorur",
+            heading="Thank you for your donation", image="varasidhi",
+            attachments=[(f"Receipt_{donation.receipt_number}.pdf", pdf)],
+        )
     return _donation_out(donation)
 
 

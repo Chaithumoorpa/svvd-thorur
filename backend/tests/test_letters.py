@@ -129,7 +129,8 @@ def test_full_workflow(client, admin, signer, offline, db, mails):
     assert db.query(AuditLog).filter(AuditLog.action == "SIGN_FAILED").count() == 1
     r = client.post(f"/api/v1/letters/{letter['id']}/sign", headers=signer_h, json={"password": "Password123"})
     assert r.status_code == 200 and r.json()["signatories"][0]["status"] == "SIGNED"
-    assert "You signed" in mails[-1][1]
+    assert "You signed" in mails[-1][1] and "IST" in mails[-1][2]
+    assert "IP" not in mails[-1][2] and "testclient" not in mails[-1][2]   # no IP address in emails
     assert client.get("/api/v1/letters/mine", headers=signer_h).json()["pending"] == []
     # a draft never carries the signature image - only the logo is embedded
     draft = PdfReader(BytesIO(client.get(f"/api/v1/letters/{letter['id']}/pdf", headers=headers).content)).pages[0]

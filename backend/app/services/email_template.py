@@ -23,6 +23,8 @@ from app.core.config import settings
 TEMPLE_NAME = "Sri Varasidhi Vinayaka Swamy Temple"
 TEMPLE_PLACE = "Thorur (V&P), Puttur (M), Tirupati (Dt) - 517583"
 INVOCATION = "ఓం గం గణపతయే నమః"
+NO_REPLY_TEXT = ("Please do not reply to this email - this mailbox is not monitored. For any help, use the "
+                 "Contact page on our website or speak to the temple office.")
 
 MAROON, MAROON_DARK, SAFFRON, GOLD_SOFT = "#7a1c1c", "#5a1010", "#d97a1f", "#f2d9a6"
 CREAM, PAGE, RULE, INK, MUTED = "#fbf6ec", "#f3ebdc", "#e7c9a0", "#2b2b2b", "#6b6b6b"
@@ -120,7 +122,7 @@ def _body(body: str, code: Optional[str], cta: Optional[Tuple[str, str]]) -> str
 
 def render_email(subject: str, body: str, *, heading: Optional[str] = None, code: Optional[str] = None,
                  cta: Optional[Tuple[str, str]] = None, tone: Tone = "normal", image: Optional[str] = None,
-                 preheader: Optional[str] = None) -> str:
+                 preheader: Optional[str] = None, attachments: Optional[list] = None) -> str:
     site = settings.FRONTEND_BASE_URL.rstrip("/")
     heading = heading or subject
     preheader = preheader or re.sub(r"\s+", " ", body.strip())[:110]
@@ -133,6 +135,15 @@ def render_email(subject: str, body: str, *, heading: Optional[str] = None, code
         strip = (f'<tr><td style="background:{CREAM};border-left:4px solid {SAFFRON};padding:10px 32px;'
                  f'font-family:{SANS};font-size:13px;font-weight:700;color:{MAROON};letter-spacing:.3px;">'
                  f'TEMPLE ADMIN NOTIFICATION</td></tr>')
+
+    attached = ""
+    if attachments:
+        names = "".join(f'<div style="font-family:{SANS};font-size:14px;color:{INK};font-weight:600;padding:2px 0;">'
+                        f'&#128206; {escape(n)}</div>' for n in attachments)
+        attached = (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">'
+                    f'<tr><td style="padding:12px 14px;background:{CREAM};border:1px dashed {RULE};border-radius:6px;">'
+                    f'<div style="font-family:{SANS};font-size:12px;color:{MUTED};margin-bottom:4px;">'
+                    f'ATTACHED TO THIS EMAIL</div>{names}</td></tr></table>')
 
     picture = ""
     if image in IMAGES:
@@ -167,8 +178,13 @@ style="display:block;width:64px;height:64px;border:0;border-radius:50%;backgroun
 {picture}
 <h1 style="margin:0 0 18px;font-family:{SERIF};font-size:22px;line-height:1.3;color:{MAROON};font-weight:700;">{escape(heading)}</h1>
 {_body(body, code, cta)}
+{attached}
 </td></tr>
 <tr><td style="padding:0 32px 24px;"><div style="border-top:1px solid {RULE};"></div></td></tr>
+<tr><td style="padding:0 32px 14px;">
+<div style="padding:10px 14px;background:{CREAM};border-radius:6px;font-family:{SANS};font-size:13px;line-height:1.5;color:{MAROON};">
+<strong>Please do not reply to this email</strong> - this mailbox is not monitored. For any help, use the
+<a href="{site}/contact" style="color:{MAROON};">Contact page</a> or speak to the temple office.</div></td></tr>
 <tr><td style="padding:0 32px 26px;font-family:{SANS};font-size:12px;line-height:1.6;color:{MUTED};">
 <strong style="color:{MAROON};">{TEMPLE_NAME}</strong><br>{escape(TEMPLE_PLACE)}<br>
 <a href="{site}" style="color:{MAROON};">{escape(site.split('://')[-1])}</a> &middot;
