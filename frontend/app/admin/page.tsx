@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Calendar, Heart, Image as ImageIcon, Mail, Megaphone, Sparkles, Ticket, Users } from 'lucide-react';
+import { Calendar, Heart, Image as ImageIcon, Mail, Megaphone, Package, Receipt, Sparkles, Ticket, Users } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
 import { useAuth } from '@/components/admin/AuthContext';
 import { ErrorBlock, LoadingBlock } from '@/components/ui/States';
@@ -30,6 +30,8 @@ export default function AdminDashboard() {
   const s = stats.data;
 
   const tiles: Tile[] = [
+    { label: 'Expenses to approve', href: '/admin/expenses', value: s.pending_expenses, icon: Receipt, permission: 'finance:write', hint: 'submitted by staff' },
+    { label: 'Low stock', href: '/admin/inventory', value: s.low_stock_items, icon: Package, permission: 'inventory:read', hint: 'time to reorder' },
     { label: 'Pending messages', href: '/admin/messages', value: s.pending_messages, icon: Mail, permission: 'messages:manage', hint: 'need a reply' },
     { label: 'Seva tickets today', href: '/admin/seva-tickets', value: s.seva_tickets_today, icon: Ticket, permission: 'tickets:manage', hint: `${s.seva_tickets} in total` },
     { label: 'Live announcements', href: '/admin/announcements', value: s.announcements, icon: Megaphone, permission: 'content:write' },
