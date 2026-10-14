@@ -31,7 +31,7 @@ def _photo(ink=(25, 35, 120), paper=(236, 232, 224), size=(900, 400), fmt="JPEG"
 @pytest.fixture()
 def mails(monkeypatch):
     sent = []
-    monkeypatch.setattr(EmailService, "send", lambda self, to, subject, body: sent.append((to, subject, body)) or True)
+    monkeypatch.setattr(EmailService, "send", lambda self, to, subject, body, **style: sent.append((to, subject, body)) or True)
     return sent
 
 

@@ -147,6 +147,7 @@ def create_donation(
             "sends you and your family warm greetings and blessings.\n\n"
             f"Your donation of Rs. {donation.amount} has been received with your intentions for this occasion.\n\n"
             "Thank you,\nSVVD Thorur",
+            image="varasidhi",
         )
     return out
 

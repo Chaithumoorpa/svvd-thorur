@@ -301,7 +301,7 @@ def test_forgot_username_by_email_sends_username(client, db, make_user, monkeypa
     sent = {}
     monkeypatch.setattr(
         "app.services.email_service.EmailService.send",
-        lambda self, to, subject, body: sent.update(to=to, body=body),
+        lambda self, to, subject, body, **style: sent.update(to=to, body=body),
     )
     r = client.post("/api/v1/auth/forgot-username", json={"identifier": "laura@example.com"})
     assert r.status_code == 200

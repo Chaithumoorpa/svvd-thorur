@@ -141,7 +141,8 @@ class LetterService:
                 f"A letter from {self._temple_name()} is waiting for your signature as {self._as(s)}.\n\n"
                 f"Subject: {letter.subject}\n\n"
                 f"Please sign in and review it at {settings.FRONTEND_BASE_URL}/sign-letters\n"
-                "Your signature is placed on the letter only when you sign it yourself."))
+                "Your signature is placed on the letter only when you sign it yourself."),
+                cta=("Review and sign", f"{settings.FRONTEND_BASE_URL}/sign-letters"))
         return self.get(letter.id)
 
     def recall(self, letter_id: int) -> OfficialLetter:
@@ -179,7 +180,8 @@ class LetterService:
         self._mail_member(slot.member, f"You signed: {letter.subject}", (
             f"Your signature was placed on a letter of {self._temple_name()} as {self._as(slot)}.\n\n"
             f"Subject: {letter.subject}\nSigned: {slot.signed_at:%d-%m-%Y %H:%M} UTC from {slot.signed_ip or 'unknown IP'}\n\n"
-            "If this was not you, contact the temple office immediately and change your password."))
+            "If this was not you, contact the temple office immediately and change your password."),
+            tone="alert")
         return self.get(letter.id), slot
 
     def decline(self, letter_id: int, user: User, reason: str) -> Tuple[OfficialLetter, LetterSignatory]:
@@ -319,9 +321,9 @@ class LetterService:
                     f"{member.name} at {self._temple_name()}.\n\nThat login can now sign temple letters as "
                     f"{member.name}, at {settings.FRONTEND_BASE_URL}/sign-letters.\n\n"
                     "If this is wrong, contact the temple office immediately.")
-            self._mail_member(member, "Your login was linked for signing temple letters", body)
+            self._mail_member(member, "Your login was linked for signing temple letters", body, tone="alert")
             if user.email and user.email != member.email:
-                self.email.send(user.email, "Your login was linked for signing temple letters", body)
+                self.email.send(user.email, "Your login was linked for signing temple letters", body, tone="alert")
         return previous, user.username if user else None
 
     def seal_status(self) -> dict:
@@ -349,7 +351,7 @@ class LetterService:
                 f"{user.username} uploaded your signature to {self._temple_name()}'s official letter system.\n\n"
                 "It is placed on a letter only when you sign that letter yourself, from your own login, "
                 f"at {settings.FRONTEND_BASE_URL}/sign-letters - nobody else can apply it.\n\n"
-                "If you did not agree to this, contact the temple office."))
+                "If you did not agree to this, contact the temple office."), cta=("Review and sign", f"{settings.FRONTEND_BASE_URL}/sign-letters"))
         return row
 
     def retire_image(self, kind: LetterImageKind, member_id: Optional[int], commit: bool = True) -> int:
@@ -399,9 +401,9 @@ class LetterService:
             OfficialLetter.reference_number.like(f"{prefix}%")).scalar() or 0
         return f"{prefix}{count + 1 + bump:04d}"
 
-    def _mail_member(self, member: Optional[Member], subject: str, body: str) -> None:
+    def _mail_member(self, member: Optional[Member], subject: str, body: str, **style) -> None:
         if not member:
             return
         to = (member.user.email if member.user and member.user.email else None) or member.email
         if to:
-            self.email.send(to, subject, f"Namaskaram {member.name},\n\n{body}")
+            self.email.send(to, subject, f"Namaskaram {member.name},\n\n{body}", **style)

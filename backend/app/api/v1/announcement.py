@@ -69,8 +69,9 @@ def create_announcement(
         f"New announcement: {result.title}",
         f"{result.title}\n\n"
         f"{result.message or ''}\n\n"
-        f"See all announcements at {settings.FRONTEND_BASE_URL}\n\n"
+        f"See all announcements at {settings.FRONTEND_BASE_URL}/announcements\n\n"
         "Thank you,\nSVVD Thorur",
+        heading=result.title, cta=("View announcements", f"{settings.FRONTEND_BASE_URL}/announcements"),
     )
     return result
 

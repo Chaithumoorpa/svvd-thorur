@@ -1,8 +1,10 @@
 import logging
+from typing import Optional, Tuple
 
 import boto3
 
 from app.core.config import settings
+from app.services.email_template import TEMPLE_NAME, Tone, render_email
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +31,17 @@ class EmailService:
         sandbox this is the same requirement (a verified from_email) as admin mail."""
         return bool(self.from_email)
 
-    def notify_admin(self, subject: str, body: str) -> bool:
+    def notify_admin(self, subject: str, body: str, **style) -> bool:
         if not self.enabled:
             logger.info("Skipping admin notification (SES not configured): %s", subject)
             return False
-        return self._send(self.admin_email, subject, body, log_label="admin notification")
+        style.setdefault("tone", "admin")
+        return self._send(self.admin_email, subject, body, render_email(subject, body, **style),
+                          log_label="admin notification")
 
-    def send(self, to_email: str, subject: str, body: str) -> bool:
+    def send(self, to_email: str, subject: str, body: str, *, heading: Optional[str] = None,
+             code: Optional[str] = None, cta: Optional[Tuple[str, str]] = None, tone: Tone = "normal",
+             image: Optional[str] = None) -> bool:
         """Best-effort mail to an arbitrary recipient (a devotee, a new admin user, ...).
         A no-op (logged, not raised) if SES isn't configured or there's no recipient -
         never blocks the action that triggered it. Returns whether the mail was
@@ -48,7 +54,8 @@ class EmailService:
         if not to_email:
             logger.info("Skipping email (no recipient address): %s", subject)
             return False
-        return self._send(to_email, subject, f"{body}\n\n{self._footer()}", log_label="email")
+        html = render_email(subject, body, heading=heading, code=code, cta=cta, tone=tone, image=image)
+        return self._send(to_email, subject, f"{body}\n\n{self._footer()}", html, log_label="email")
 
     def _footer(self) -> str:
         return (
@@ -57,15 +64,23 @@ class EmailService:
             f"{settings.FRONTEND_BASE_URL}/legal/privacy-policy"
         )
 
-    def _send(self, to_email: str, subject: str, body: str, log_label: str) -> bool:
+    @property
+    def source(self) -> str:
+        """The From header: the temple's name in front of a bare address, so inboxes
+        show "Sri Varasidhi Vinayaka Swamy Temple" rather than a no-reply address."""
+        addr = self.from_email or ""
+        return addr if "<" in addr else f'"{TEMPLE_NAME}" <{addr}>'
+
+    def _send(self, to_email: str, subject: str, body: str, html: str, log_label: str) -> bool:
         try:
             client = boto3.client("ses", region_name=self.region)
             client.send_email(
-                Source=self.from_email,
+                Source=self.source,
                 Destination={"ToAddresses": [to_email]},
                 Message={
                     "Subject": {"Data": subject, "Charset": "UTF-8"},
-                    "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
+                    "Body": {"Text": {"Data": body, "Charset": "UTF-8"},
+                             "Html": {"Data": html, "Charset": "UTF-8"}},
                 },
             )
             return True
