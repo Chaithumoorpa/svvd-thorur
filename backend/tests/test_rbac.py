@@ -20,6 +20,9 @@ def test_permission_matrix():
     assert Permission.INVENTORY_MANAGE not in permissions_for(["STAFF"])
     assert Permission.INVENTORY_READ in permissions_for(["TRUSTEE"])
     assert Permission.INVENTORY_WRITE not in permissions_for(["TRUSTEE"])
+    # trustees read letters; only admins draft/issue them and manage signatures
+    assert Permission.LETTERS_READ in permissions_for(["TRUSTEE"])
+    assert Permission.LETTERS_WRITE not in permissions_for(["TRUSTEE"]) | permissions_for(["STAFF"])
     assert permissions_for(["GENERAL_USER"]) == set()
     assert permissions_for(["NOT_A_ROLE"]) == set()
     assert permissions_for(None) == set()
@@ -86,6 +89,14 @@ PROTECTED = [
     ("GET", "/api/v1/analytics/finance", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
     ("GET", "/api/v1/analytics/inventory", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
     ("GET", "/api/v1/analytics/audit", None, {"SUPER_ADMIN"}),
+    # official letters
+    ("GET", "/api/v1/letters", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/letters/templates", None, {"SUPER_ADMIN", "ADMIN"}),
+    ("GET", "/api/v1/letters/signatures", None, {"SUPER_ADMIN", "ADMIN"}),
+    ("GET", "/api/v1/letters/seal", None, {"SUPER_ADMIN", "ADMIN"}),
+    ("POST", "/api/v1/letters", {"kind": "GENERAL", "letter_date": "2026-10-14", "subject": "Notice",
+                                 "body": "A short notice to all members.", "signatories": []},
+     {"SUPER_ADMIN", "ADMIN"}),
 ]
 
 

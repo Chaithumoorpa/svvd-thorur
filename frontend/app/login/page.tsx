@@ -14,8 +14,14 @@ import { useTurnstile } from '@/hooks/useTurnstile';
 type Step = 'credentials' | 'otp';
 
 /** Same login for everyone; where it lands depends on the account's roles. */
+/** Pages that send people here to sign in and expect them back (?next=...). Only these exact
+ * paths are honoured, so the parameter can't bounce anyone to another site. */
+const RETURN_PATHS = new Set(['/sign-letters']);
+
 function landingPath(me: Me): string {
   if (me.must_change_password) return '/admin/change-password';
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (next && RETURN_PATHS.has(next)) return next;
   return me.is_admin || me.is_trustee || me.permissions.length > 0 ? '/admin' : '/my-bookings';
 }
 
