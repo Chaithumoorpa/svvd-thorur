@@ -13,6 +13,15 @@ const securityHeaders = [
   // still blocked for any third-party iframe. Empty () for camera would block the
   // permission prompt from ever appearing at all, not just deny it silently.
   { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' },
+  // HTTPS only for a year once a browser has seen the site. Subdomains are left out on
+  // purpose: not every one is known to serve HTTPS.
+  { key: 'Strict-Transport-Security', value: 'max-age=31536000' },
+  // Own browsing-context group (blocks cross-window attacks); popups we open (payment
+  // pages, PDFs in a new tab) still work.
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+  // A policy that blocks nothing the site needs: no framing by other sites, no <base>
+  // hijacking, no plugins. (Restricting scripts needs per-request nonces - a separate change.)
+  { key: 'Content-Security-Policy', value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'" },
 ];
 
 // Legacy / duplicate URLs -> one canonical page each (keeps SEO signals in one place).

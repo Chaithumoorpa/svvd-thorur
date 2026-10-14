@@ -312,7 +312,7 @@ export default function BookSeva({
                       {uploading ? 'Uploading…' : photoKey ? 'Replace photo' : 'Add one photo'}
                       <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={handlePhoto} />
                     </label>
-                    <p className="mt-1 text-xs text-gray-500">Shown with your blessing on the seva date, once the temple has reviewed it.</p>
+                    <p className="mt-1 text-xs text-gray-600">Shown with your blessing on the seva date, once the temple has reviewed it.</p>
                     {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
                     {photoKey && photoPreview && (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -323,7 +323,7 @@ export default function BookSeva({
                     <input type="checkbox" className="mt-1" checked={showPublicly} onChange={(e) => setShowPublicly(e.target.checked)} />
                     <span>
                       Show my blessing publicly
-                      <span className="block text-xs text-gray-500">
+                      <span className="block text-xs text-gray-600">
                         Your name and occasion on the {seva.name} calendar, and your photo on that day&apos;s
                         blessings page for 7 days, after the temple approves it. Leave unticked to keep it
                         private - you still get your blessing by email.

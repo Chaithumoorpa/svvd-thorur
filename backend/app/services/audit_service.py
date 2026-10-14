@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.utils.rate_limiter import get_client_ip
@@ -115,6 +116,7 @@ class AuditService:
                     "If this is expected (a cleanup, a bulk correction), no action is needed. "
                     "If it isn't, review Admin -> Audit Log for what was deleted and by whom.\n\n"
                     "Thank you,\nSVVD Thorur",
+                    tone="alert", cta=("Open the audit log", f"{settings.FRONTEND_BASE_URL}/admin/audit"),
                 )
         except Exception:  # noqa: BLE001 - the alert itself must never break the request
             logger.exception("Failed to check/send repeated-deletion alert for actor_id=%s", actor_id)

@@ -71,15 +71,15 @@ export default async function HundiPosterPage() {
 
             <dl className="mt-[3mm] space-y-[0.5mm]">
               <div>
-                <dt className="text-[9pt] uppercase tracking-wide text-gray-500">{td('upiId')}</dt>
+                <dt className="text-[9pt] uppercase tracking-wide text-gray-600">{td('upiId')}</dt>
                 <dd className="font-mono text-[15pt] font-bold text-maroon">{qr.upi_vpa}</dd>
               </div>
               <div>
-                <dt className="text-[9pt] uppercase tracking-wide text-gray-500">{td('accountName')}</dt>
+                <dt className="text-[9pt] uppercase tracking-wide text-gray-600">{td('accountName')}</dt>
                 <dd className="text-[13pt] font-semibold text-gray-900">{qr.payee_name}</dd>
               </div>
             </dl>
-            <p className="mt-[1.5mm] text-[9pt] text-gray-500">{td('apps')}</p>
+            <p className="mt-[1.5mm] text-[9pt] text-gray-600">{td('apps')}</p>
 
             <div className="mt-[3mm] w-full rounded-[3mm] border border-green-300 bg-green-50 px-[5mm] py-[2.5mm] text-left text-[10pt] text-green-900">
               <p className="flex items-center gap-[1.5mm] font-semibold">
@@ -117,7 +117,7 @@ export default async function HundiPosterPage() {
                 )}
                 <span>{t('website')}: <strong>{website}</strong></span>
               </p>
-              <p className="mt-[1mm] text-[8pt] text-gray-500">{t('printedOn', { date: printedOn })}</p>
+              <p className="mt-[1mm] text-[8pt] text-gray-600">{t('printedOn', { date: printedOn })}</p>
             </footer>
           </div>
         </div>

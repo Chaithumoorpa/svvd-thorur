@@ -91,7 +91,7 @@ class OccasionGreetingService:
         self.db.commit()
         if not claimed:
             return False
-        sent = self.email.send(to_email, subject, body)
+        sent = self.email.send(to_email, subject, body, image="varasidhi")
         if not sent:
             self.db.query(SevaTicket).filter(SevaTicket.id == ticket.id).update(
                 {SevaTicket.greeting_sent_at: None}, synchronize_session=False,

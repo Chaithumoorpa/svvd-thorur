@@ -24,7 +24,7 @@ export default async function PrivacyPolicyPage() {
   return (
     <PageContainer>
       <h1 className="text-3xl font-serif font-semibold text-templeDark">Privacy Policy</h1>
-      <p className="mt-2 text-sm text-gray-500">Last updated: 29 September 2026</p>
+      <p className="mt-2 text-sm text-gray-600">Last updated: 29 September 2026</p>
       <p className="mt-4 text-gray-700">
         {name} (&quot;the temple&quot;, &quot;we&quot;, &quot;us&quot;) operates svvdthorur.org for devotees to look up
         temple information, book sevas, make donations and get in touch with the temple office. This

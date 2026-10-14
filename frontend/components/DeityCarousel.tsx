@@ -106,7 +106,7 @@ export default function DeityCarousel() {
                   <p className="text-md text-gray-600 mt-1 uppercase tracking-widest">{slide.templeNameSub}</p>
 
                   <div className="mt-6 md:mt-8">
-                    <h2 className="text-2xl font-serif font-semibold text-templeGold">
+                    <h2 className="text-2xl font-serif font-semibold text-templeGoldDark">
                       {slide.deityName}
                     </h2>
                     <p className="text-xl text-red-800 font-serif my-2 italic">
@@ -153,15 +153,17 @@ export default function DeityCarousel() {
           </button>
 
           {/* Dot Indicators */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex gap-3">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex gap-1">
             {slides.map((_, index) => (
               <button
                 key={index}
                 aria-label={`Go to slide ${index + 1}`}
                 onClick={() => goToSlide(index)}
-                className={`w-2.5 h-2.5 rounded-full transition ${index === current ? 'bg-templeGold scale-125' : 'bg-gray-300'
-                  }`}
-              />
+                aria-current={index === current ? 'true' : undefined}
+                className="flex h-6 w-6 items-center justify-center rounded-full"
+              >
+                <span className={`block w-2.5 h-2.5 rounded-full transition ${index === current ? 'bg-templeGold scale-125' : 'bg-gray-400'}`} />
+              </button>
             ))}
           </div>
         </div>

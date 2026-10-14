@@ -19,7 +19,7 @@ export default async function RefundPolicyPage() {
         <p className="mt-2 text-gray-600">{t('sectionText')}</p>
       </section>
 
-      <p className="mt-8 text-sm text-gray-500">{t('lastUpdated', { date: '2025-12-27' })}</p>
+      <p className="mt-8 text-sm text-gray-600">{t('lastUpdated', { date: '2025-12-27' })}</p>
     </PageContainer>
   )
 }

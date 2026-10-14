@@ -21,7 +21,7 @@ from app.models.letter import LetterStatus, OfficialLetter, SignatoryRole, Signa
 from app.models.temple import Temple
 from app.services.donation_receipt_service import IST, MAROON, MUTED, RULE, _header, _safe, _style
 from app.services.letter_service import verify_url
-from app.services.letter_templates import CERTIFICATE_TITLES
+from app.services.letter_templates import ATTESTOR_HEADINGS, CERTIFICATE_TITLES
 
 PAGE_W, PAGE_H = A4
 MARGIN = 20 * mm
@@ -197,7 +197,7 @@ def generate_letter_pdf(letter: OfficialLetter, temple: Optional[Temple],
         seal = None
     elements.append(KeepTogether(closing))
     if attestors:
-        elements.append(KeepTogether([Spacer(1, 4), Paragraph("ATTESTED BY", S["attested"]), Spacer(1, 2),
+        elements.append(KeepTogether([Spacer(1, 4), Paragraph(ATTESTOR_HEADINGS.get(letter.kind, "ATTESTED BY"), S["attested"]), Spacer(1, 2),
                                       _signature_rows(attestors, width, issued, seal)]))
 
     generated = (generated_at or datetime.now(IST)).astimezone(IST)

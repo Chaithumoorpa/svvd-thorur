@@ -40,7 +40,7 @@ function FestivalCard({ f, muted }: { f: Festival; muted?: boolean }) {
       </div>
       <div className="min-w-0 flex-1 p-5">
         <h3 className="font-serif text-xl font-bold text-maroon">{f.name}</h3>
-        <p className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-gray-500">
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-gray-600">
           {f.end_date && f.festival_date && <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3" aria-hidden="true" />{formatDate(f.festival_date)} – {formatDate(f.end_date)}</span>}
           {f.location && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" aria-hidden="true" />{f.location}</span>}
         </p>
@@ -85,7 +85,7 @@ export default async function FestivalsPage() {
             ))}
           </div>
         ) : (
-          <p className="rounded-xl border border-dashed border-amber-300 bg-white p-8 text-center text-gray-500">{t('noUpcoming')}</p>
+          <p className="rounded-xl border border-dashed border-amber-300 bg-white p-8 text-center text-gray-600">{t('noUpcoming')}</p>
         )}
       </section>
 

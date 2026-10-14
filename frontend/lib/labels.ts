@@ -59,10 +59,15 @@ export const LETTER_KIND_LABELS: Record<LetterKind, string> = {
   DONATION_ACKNOWLEDGEMENT: 'Donation acknowledgement',
   NOC: 'No objection certificate',
   INVITATION: 'Invitation',
+  POWER_OF_ATTORNEY: 'Power of attorney (authorised signatory)',
+  RESOLUTION: 'Resolution (authorised signatory)',
+  AUTHORISATION: 'Letter of authorisation',
 };
 export const LETTER_KINDS = Object.keys(LETTER_KIND_LABELS) as LetterKind[];
 /** Certificates print a centred title instead of the To / Subject / Dear block. */
-export const CERTIFICATE_KINDS = new Set<LetterKind>(['MEMBERSHIP_CERTIFICATE', 'SERVICE_CERTIFICATE', 'TO_WHOM_IT_MAY_CONCERN', 'NOC']);
+export const CERTIFICATE_KINDS = new Set<LetterKind>([
+  'MEMBERSHIP_CERTIFICATE', 'SERVICE_CERTIFICATE', 'TO_WHOM_IT_MAY_CONCERN', 'NOC', 'POWER_OF_ATTORNEY', 'RESOLUTION',
+]);
 
 export const LETTER_STATUS: Record<LetterStatus, { label: string; cls: string }> = {
   DRAFT: { label: 'Draft', cls: 'bg-gray-100 text-gray-700' },

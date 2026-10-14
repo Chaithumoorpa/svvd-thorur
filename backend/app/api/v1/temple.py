@@ -106,7 +106,8 @@ def create_timing(
     timing = service.create_timing(payload)
     audit.log("CREATE", "temple_timing", timing.id, f"Added timing '{timing.label}'")
     invalidate("temple:timings")
-    notify_devotees(db, "Darshan timings updated", _timing_notice("added", timing))
+    notify_devotees(db, "Darshan timings updated", _timing_notice("added", timing),
+                    cta=("See darshan timings", f"{settings.FRONTEND_BASE_URL}/timings"))
     return timing
 
 
@@ -123,7 +124,8 @@ def update_timing(
     audit.log("UPDATE", "temple_timing", timing.id, f"Updated timing '{timing.label}'",
               payload.model_dump(exclude_unset=True))
     invalidate("temple:timings")
-    notify_devotees(db, "Darshan timings updated", _timing_notice("changed", timing))
+    notify_devotees(db, "Darshan timings updated", _timing_notice("changed", timing),
+                    cta=("See darshan timings", f"{settings.FRONTEND_BASE_URL}/timings"))
     return timing
 
 
@@ -138,5 +140,6 @@ def delete_timing(
     timing = service.delete_timing(timing_id)
     audit.log("DELETE", "temple_timing", timing_id, f"Deleted timing '{timing.label}'")
     invalidate("temple:timings")
-    notify_devotees(db, "Darshan timings updated", _timing_notice("removed", timing))
+    notify_devotees(db, "Darshan timings updated", _timing_notice("removed", timing),
+                    cta=("See darshan timings", f"{settings.FRONTEND_BASE_URL}/timings"))
     return timing

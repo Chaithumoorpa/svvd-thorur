@@ -82,6 +82,7 @@ class OtpService:
             "It is valid for 10 minutes - enter it on the booking page to continue.\n\n"
             "If you didn't request this, you can safely ignore this email.\n\n"
             "Thank you,\nSVVD Thorur",
+            code=code, heading="Your verification code",
         )
         if not sent:
             raise HTTPException(
@@ -119,6 +120,7 @@ class OtpService:
             "It is valid for 10 minutes. If you didn't just try to sign in, your password "
             "may be compromised - change it as soon as you can.\n\n"
             "Thank you,\nSVVD Thorur",
+            code=code, heading="Your sign-in code", tone="alert",
         )
         if not sent:
             raise HTTPException(

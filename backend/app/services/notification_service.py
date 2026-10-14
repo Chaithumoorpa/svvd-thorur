@@ -8,7 +8,7 @@ from app.services.email_service import EmailService
 logger = logging.getLogger(__name__)
 
 
-def notify_devotees(db: Session, subject: str, body: str) -> None:
+def notify_devotees(db: Session, subject: str, body: str, **style) -> None:
     """Best-effort email to every devotee account (an active user with an
     email on file who isn't staff, a trustee, or an admin) - used when
     something devotee-facing changes (darshan timings, a new announcement).
@@ -22,6 +22,6 @@ def notify_devotees(db: Session, subject: str, body: str) -> None:
             return
         email_service = EmailService()
         for devotee in devotees:
-            email_service.send(devotee.email, subject, body)
+            email_service.send(devotee.email, subject, body, **style)
     except Exception:  # noqa: BLE001 - notifying devotees must never break the request
         logger.exception("Failed to notify devotees: %s", subject)

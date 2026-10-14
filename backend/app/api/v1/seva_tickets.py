@@ -4,6 +4,8 @@ from fastapi.responses import HTMLResponse
 from typing import List, Literal, Optional
 from uuid import UUID
 
+import logging
+
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission
 from app.core.security import create_access_token, decode_access_token
@@ -41,6 +43,7 @@ from app.schemas.seva_ticket import (
 )
 from app.models.user import User
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/seva-tickets", tags=["Seva Tickets"])
 
 _manage = require_permission(Permission.TICKETS_MANAGE)
@@ -49,7 +52,7 @@ SEVA_PAYMENT_PURPOSE = "seva_payment"
 PAYMENT_TOKEN_TTL = timedelta(minutes=20)  # generous for a bank's own OTP step mid-checkout
 
 
-def _after_booking(ticket, greetings: OccasionGreetingService) -> None:
+def _after_booking(ticket, greetings: OccasionGreetingService, service: "SevaTicketService") -> None:
     """Admin notification + devotee confirmation email, and the occasion
     greeting if it's already due - shared by every path that produces a
     booked ticket (free/pay-at-counter and paid-online alike)."""
@@ -82,8 +85,9 @@ def _after_booking(ticket, greetings: OccasionGreetingService) -> None:
         f"Seva: {ticket.seva_name}\n"
         f"Date: {ticket.seva_date}\n\n"
         f"{payment_note}"
-        "Please show this ticket number at the temple counter.\n\n"
+        "Your ticket is attached - please show it (printed or on your phone) at the temple counter.\n\n"
         "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
+        attachments=_ticket_attachment(service, ticket),
     )
     # A booking already paid for (free, or paid online) gets its occasion blessing
     # now if the date has come; a PENDING one waits until its fee is collected.
@@ -133,6 +137,16 @@ def create_blessing_photo_upload_url(
     return upload
 
 
+def _ticket_attachment(service: SevaTicketService, ticket) -> list:
+    """The ticket PDF to attach - or nothing if it can't be generated (the email,
+    with the ticket number in it, still goes)."""
+    try:
+        return [(f"Ticket_{ticket.ticket_number}.pdf", service.generate_ticket_pdf(ticket).getvalue())]
+    except Exception:  # noqa: BLE001 - a PDF hiccup must not stop the confirmation
+        logger.warning("Could not attach ticket PDF for %s", ticket.ticket_number, exc_info=True)
+        return []
+
+
 @router.post("", response_model=SevaTicketOut)
 def book_seva_ticket(
     payload: SevaBookingOnline,
@@ -155,7 +169,7 @@ def book_seva_ticket(
         raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
     OtpService.check_booking_token(payload.booking_token, payload.email)
     ticket = service.book_ticket(payload, booked_by_user_id=current_user.id if current_user else None)
-    _after_booking(ticket, greetings)
+    _after_booking(ticket, greetings, service)
     return ticket
 
 
@@ -234,7 +248,7 @@ def confirm_seva_payment(
             )
             raise HTTPException(status_code=409, detail=detail)
         raise
-    _after_booking(ticket, greetings)
+    _after_booking(ticket, greetings, service)
     return ticket
 
 
@@ -298,6 +312,20 @@ def collect_ticket_payment(
     ticket = service.collect_payment(ticket_id, admin_user)
     audit.log("COLLECT_PAYMENT", "seva_ticket", ticket.id, f"Collected payment for ticket {ticket.ticket_number}",
               {"amount": ticket.amount})
+    if ticket.email:
+        EmailService().send(
+            ticket.email,
+            f"Payment received: {ticket.seva_name} ({ticket.ticket_number})",
+            f"Dear {ticket.devotee_name},\n\n"
+            "We have received the seva fee at the temple counter. Your updated ticket, marked paid, is "
+            "attached.\n\n"
+            f"Ticket number: {ticket.ticket_number}\n"
+            f"Seva: {ticket.seva_name}\n"
+            f"Date: {ticket.seva_date}\n"
+            f"Amount paid: Rs. {ticket.amount}\n\n"
+            "Thank you,\nSri Varasidhi Vinayaka Swamy Devasthanam, Thorur",
+            attachments=_ticket_attachment(service, ticket),
+        )
     # Paid on (or just after) the seva date: the cron run for that day has
     # already skipped this ticket, so greet now. Paid earlier: cron does it.
     if greetings.seva_due(ticket, date.today()):
