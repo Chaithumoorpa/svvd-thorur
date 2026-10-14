@@ -1,5 +1,7 @@
 /** Display names for enum values the admin pages show. */
-import type { AssetCondition, ExpenseCategory, ExpenseStatus, MovementType } from './types';
+import type {
+  AssetCondition, ExpenseCategory, ExpenseStatus, LetterKind, LetterStatus, MovementType, SignatoryStatus,
+} from './types';
 
 export const EXPENSE_CATEGORIES: Record<ExpenseCategory, string> = {
   POOJA_SUPPLIES: 'Pooja supplies',
@@ -46,4 +48,32 @@ export const formatQty = (q: string | number | null | undefined) => {
   if (q === null || q === undefined || q === '') return '-';
   const n = Number(q);
   return Number.isFinite(n) ? n.toLocaleString('en-IN', { maximumFractionDigits: 3 }) : String(q);
+};
+
+export const LETTER_KIND_LABELS: Record<LetterKind, string> = {
+  GENERAL: 'General letter',
+  APPOINTMENT: 'Appointment letter',
+  MEMBERSHIP_CERTIFICATE: 'Membership certificate',
+  SERVICE_CERTIFICATE: 'Service certificate',
+  TO_WHOM_IT_MAY_CONCERN: 'To whom it may concern',
+  DONATION_ACKNOWLEDGEMENT: 'Donation acknowledgement',
+  NOC: 'No objection certificate',
+  INVITATION: 'Invitation',
+};
+export const LETTER_KINDS = Object.keys(LETTER_KIND_LABELS) as LetterKind[];
+/** Certificates print a centred title instead of the To / Subject / Dear block. */
+export const CERTIFICATE_KINDS = new Set<LetterKind>(['MEMBERSHIP_CERTIFICATE', 'SERVICE_CERTIFICATE', 'TO_WHOM_IT_MAY_CONCERN', 'NOC']);
+
+export const LETTER_STATUS: Record<LetterStatus, { label: string; cls: string }> = {
+  DRAFT: { label: 'Draft', cls: 'bg-gray-100 text-gray-700' },
+  AWAITING_SIGNATURES: { label: 'Awaiting signatures', cls: 'bg-amber-100 text-amber-800' },
+  ISSUED: { label: 'Issued', cls: 'bg-green-100 text-green-800' },
+  REVOKED: { label: 'Revoked', cls: 'bg-red-100 text-red-800' },
+};
+
+export const SIGNATORY_STATUS: Record<SignatoryStatus, { label: string; cls: string }> = {
+  PENDING: { label: 'Waiting', cls: 'text-amber-700' },
+  SIGNED: { label: 'Signed', cls: 'text-green-700' },
+  PAPER: { label: 'Signs in ink', cls: 'text-gray-600' },
+  DECLINED: { label: 'Declined', cls: 'text-red-700' },
 };

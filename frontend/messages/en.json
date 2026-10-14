@@ -340,5 +340,31 @@
     "print": "Print poster",
     "printHint": "Print on A4 with 'Fit to page' and 'Background graphics' turned on.",
     "metaTitle": "e-Hundi poster"
+  },
+  "letterVerify": {
+    "metaTitle": "Verify a temple letter",
+    "title": "Letter verification",
+    "genuine": "Genuine letter",
+    "genuineText": "This letter was issued by {temple}. Check that the details below match the printed letter.",
+    "revoked": "This letter has been revoked",
+    "revokedText": "This letter was issued by {temple} but has since been revoked. It is no longer valid.",
+    "reason": "Reason",
+    "notFound": "No matching letter",
+    "notFoundText": "No issued letter matches this link. If you scanned the QR code on a letter, do not rely on that letter - please contact the temple office.",
+    "unavailableTitle": "Could not check right now",
+    "unavailableText": "The verification service did not respond. Please try again in a few minutes.",
+    "reference": "Reference number",
+    "type": "Type",
+    "subject": "Subject",
+    "issuedTo": "Issued to",
+    "letterDate": "Letter date",
+    "issuedOn": "Issued on",
+    "revokedOn": "Revoked on",
+    "signedBy": "Signed by",
+    "attestedBy": "Attested by",
+    "digital": "Signed digitally on {date}",
+    "ink": "Signs in ink on the printed letter",
+    "compare": "The reference number, subject and names above must match the printed letter.",
+    "contact": "Questions? Contact the temple office"
   }
 }

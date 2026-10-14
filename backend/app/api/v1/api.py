@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
-    analytics, announcement, audit, auth, contact, donors, expenses, festival, finance, gallery, inventory, members,
-    meta, pooja, public, seva_tickets, stats, temple,
+    analytics, announcement, audit, auth, contact, donors, expenses, festival, finance, gallery, inventory, letters,
+    members, meta, pooja, public, seva_tickets, stats, temple,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -25,3 +25,4 @@ api_router.include_router(stats.router, prefix="/stats", tags=["stats"])
 api_router.include_router(finance.router, prefix="/finance", tags=["finance"])
 api_router.include_router(expenses.router, prefix="/finance", tags=["expenses"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+api_router.include_router(letters.router)
