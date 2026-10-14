@@ -294,3 +294,21 @@ def test_wide_rubber_stamp_prints_at_full_width(client, admin, signer):
     ring.save(buf, format="PNG")
     png, *_ = clean_mark(buf.getvalue(), LetterImageKind.SEAL)
     assert _seal(png).drawWidth <= 30 * mm + 0.01
+
+
+def test_authority_document_templates(client, admin, signer, offline):
+    _, headers = admin
+    member, _ = signer
+    rows = {t["kind"]: t for t in client.get("/api/v1/letters/templates", headers=headers).json()}
+    poa = rows["POWER_OF_ATTORNEY"]
+    assert poa["certificate_title"] == "POWER OF ATTORNEY" and "[Attorney name]" in poa["body"]
+    assert rows["RESOLUTION"]["certificate_title"] == "EXTRACT OF RESOLUTION" and "RESOLVED THAT" in rows["RESOLUTION"]["body"]
+    assert rows["AUTHORISATION"]["certificate_title"] is None and rows["AUTHORISATION"]["closing"] == "Yours faithfully,"
+
+    # unfilled template can't be sent; the PDF names the second group "WITNESSES"
+    letter = _letter(client, headers, [{"member_id": member.id}, {"member_id": offline.id, "role": "ATTESTOR"}],
+                     kind="POWER_OF_ATTORNEY", subject=poa["subject"], body=poa["body"])
+    assert "[Attorney name]" in client.post(f"/api/v1/letters/{letter['id']}/send", headers=headers).json()["detail"]
+    pages = PdfReader(BytesIO(client.get(f"/api/v1/letters/{letter['id']}/pdf", headers=headers).content)).pages
+    text = " ".join(" ".join(p.extract_text() for p in pages).split())
+    assert "POWER OF ATTORNEY" in text and "WITNESSES" in text and "ATTESTED BY" not in text

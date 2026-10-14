@@ -31,6 +31,10 @@ class LetterKind(str, enum.Enum):
     DONATION_ACKNOWLEDGEMENT = "DONATION_ACKNOWLEDGEMENT"
     NOC = "NOC"
     INVITATION = "INVITATION"
+    # authority documents (payment gateway / bank KYC, government offices)
+    POWER_OF_ATTORNEY = "POWER_OF_ATTORNEY"
+    RESOLUTION = "RESOLUTION"
+    AUTHORISATION = "AUTHORISATION"
 
 
 class LetterStatus(str, enum.Enum):

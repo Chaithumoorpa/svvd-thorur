@@ -195,7 +195,7 @@ function LetterEditor({
                   </select>
                   <select aria-label="Role" className={inputCls} value={s.role} onChange={(e) => setSignatory(i, { role: e.target.value as SignatoryRole })}>
                     <option value="SIGNATORY">Signs</option>
-                    <option value="ATTESTOR">Attests</option>
+                    <option value="ATTESTOR">Attests / witness</option>
                   </select>
                   <input aria-label="Designation" className={inputCls} maxLength={100} placeholder={m?.position ?? 'Designation'}
                     value={s.designation} onChange={(e) => setSignatory(i, { designation: e.target.value })} />
