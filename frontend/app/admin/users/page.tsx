@@ -12,7 +12,7 @@ import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/St
 import { btnGhost, btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
 import { useAction } from '@/hooks/useAction';
 import { useLoad } from '@/hooks/useLoad';
-import { createUser, deleteUser, listUsers, updateUser } from '@/lib/api';
+import { createUser, deleteUser, listUnverifiedSignups, listUsers, purgeUnverifiedSignups, updateUser } from '@/lib/api';
 import { emptyToNull } from '@/lib/format';
 import type { AppUser, Role } from '@/lib/types';
 
@@ -42,6 +42,18 @@ export default function UsersAdmin() {
   const action = useAction();
   const [editing, setEditing] = useState<{ id: number | null; form: FormState } | null>(null);
   const [toDelete, setToDelete] = useState<AppUser | null>(null);
+  // Devotee sign-ups from before the emailed code was required that never proved their email
+  const unverified = useLoad(() => listUnverifiedSignups(), []);
+  const [confirmPurge, setConfirmPurge] = useState(false);
+
+  async function purge() {
+    const result = await action.run(() => purgeUnverifiedSignups(), 'Unverified sign-ups removed.');
+    setConfirmPurge(false);
+    if (result) {
+      unverified.reload();
+      list.reload();
+    }
+  }
 
   async function remove() {
     if (!toDelete) return;
@@ -97,6 +109,21 @@ export default function UsersAdmin() {
         </button>
       }
     >
+      {!!unverified.data?.length && (
+        <div className="mb-4">
+          <Notice kind="info">
+            <span className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                {unverified.data.length} devotee sign-up{unverified.data.length === 1 ? '' : 's'} never confirmed an email
+                address (created before sign-up required an emailed code; never signed in or booked).
+              </span>
+              <button type="button" className={btnGhost} onClick={() => setConfirmPurge(true)}>
+                <Trash2 className="h-4 w-4" aria-hidden="true" /> Remove them
+              </button>
+            </span>
+          </Notice>
+        </div>
+      )}
       {action.success && <div className="mb-4"><Notice kind="success">{action.success}</Notice></div>}
       {action.error && !editing && <div className="mb-4"><Notice kind="error">{action.error}</Notice></div>}
 
@@ -124,7 +151,11 @@ export default function UsersAdmin() {
                   <tr key={u.id}>
                     <td className="px-4 py-3 font-medium text-gray-900">{u.username}{u.must_change_password && <span className="ml-2 text-xs text-amber-700">(temporary password)</span>}</td>
                     <td className="px-4 py-3 text-gray-700">{u.roles.map(roleLabel).join(', ')}</td>
-                    <td className="px-4 py-3 text-gray-600">{u.email ?? '—'}{u.phone && <div className="text-xs text-gray-400">{u.phone}</div>}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {u.email ?? '—'}
+                      {u.email && !u.email_verified_at && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">unverified</span>}
+                      {u.phone && <div className="text-xs text-gray-400">{u.phone}</div>}
+                    </td>
                     <td className="px-4 py-3"><StatusPill on={u.is_active} onLabel="Active" offLabel="Disabled" /></td>
                     <td className="px-4 py-3 text-right">
                       <button type="button" className={btnGhost} onClick={() => openEdit(u)} aria-label={`Edit ${u.username}`}><Pencil className="h-4 w-4" /></button>
@@ -178,6 +209,14 @@ export default function UsersAdmin() {
         </Modal>
       )}
 
+      {confirmPurge && (
+        <ConfirmDialog
+          title="Remove unverified sign-ups?"
+          message={`This permanently deletes ${unverified.data?.length ?? 0} devotee account(s) that never confirmed their email, never signed in and never booked a seva: ${(unverified.data ?? []).slice(0, 8).map((u) => u.username).join(', ')}${(unverified.data?.length ?? 0) > 8 ? ', …' : ''}. Real devotees can sign up again at any time.`}
+          confirmLabel="Remove" danger busy={action.busy}
+          onCancel={() => setConfirmPurge(false)} onConfirm={purge}
+        />
+      )}
       {toDelete && (
         <ConfirmDialog
           title="Delete user?"

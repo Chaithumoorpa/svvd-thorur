@@ -1,3 +1,4 @@
+from datetime import datetime
 import re
 from enum import Enum
 from typing import List, Optional
@@ -61,18 +62,40 @@ class UserCreate(UserBase):
         return _validate_password(v)
 
 
+class RegisterCodeRequest(BaseModel):
+    """Sign-up step 1: the details are checked (format, username/email free) and
+    a code is emailed - no account is created until step 2 confirms it."""
+    username: str = Field(max_length=100)
+    email: EmailStr
+    phone: str = Field(max_length=20)
+    # Cloudflare Turnstile challenge token from the frontend widget - required
+    # only when TURNSTILE_SECRET_KEY is configured server-side.
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        v = v.strip()
+        if not _USERNAME_RE.match(v):
+            raise ValueError("Username must be 3-100 characters: letters, digits, . _ @ -")
+        return v
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        return normalize_mobile(v)
+
+
 class PublicRegister(BaseModel):
-    """Self-registration: can never choose roles. Email and phone are required -
-    a devotee account is only useful if the temple can reach its owner, and a
-    booking's contact details already require both anyway."""
+    """Self-registration (step 2): can never choose roles. Email and phone are
+    required - a devotee account is only useful if the temple can reach its
+    owner - and the email must be proven with the code step 1 sent to it."""
     username: str = Field(max_length=100)
     email: EmailStr
     phone: str = Field(max_length=20)
     password: str
     accept_terms: bool
-    # Cloudflare Turnstile challenge token from the frontend widget - required
-    # only when TURNSTILE_SECRET_KEY is configured server-side.
-    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
+    email_code: str = Field(pattern=r"^\d{6}$")
 
     @field_validator("username")
     @classmethod
@@ -137,6 +160,9 @@ class UserOut(BaseModel):
     is_active: bool
     roles: List[str]
     must_change_password: bool
+    email_verified_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 

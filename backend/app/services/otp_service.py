@@ -14,6 +14,12 @@ MAX_ATTEMPTS = 5
 BOOKING_TOKEN_TTL = timedelta(minutes=30)
 BOOKING_PURPOSE = "seva_booking"
 LOGIN_PURPOSE = "login"
+REGISTER_PURPOSE = "register"
+# However many IPs the requests come from, one address gets at most this many
+# codes per window - so the form can't be used to flood someone's inbox (or run
+# up the temple's mail sending).
+MAX_CODES_PER_EMAIL = 5
+CODE_WINDOW = timedelta(minutes=15)
 
 
 class OtpService:
@@ -30,9 +36,15 @@ class OtpService:
         self.db = db
 
     def _create_code(self, email: str, purpose: str) -> str:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        recent = self.db.query(EmailOtp).filter(
+            EmailOtp.email == email, EmailOtp.purpose == purpose, EmailOtp.created_at >= now - CODE_WINDOW,
+        ).count()
+        if recent >= MAX_CODES_PER_EMAIL:
+            raise HTTPException(status_code=429, detail=(
+                "Too many codes have been sent to this email address. Please wait 15 minutes and try again."))
         code = f"{secrets.randbelow(1_000_000):06d}"
         code_hash = hashlib.sha256(code.encode()).hexdigest()
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
         self.db.add(EmailOtp(email=email, purpose=purpose, code_hash=code_hash, expires_at=now + OTP_TTL))
         self.db.commit()
         return code
@@ -127,6 +139,31 @@ class OtpService:
                 status_code=502, detail="Could not send the sign-in code. Please try again.",
             )
         return code
+
+    # ---- sign-up (prove the email before any account exists) --------------------------
+    def request_register_otp(self, email: str) -> str:
+        email = email.strip().lower()
+        code = self._create_code(email, REGISTER_PURPOSE)
+        sent = EmailService().send(
+            email,
+            "Your SVVD Thorur sign-up code",
+            f"Your sign-up code is: {code}\n\n"
+            "Enter it on the sign-up page to confirm this is your email address. It is valid for "
+            "10 minutes.\n\n"
+            "If you didn't try to create an account, you can safely ignore this email - no account "
+            "has been created.\n\n"
+            "Thank you,\nSVVD Thorur",
+            code=code, heading="Confirm your email",
+        )
+        if not sent:
+            raise HTTPException(
+                status_code=502,
+                detail="Could not send the verification email. Please check the address and try again.",
+            )
+        return code
+
+    def verify_register_otp(self, email: str, code: str) -> None:
+        self._consume_code(email.strip().lower(), REGISTER_PURPOSE, code)
 
     def verify_login_otp(self, email: str, code: str) -> None:
         self._consume_code(email.strip().lower(), LOGIN_PURPOSE, code)

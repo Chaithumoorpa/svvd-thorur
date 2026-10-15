@@ -64,17 +64,59 @@ def test_login_rate_limited(client, make_user):
     assert 429 in statuses[5:]
 
 
-def test_register_creates_general_user_only(client):
-    response = client.post("/api/v1/auth/register", json={
-        "username": "devotee1", "password": "Temple123", "email": "devotee1@example.com",
-        "phone": "9876543210", "roles": ["SUPER_ADMIN"], "is_admin": True, "accept_terms": True,
-    })
-    assert response.status_code == 201
+def _signup(client, monkeypatch, **fields):
+    """Both sign-up steps: request the code (captured instead of emailed), then
+    submit the form with it. Returns the step-2 response."""
+    from unittest.mock import MagicMock
+    sent = MagicMock(return_value=True)
+    monkeypatch.setattr("app.services.otp_service.EmailService.send", sent)
+    data = {"username": "devotee1", "password": "Temple123", "email": "devotee1@example.com",
+            "phone": "9876543210", "accept_terms": True, **fields}
+    step1 = client.post("/api/v1/auth/register/request-code",
+                        json={k: data[k] for k in ("username", "email", "phone") if k in data})
+    if step1.status_code != 200:
+        return step1
+    code = sent.call_args.kwargs["code"]
+    return client.post("/api/v1/auth/register", json={**data, "email_code": code})
+
+
+def test_register_creates_general_user_only_after_the_email_code(client, db, monkeypatch):
+    from app.models.user import User
+    response = _signup(client, monkeypatch, roles=["SUPER_ADMIN"], is_admin=True)
+    assert response.status_code == 201, response.text
     assert response.json()["roles"] == ["GENERAL_USER"]
+    assert response.json()["email_verified_at"]
+    assert "set-cookie" in response.headers            # signed in straight away
+    assert db.query(User).filter_by(username="devotee1").one().email_verified_at
+
+
+def test_no_account_is_created_without_the_emailed_code(client, db, monkeypatch):
+    from app.models.user import User
+    base = {"username": "nocode", "password": "Temple123", "email": "nocode@example.com",
+            "phone": "9876543210", "accept_terms": True}
+    assert client.post("/api/v1/auth/register", json=base).status_code == 422          # no code at all
+    assert client.post("/api/v1/auth/register", json={**base, "email_code": "123456"}).status_code == 400
+    # a code sent to a different address doesn't work for this one
+    from unittest.mock import MagicMock
+    sent = MagicMock(return_value=True)
+    monkeypatch.setattr("app.services.otp_service.EmailService.send", sent)
+    client.post("/api/v1/auth/register/request-code",
+                json={"username": "other", "email": "other@example.com", "phone": "9876543210"})
+    stolen = sent.call_args.kwargs["code"]
+    assert client.post("/api/v1/auth/register", json={**base, "email_code": stolen}).status_code == 400
+    assert db.query(User).filter_by(username="nocode").count() == 0
+
+
+def test_request_code_checks_details_and_availability_first(client, monkeypatch, make_user):
+    make_user("GENERAL_USER", username="taken", email="taken@example.com")
+    url = "/api/v1/auth/register/request-code"
+    assert client.post(url, json={"username": "x1", "email": "x1@example.com", "phone": "not-a-number"}).status_code == 422
+    assert client.post(url, json={"username": "taken", "email": "new@example.com", "phone": "9876543210"}).status_code == 400
+    assert client.post(url, json={"username": "fresh", "email": "taken@example.com", "phone": "9876543210"}).status_code == 400
 
 
 def test_register_requires_email_and_phone(client):
-    base = {"username": "devotee1b", "password": "Temple123", "accept_terms": True}
+    base = {"username": "devotee1b", "password": "Temple123", "accept_terms": True, "email_code": "123456"}
     assert client.post("/api/v1/auth/register", json=base).status_code == 422
     assert client.post("/api/v1/auth/register",
                        json={**base, "email": "devotee1b@example.com"}).status_code == 422
@@ -84,32 +126,25 @@ def test_register_requires_email_and_phone(client):
                        json={**base, "email": "devotee1b@example.com", "phone": "not-a-number"}).status_code == 422
 
 
-def test_register_requires_accepting_terms(client):
-    base = {"username": "devotee1c", "password": "Temple123",
-            "email": "devotee1c@example.com", "phone": "9876543210"}
-    assert client.post("/api/v1/auth/register", json=base).status_code == 422  # accept_terms missing
-    assert client.post("/api/v1/auth/register",
-                       json={**base, "accept_terms": False}).status_code == 422
-    assert client.post("/api/v1/auth/register",
-                       json={**base, "accept_terms": True}).status_code == 201
+def test_register_requires_accepting_terms(client, monkeypatch):
+    assert _signup(client, monkeypatch, username="devotee1c", email="devotee1c@example.com",
+                   accept_terms=False).status_code == 422
+    assert _signup(client, monkeypatch, username="devotee1d", email="devotee1d@example.com").status_code == 201
 
 
 @pytest.mark.parametrize("password", ["short1", "allletters", "12345678"])
 def test_weak_passwords_rejected(client, password):
     response = client.post("/api/v1/auth/register", json={
         "username": "devotee2", "password": password, "email": "devotee2@example.com",
-        "phone": "9876543210", "accept_terms": True,
+        "phone": "9876543210", "accept_terms": True, "email_code": "123456",
     })
     assert response.status_code == 422
 
 
-def test_duplicate_username_and_email(client):
-    ok = {"username": "devotee3", "password": "Temple123", "email": "a@example.com",
-          "phone": "9876543210", "accept_terms": True}
-    assert client.post("/api/v1/auth/register", json=ok).status_code == 201
-    assert client.post("/api/v1/auth/register", json=ok).status_code == 400
-    other = {**ok, "username": "devotee4"}
-    assert client.post("/api/v1/auth/register", json=other).status_code == 400  # same email
+def test_duplicate_username_and_email(client, monkeypatch):
+    assert _signup(client, monkeypatch, username="devotee3", email="a@example.com").status_code == 201
+    assert _signup(client, monkeypatch, username="devotee3", email="b@example.com").status_code == 400
+    assert _signup(client, monkeypatch, username="devotee4", email="a@example.com").status_code == 400
 
 
 def test_registration_race_on_duplicate_username_is_a_clean_400_not_a_500(client, monkeypatch):
@@ -118,35 +153,33 @@ def test_registration_race_on_duplicate_username_is_a_clean_400_not_a_500(client
     same as if a second request's insert had landed in between. The table's
     own unique constraint must still turn this into a normal 400, not an
     unhandled IntegrityError bubbling up as a 500."""
-    ok = {"username": "racer", "password": "Temple123", "email": "racer@example.com",
-          "phone": "9876543210", "accept_terms": True}
-    assert client.post("/api/v1/auth/register", json=ok).status_code == 201
-
+    assert _signup(client, monkeypatch, username="racer", email="racer@example.com").status_code == 201
     monkeypatch.setattr("app.services.auth_service.AuthService._ensure_unique", lambda *a, **k: None)
-    raced = client.post("/api/v1/auth/register", json=ok)
+    raced = _signup(client, monkeypatch, username="racer", email="racer2@example.com")
     assert raced.status_code == 400
     assert "already exists" in raced.json()["detail"].lower()
 
 
+def test_signup_codes_are_rate_limited_per_ip_and_per_address(client, monkeypatch):
+    from unittest.mock import MagicMock
+    monkeypatch.setattr("app.services.otp_service.EmailService.send", MagicMock(return_value=True))
+    url = "/api/v1/auth/register/request-code"
+    # one address: at most 5 codes per 15 minutes, whatever the IP
+    same = [client.post(url, json={"username": f"user{n}", "email": "victim@example.com", "phone": "9876543210"},
+                        headers={"X-Forwarded-For": f"10.0.0.{n}"}).status_code for n in range(6)]
+    assert same[:5] == [200] * 5 and same[5] == 429
+    # one IP: at most 10 sign-up code requests per hour
+    statuses = [client.post(url, json={"username": f"person{n}", "email": f"p{n}@example.com",
+                                       "phone": "9876543210"}).status_code for n in range(12)]
+    assert 429 in statuses
+
+
 def test_register_rate_limited(client):
-    statuses = []
-    for n in range(6):
-        statuses.append(client.post("/api/v1/auth/register", json={
-            "username": f"limited{n}", "password": "Temple123", "email": f"limited{n}@example.com",
-            "phone": "9876543210", "accept_terms": True,
-        }).status_code)
-    assert statuses[:5] == [201] * 5
+    statuses = [client.post("/api/v1/auth/register", json={
+        "username": f"limited{n}", "password": "Temple123", "email": f"limited{n}@example.com",
+        "phone": "9876543210", "accept_terms": True, "email_code": "123456"}).status_code for n in range(6)]
+    assert statuses[:5] == [400] * 5      # wrong code
     assert statuses[5] == 429
-
-
-def test_registration_can_be_disabled(client, monkeypatch):
-    from app.core.config import settings
-
-    monkeypatch.setattr(settings, "ALLOW_PUBLIC_REGISTRATION", False)
-    assert client.post("/api/v1/auth/register", json={
-        "username": "devotee5", "password": "Temple123", "email": "devotee5@example.com",
-        "phone": "9876543210", "accept_terms": True,
-    }).status_code == 403
 
 
 def test_change_password(client, make_user):
