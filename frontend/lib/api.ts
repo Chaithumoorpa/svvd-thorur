@@ -159,9 +159,16 @@ export const forgotUsername = async (identifier: string, turnstile_token?: strin
   (await api.post<{ message: string }>('/auth/forgot-username', { identifier, turnstile_token })).data;
 export const resetPassword = async (token: string, new_password: string) =>
   (await api.post<{ message: string }>('/auth/reset-password', { token, new_password })).data;
+/** Sign-up step 1: checks the details and emails a code - no account exists yet. */
+export const requestRegisterCode = async (data: { username: string; email: string; phone: string; turnstile_token?: string }) =>
+  (await api.post<{ message: string }>('/auth/register/request-code', data)).data;
+/** Sign-up step 2: the emailed code proves the address; the account is created and signed in. */
 export const register = async (data: {
-  username: string; password: string; email: string; phone: string; accept_terms: boolean; turnstile_token?: string;
-}) => (await api.post<AppUser>('/auth/register', data)).data;
+  username: string; password: string; email: string; phone: string; accept_terms: boolean; email_code: string;
+}) => { const user = (await api.post<AppUser>('/auth/register', data)).data; markSignedIn(true); return user; };
+export const listUnverifiedSignups = async () => (await api.get<AppUser[]>('/auth/admin/users/unverified')).data;
+export const purgeUnverifiedSignups = async () =>
+  (await api.post<{ deleted: number }>('/auth/admin/users/purge-unverified')).data;
 export const getMe = async () => (await api.get<Me>('/auth/verify')).data;
 export const changePassword = async (current_password: string, new_password: string) =>
   (await api.post('/auth/change-password', { current_password, new_password })).data;

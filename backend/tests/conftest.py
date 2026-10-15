@@ -7,6 +7,8 @@ os.environ.setdefault("ENV", "development")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 os.environ.setdefault("ALLOW_PUBLIC_REGISTRATION", "true")
 
+from datetime import datetime
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
@@ -46,12 +48,9 @@ def client(db):
 
     app.dependency_overrides[get_db] = override_get_db
     # limiters are process-global; reset so tests do not affect each other
-    for limiter in (rate_limiter.login_limiter, rate_limiter.register_limiter,
-                    rate_limiter.contact_limiter, rate_limiter.booking_limiter,
-                    rate_limiter.password_reset_limiter, rate_limiter.username_recovery_limiter,
-                    rate_limiter.otp_request_limiter, rate_limiter.otp_verify_limiter,
-                    rate_limiter.blessing_photo_upload_limiter):
-        limiter.requests.clear()
+    for limiter in vars(rate_limiter).values():
+        if isinstance(limiter, rate_limiter.SimpleRateLimiter):
+            limiter.requests.clear()
     # The content cache (app/core/cache.py) is also process-global - each test
     # gets a fresh in-memory database above, so a cached response from a
     # previous test would otherwise leak into this one.
@@ -68,6 +67,8 @@ def make_user(db):
 
     def _make(*roles: str, username: str | None = None, password: str = "Password123", **extra):
         counter["n"] += 1
+        if extra.get("email") and "email_verified_at" not in extra:
+            extra["email_verified_at"] = datetime.utcnow()  # a test account's email counts as proven
         user = User(
             username=username or f"user{counter['n']}",
             hashed_password=hash_password(password),

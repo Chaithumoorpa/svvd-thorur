@@ -24,7 +24,7 @@ IST = timedelta(hours=5, minutes=30)
 OFF_HOURS = (22, 6)  # 10 pm - 6 am IST
 SENSITIVE_ACTIONS = ("DELETE", "DELETE_ACCOUNT", "VOID", "REJECT", "WRITE_OFF", "ADJUST", "LOGIN_FAILED",
                      "PASSWORD_CHANGE", "REVOKE", "SIGN_FAILED", "UPLOAD_SIGNATURE", "REMOVE_SIGNATURE", "UPLOAD_SEAL",
-                     "LINK_LOGIN")
+                     "LINK_LOGIN", "PURGE_UNVERIFIED")
 
 
 def _month(d) -> str:

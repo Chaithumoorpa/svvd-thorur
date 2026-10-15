@@ -357,6 +357,9 @@ export interface AppUser {
   is_active: boolean;
   roles: Role[];
   must_change_password: boolean;
+  email_verified_at?: string | null;
+  created_at?: string | null;
+  last_login?: string | null;
 }
 
 export interface UserCreateInput {

@@ -13,8 +13,8 @@ from app.models.user import User
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import (
     DeleteAccountConfirm, LoginOtpVerify, LoginResponse, PasswordChange, PasswordResetConfirm,
-    PasswordResetRequest, PublicRegister, SessionOut, UsernameRecoveryRequest, UserCreate, UserLogin,
-    UserOut, UserUpdate,
+    PasswordResetRequest, PublicRegister, RegisterCodeRequest, SessionOut, UsernameRecoveryRequest, UserCreate,
+    UserLogin, UserOut, UserUpdate,
 )
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
@@ -26,8 +26,8 @@ from app.utils.dependencies import (
     get_turnstile_service, require_permission, security,
 )
 from app.utils.rate_limiter import (
-    enforce, get_client_ip, login_limiter, password_reset_limiter, register_limiter,
-    username_recovery_limiter,
+    enforce, get_client_ip, login_limiter, login_user_limiter, password_reset_limiter, register_code_limiter,
+    register_limiter, username_recovery_limiter,
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -90,6 +90,12 @@ def login(
         raise HTTPException(status_code=429, detail="Too many login attempts. Please try again in a minute.")
     if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
         raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
+    # Per account as well as per IP: password guessing spread over many IPs
+    # still hits this. Keyed by what was typed, so it reveals nothing about
+    # whether the account exists.
+    if not login_user_limiter.is_allowed(payload.username.strip().lower()):
+        raise HTTPException(status_code=429, detail=(
+            "Too many sign-in attempts for this account. Please wait 15 minutes, or reset your password."))
 
     try:
         user = service.authenticate_user(payload)
@@ -132,26 +138,56 @@ def verify_login_otp(
         _record_failed_login(db, request, user.username, "wrong or expired sign-in code")
         raise
 
+    AuthService.mark_email_verified(db, user)  # the code reached this inbox
     AuditService(db).record(user, "LOGIN", "user", user.id, f"{user.username} signed in", request=request)
     _start_session(response, service, user)
     return SessionOut(must_change_password=user.must_change_password)
+
+
+@router.post("/register/request-code", response_model=dict)
+def request_register_code(
+    payload: RegisterCodeRequest,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+    otp_service: OtpService = Depends(get_otp_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
+):
+    """Sign-up step 1: checks the details and emails a 6-digit code. Nothing
+    is created yet - an account exists only once its email is proven (step 2).
+    Turnstile + per-IP limit here; per-address limit inside OtpService."""
+    if not settings.ALLOW_PUBLIC_REGISTRATION:
+        raise HTTPException(status_code=403, detail="Registration is disabled")
+    enforce(register_code_limiter, get_client_ip(request), "Too many sign-up attempts. Please try again later.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
+    service.check_available(payload.username, payload.email)
+    otp_service.request_register_otp(payload.email)
+    return {"message": "A sign-up code has been sent to your email."}
 
 
 @router.post("/register", response_model=UserOut, status_code=201)
 def register(
     payload: PublicRegister,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
-    turnstile: TurnstileService = Depends(get_turnstile_service),
+    otp_service: OtpService = Depends(get_otp_service),
+    db: Session = Depends(get_db),
 ):
-    """Public self-registration. Always creates a GENERAL_USER (no admin access)."""
+    """Sign-up step 2: the emailed code proves the address, then the account is
+    created (always GENERAL_USER - no admin access) and signed in. A wrong code
+    counts against that code's 5 attempts."""
     if not settings.ALLOW_PUBLIC_REGISTRATION:
         raise HTTPException(status_code=403, detail="Registration is disabled")
     if not register_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many registration attempts. Please try again in a minute.")
-    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
-        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
-    return service.create_general_user(payload)
+    service.check_available(payload.username, payload.email)
+    otp_service.verify_register_otp(payload.email, payload.email_code)
+    user = service.create_general_user(payload)
+    AuditService(db).record(user, "REGISTER", "user", user.id, f"{user.username} signed up (email verified)",
+                            request=request)
+    _start_session(response, service, user)
+    return user
 
 
 @router.post("/forgot-password", response_model=dict)
@@ -383,6 +419,25 @@ def update_user_admin(
             cta=("Set a new password", link), heading="Your password was reset", tone="alert",
         )
     return user
+
+
+@router.get("/admin/users/unverified", response_model=List[UserOut])
+def list_unverified_signups(service: AuthService = Depends(get_auth_service),
+                            _: User = Depends(require_permission(Permission.USERS_MANAGE))):
+    """Devotee sign-ups that never proved their email (see AuthService.unverified_signups)."""
+    return service.unverified_signups()
+
+
+@router.post("/admin/users/purge-unverified", response_model=dict)
+def purge_unverified_signups(service: AuthService = Depends(get_auth_service),
+                             audit: AuditContext = Depends(get_audit),
+                             _: User = Depends(require_permission(Permission.USERS_MANAGE))):
+    """Removes them all at once - one audit entry for the batch."""
+    names = service.purge_unverified_signups()
+    if names:
+        audit.log("PURGE_UNVERIFIED", "user", None, f"Removed {len(names)} unverified sign-up(s)",
+                  {"usernames": names[:200]})
+    return {"deleted": len(names)}
 
 
 @router.delete("/admin/users/{user_id}", response_model=dict)
