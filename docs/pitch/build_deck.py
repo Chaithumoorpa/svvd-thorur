@@ -20,13 +20,7 @@ def clean(name, box, sample):
     return SH + name + "_c.png"
 
 
-imgs = {
-    "home": clean("home", (10, 835, 150, 890), (160, 862)),
-    "telugu": clean("telugu", (10, 835, 150, 890), (160, 862)),
-    "donations": clean("donations", (10, 835, 150, 890), (160, 862)),
-    "mobile": clean("mobile", (10, 780, 150, 830), (5, 805)),
-    "login": clean("login", (10, 835, 80, 890), (200, 862)),
-}
+imgs = {k: f"shots2/{k}.png" for k in ["home", "telugu", "mobile", "login", "poojas", "admin_dashboard", "admin_tickets", "admin_finance", "gallery"]}
 
 prs = Presentation(); prs.slide_width = Inches(13.333); prs.slide_height = Inches(7.5)
 blank = prs.slide_layouts[6]
@@ -117,7 +111,7 @@ text(s, 0.6, 5.3, 7, 1.2, "Search engines see every language: canonical and href
 
 # 5 Devotee journey
 s = slide("Devotee journey: book a seva in minutes", "No account needed; account optional for history")
-shot(s, "login", 0.6, 1.7, 5.4)
+shot(s, "poojas", 0.6, 1.7, 5.4)
 steps = [("1", "Choose a seva"), ("2", "Verify email with OTP"), ("3", "Booking confirmed + QR ticket by email"), ("4", "Pay at the counter (or online with gateway add-on)"), ("5", "Staff scans QR at the temple")]
 for i, (n, t) in enumerate(steps):
     y = 1.8 + i * 0.95
@@ -126,9 +120,9 @@ for i, (n, t) in enumerate(steps):
 text(s, 6.6, 6.5, 6.5, 0.5, "Optional sign-in shows 'My Bookings'; personal blessing email on birthdays and anniversaries.", 13, SAFFRON)
 
 # 6 Donations transparency
-s = slide("Donations with transparency", "Archive of historical donors today, online giving as an add-on")
-shot(s, "donations", 0.6, 1.7, 7.4)
-bullets(s, 8.4, 1.9, 4.7, ["Historic donors, land and item donors, committee archive", "Admin records donations and issues PDF receipts", "A receipt, once issued, cannot be edited or deleted", "Every rupee posts to the finance ledger", "Gateway (UPI/cards) available as add-on"], 16)
+s = slide("Donations and finance with transparency", "Every donation and paid seva posts to the ledger automatically")
+shot(s, "admin_finance", 0.6, 1.7, 7.4)
+bullets(s, 8.4, 1.9, 4.7, ["Donors and donations recorded by staff", "PDF receipts; once issued they cannot be edited or deleted", "Income by source, expenses by category", "CSV and PDF ledger export", "Gateway (UPI/cards) available as add-on"], 16)
 
 # 7 Admin
 s = slide("Behind the scenes: the admin panel", "Staff manage everything without a developer: 14 modules, 5 roles")
@@ -145,6 +139,17 @@ for i, (r_, d) in enumerate(roles):
     col = RGBColor(255, 255, 255) if i == 0 else MAROON
     text(s, x + 0.1, 5.85, 2.15, 0.4, r_, 15, col, True)
     text(s, x + 0.1, 6.25, 2.15, 0.6, d, 12, RGBColor(0xF3, 0xE3, 0xC8) if i == 0 else INK)
+
+
+# 7b Admin in action
+s = slide("Admin in action", "Seeded demo data: dashboard, counter tickets, collect payment, QR scan")
+shot(s, "admin_dashboard", 0.6, 1.7, 6.0)
+shot(s, "admin_tickets", 6.8, 1.7, 6.0)
+text(s, 0.6, 5.85, 12, 1.2, ["Dashboard shows what needs attention; recent changes come from the audit log.", "Tickets: 'Collect' records a pending payment into the finance ledger; 'Scan ticket' admits devotees."], 16)
+
+# 7c Video
+s = slide("Walkthrough video", "Click to play: public site, sign-in, admin (about 1 min)")
+s.shapes.add_movie("video/walkthrough.mp4", Inches(2.45), Inches(1.6), Inches(8.4), Inches(5.25), poster_frame_image=imgs["home"], mime_type="video/mp4")
 
 # 8 Architecture
 s = slide("How it is built", "Modern, tested, containerised: low cost to run, easy to hand over")
