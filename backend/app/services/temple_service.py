@@ -81,6 +81,8 @@ class TempleService:
         for key, value in fields.items():
             if key == "name" and not value:
                 continue  # name is mandatory; ignore attempts to blank it
+            if key == "tv_sections" and value is not None:
+                value = ",".join(dict.fromkeys(value))  # de-duplicated, order kept
             setattr(temple, key, value)
         return self.repository.save(temple)
 

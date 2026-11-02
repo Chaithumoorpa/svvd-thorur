@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Printer, Save } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
+import TvSectionsCard from '@/components/admin/TvSectionsCard';
 import Field from '@/components/ui/Field';
 import { ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
 import { btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
@@ -12,7 +13,7 @@ import { emptyToNull } from '@/lib/format';
 import type { HundiQrInfo, Temple } from '@/lib/types';
 import axios from 'axios';
 
-type Form = Record<Exclude<keyof Temple, 'id'>, string>;
+type Form = Record<Exclude<keyof Temple, 'id' | 'tv_sections'>, string>;
 
 const FIELDS: Array<{
   key: keyof Form; label: string; hint?: string; type?: string; wide?: boolean; area?: boolean; required?: boolean;
@@ -63,16 +64,17 @@ const POSTER_LANGUAGES = [
 
 export default function TempleAdmin() {
   const [form, setForm] = useState<Form | null>(null);
+  const [tvSections, setTvSections] = useState<string[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hundiQr, setHundiQr] = useState<HundiQrInfo | null>(null);
   const action = useAction();
 
   useEffect(() => {
     getTemple()
-      .then((t) => setForm(toForm(t)))
+      .then((t) => { setForm(toForm(t)); setTvSections(t.tv_sections); })
       .catch((err) => {
         // 404 = profile not created yet: start from an empty form
-        if (axios.isAxiosError(err) && err.response?.status === 404) setForm(toForm(null));
+        if (axios.isAxiosError(err) && err.response?.status === 404) { setForm(toForm(null)); setTvSections(null); }
         else setLoadError('Could not load the temple profile.');
       });
     getHundiQr().then(setHundiQr).catch(() => setHundiQr(null));
@@ -121,6 +123,7 @@ export default function TempleAdmin() {
           </button>
         </div>
       </form>
+      {tvSections && <TvSectionsCard initial={tvSections} />}
 
       {hundiQr?.configured && (
         <div className={`${cardCls} mt-6 flex flex-wrap items-center gap-4 p-5`}>

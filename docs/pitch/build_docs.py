@@ -149,6 +149,7 @@ def srs():
              ["FR-SEC-05", "Alert Super Admins on bursts of repeated deletions by one actor", "Could"]], widths=[2.4, 11.2, 2.4])
     D.h("3.5 Future / optional modules (not in reference build)", 2)
     D.ul(["Online payment gateway for sevas and donations (UPI / cards) with reconciliation.",
+          "TV display page (/tv): fullscreen animated display of darshan timings, staff-approved donor blessings, festivals and announcements, with QR codes so devotees register, sign in and book from their phone (FR-FUT-01, built; sections selectable per temple in the admin panel, private data never shown); live-stream page on the website with an admin-set stream link (FR-FUT-02).",
           "WhatsApp / SMS notifications.",
           "Live darshan / video streaming embed.",
           "Annadanam and accommodation booking.",
@@ -345,8 +346,23 @@ def budget():
              ["WhatsApp / SMS notifications", "₹20,000 + usage", "Provider fees extra"],
              ["Content entry & photo digitisation", "₹8,000–20,000", "Depends on volume"],
              ["Professional photography / drone video", "At actuals", "Third party"],
-             ["Live darshan embed", "₹8,000", "Streaming costs separate"],
+             ["TV display page (/tv): animated, branded scenes (timings, sevas, today's donor blessings, festivals, announcements, gallery, committee) with QR codes to register, sign in and book a seva; staff pick the sections with checkboxes in the admin panel", "₹12,000", "Fullscreen, auto-refreshing, staff-approved blessings only; built and demonstrated. Needs Standard or Complete (booking and blessings)"],
+             ["Live-stream page on website + admin field for the stream link", "₹8,000", "Embeds YouTube Live for devotees online; separate from the TV page; the stream itself runs on YouTube, not the temple server"],
+             ["Live-stream setup and festival-day support", "₹7,000", "OBS/YouTube setup, test run, on-site support for one event"],
              ["Annual DPDPA/legal text review", "₹6,000", "By legal advisor; optional"]], widths=[6.5, 3, 6.5])
+
+    D.p("Optional on-site hardware for the live stream (the TV page itself needs only the TV and a small Android box or the TV's browser) (bought by the temple, not part of the software fee; "
+        "estimates, confirm with a local dealer):", bold=True)
+    D.table([["Item", "Estimate", "Note"],
+             ["Smart/Android TV (40 inch)", "Temple's purchase", "Opens /tv in a browser; an Android box can be added if the TV browser is weak"],
+             ["IP camera, PoE, motorised zoom, microphone", "₹6,000–12,000", "CP Plus / Hikvision class; fixed framing (recommended)"],
+             ["PTZ camera with 10-20x optical zoom (alternative)", "₹40,000–60,000", "Staff can zoom and pan during the event; can push to YouTube without a PC"],
+             ["PoE switch, cables, mounting", "₹3,000–6,000", "Wired network for camera and TV box"],
+             ["Mini-PC running OBS (not needed with a PTZ that streams directly)", "₹15,000–20,000", "Sends the stream to YouTube"],
+             ["UPS and 4G backup connection", "₹5,000–8,000", "Keeps the stream alive through power or broadband failure"],
+             ["Total, recommended setup (excl. TV)", "₹30,000–45,000", "Needs about 3-5 Mbps upload"]], widths=[7, 3, 6])
+    D.p("Camera framing should avoid devotees' faces; display a filming notice and agree the arrangement with the priests. "
+        "Blessings are shown on screen only after staff review and the donor's consent.", italic=True)
 
     D.h("4. Recurring costs (per temple, per year)")
     D.table([["Item", "Essential", "Standard", "Complete", "Basis"],

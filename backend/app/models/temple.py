@@ -38,6 +38,8 @@ class Temple(Base):
     instagram_url = Column(String(300), nullable=True)
     youtube_url = Column(String(300), nullable=True)
 
+    # Lobby TV (/tv): comma-separated section keys to show. NULL = every section (the default).
+    tv_sections = Column(Text, nullable=True)
     # e-Hundi: the temple's own UPI ID, used only to generate a QR code for
     # direct devotee-to-temple payments - never touched by this backend.
     upi_vpa = Column(String(100), nullable=True)
