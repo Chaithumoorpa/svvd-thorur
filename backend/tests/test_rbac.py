@@ -14,6 +14,15 @@ def test_permission_matrix():
     assert Permission.DONORS_WRITE not in permissions_for(["TRUSTEE"])
     assert Permission.CONTENT_WRITE in permissions_for(["STAFF"])
     assert Permission.FINANCE_READ not in permissions_for(["STAFF"])
+    # staff can spend (pending approval) and move stock, not approve or manage valuables
+    assert {Permission.EXPENSES_SUBMIT, Permission.INVENTORY_WRITE} <= permissions_for(["STAFF"])
+    assert Permission.FINANCE_WRITE not in permissions_for(["STAFF"])
+    assert Permission.INVENTORY_MANAGE not in permissions_for(["STAFF"])
+    assert Permission.INVENTORY_READ in permissions_for(["TRUSTEE"])
+    assert Permission.INVENTORY_WRITE not in permissions_for(["TRUSTEE"])
+    # trustees read letters; only admins draft/issue them and manage signatures
+    assert Permission.LETTERS_READ in permissions_for(["TRUSTEE"])
+    assert Permission.LETTERS_WRITE not in permissions_for(["TRUSTEE"]) | permissions_for(["STAFF"])
     assert permissions_for(["GENERAL_USER"]) == set()
     assert permissions_for(["NOT_A_ROLE"]) == set()
     assert permissions_for(None) == set()
@@ -45,6 +54,49 @@ PROTECTED = [
         "paid_to": "Vendor", "expense_date": "2026-01-01"}, {"SUPER_ADMIN", "ADMIN"}),
     ("POST", "/api/v1/auth/admin/users", {
         "username": "newuser", "password": "Password123", "roles": ["STAFF"]}, {"SUPER_ADMIN"}),
+    ("PUT", "/api/v1/temple/", {"name": "Test Temple"}, {"SUPER_ADMIN", "ADMIN"}),
+    ("POST", "/api/v1/temple/timings", {
+        "label": "Test", "start_time": "06:00:00", "end_time": "07:00:00"}, {"SUPER_ADMIN", "ADMIN"}),
+    ("POST", "/api/v1/gallery", {
+        "title": "x", "image_url": "https://example.com/a.jpg"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    ("POST", "/api/v1/poojas", {"name": "Test Pooja"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    ("POST", "/api/v1/festivals", {"name": "Test Festival"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    ("POST", "/api/v1/finance/income", {
+        "source_type": "MANUAL", "amount": "10", "payment_mode": "CASH"}, {"SUPER_ADMIN", "ADMIN"}),
+    ("GET", "/api/v1/finance/ledger/csv?start_date=2026-01-01&end_date=2026-01-01", None,
+     {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/finance/ledger/pdf?start_date=2026-01-01&end_date=2026-01-01", None,
+     {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/finance/reports/monthly?year=2026&month=1", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/finance/reports/monthly/pdf?year=2026&month=1", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/seva-tickets/blessing-reviews", None, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    ("POST", "/api/v1/seva-tickets/scan", {"qr_token": "does-not-exist"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    # expenses + budgets
+    ("POST", "/api/v1/finance/expenses", {
+        "category": "OTHER", "description": "Flowers", "amount": "10", "payment_mode": "CASH",
+        "paid_to": "Vendor", "expense_date": "2026-01-01"}, {"SUPER_ADMIN", "ADMIN", "STAFF"}),
+    ("GET", "/api/v1/finance/expenses", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("GET", "/api/v1/finance/budgets?month=2026-01", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("PUT", "/api/v1/finance/budgets/2026-01", {"lines": []}, {"SUPER_ADMIN", "ADMIN"}),
+    # inventory
+    ("GET", "/api/v1/inventory/items", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("GET", "/api/v1/inventory/summary", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("GET", "/api/v1/inventory/movements", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("GET", "/api/v1/inventory/festival-costs", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("POST", "/api/v1/inventory/items", {"name": "Ghee", "kind": "CONSUMABLE", "category": "Pooja", "unit": "kg"},
+     {"SUPER_ADMIN", "ADMIN"}),
+    # analytics
+    ("GET", "/api/v1/analytics/finance", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/analytics/inventory", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE", "STAFF"}),
+    ("GET", "/api/v1/analytics/audit", None, {"SUPER_ADMIN"}),
+    # official letters
+    ("GET", "/api/v1/letters", None, {"SUPER_ADMIN", "ADMIN", "TRUSTEE"}),
+    ("GET", "/api/v1/letters/templates", None, {"SUPER_ADMIN", "ADMIN"}),
+    ("GET", "/api/v1/letters/signatures", None, {"SUPER_ADMIN", "ADMIN"}),
+    ("GET", "/api/v1/letters/seal", None, {"SUPER_ADMIN", "ADMIN"}),
+    ("POST", "/api/v1/letters", {"kind": "GENERAL", "letter_date": "2026-10-14", "subject": "Notice",
+                                 "body": "A short notice to all members.", "signatories": []},
+     {"SUPER_ADMIN", "ADMIN"}),
 ]
 
 
@@ -55,7 +107,11 @@ def test_route_matrix(client, make_user, method, path, body, allowed):
 
     for role in ROLES:
         _, headers = make_user(role, username=f"{role.lower()}_x")
-        response = client.request(method, path, json=body, headers=headers)
+        # a create endpoint with a unique "name" would 400 on the second allowed
+        # role to reach it in this loop (same name, already created) - not a
+        # permission failure, so give each role its own name.
+        role_body = {**body, "name": f"{body['name']} {role}"} if body and "name" in body else body
+        response = client.request(method, path, json=role_body, headers=headers)
         if role in allowed:
             assert response.status_code < 400, f"{role} should reach {method} {path}: {response.text}"
         else:

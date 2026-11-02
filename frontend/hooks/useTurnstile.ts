@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { isTurnstileBlocked } from '@/lib/turnstile';
+
+const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 /**
  * Manages a Turnstile token's lifecycle for a form that may need to submit
  * more than once (a resend, or an auto-login right after registration) -
  * tokens are single-use, so `reset()`/`next()` remount the widget rather than
  * resubmitting an already-consumed token.
+ *
+ * Also exposes `blocked`: true whenever the widget is configured but hasn't
+ * produced a usable token yet (not solved, expired, or failed to load).
+ * Every Turnstile-gated form must fold this into its submit button's
+ * `disabled` - without it, a devotee can submit straight through a failed
+ * or unsolved challenge, and whether that's actually stopped then depends
+ * entirely on the backend having TURNSTILE_SECRET_KEY configured.
  */
 export function useTurnstile() {
   const [token, setToken] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [widgetKey, setWidgetKey] = useState(0);
   const tokenRef = useRef<string | null>(null);
 
@@ -17,6 +28,7 @@ export function useTurnstile() {
 
   const reset = useCallback(() => {
     setToken(null);
+    setFailed(false);
     setWidgetKey((k) => k + 1);
   }, []);
 
@@ -42,5 +54,6 @@ export function useTurnstile() {
     });
   }, [reset]);
 
-  return { token, widgetKey, setToken, reset, next };
+  const required = Boolean(SITE_KEY);
+  return { token, failed, setFailed, widgetKey, setToken, reset, next, required, blocked: isTurnstileBlocked(required, token, failed) };
 }

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.pagination import PageParams
 from app.repositories.finance_repo import FinanceRepository
-from app.schemas.finance import ExpenseTransactionCreate, IncomeTransactionCreate
+from app.schemas.finance import IncomeTransactionCreate
 
 
 def _as_datetime(value) -> datetime:
@@ -22,12 +22,6 @@ class FinanceService:
         data = income_in.model_dump()
         data["received_by"] = user_id
         return FinanceRepository.create_income(db, data)
-
-    @staticmethod
-    def add_expense(db: Session, expense_in: ExpenseTransactionCreate, user_id: int):
-        data = expense_in.model_dump()
-        data["approved_by"] = user_id
-        return FinanceRepository.create_expense(db, data)
 
     @staticmethod
     def get_summary(db: Session) -> Dict:

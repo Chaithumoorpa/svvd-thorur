@@ -14,6 +14,10 @@ on:
       - frontend/package.json
       - frontend/package-lock.json
 
+# Least privilege: these jobs only check out code; none writes to GitHub.
+permissions:
+  contents: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -23,10 +27,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install pip-audit
-      # PYSEC-2026-1325: ecdsa (a python-jose dependency) - no fixed release yet,
-      # and not reachable here: tokens are HS256 only (see app/core/security.py),
-      # ecdsa is never used to sign or verify anything.
-      - run: pip-audit -r backend/requirements.txt --ignore-vuln PYSEC-2026-1325
+      - run: pip-audit -r backend/requirements.txt
 
   frontend:
     runs-on: ubuntu-latest

@@ -64,12 +64,12 @@ export default function ForgotPasswordPage() {
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
-            <button type="submit" disabled={busy || !email} className={`${btnPrimary} w-full`}>
+            <button type="submit" disabled={busy || !email || turnstile.blocked} className={`${btnPrimary} w-full`}>
               <Mail className="h-4 w-4" aria-hidden="true" />
               {busy ? 'Sending…' : 'Send reset link'}
             </button>
             <div className="flex justify-center">
-              <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+              <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} onError={turnstile.setFailed} />
             </div>
           </form>
         )}

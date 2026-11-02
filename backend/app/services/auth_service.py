@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
@@ -12,14 +13,36 @@ from app.models.password_reset import PasswordResetToken
 from app.models.seva_ticket import SevaTicket
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
+from app.schemas.common import normalize_mobile
 from app.schemas.user import PasswordChange, PublicRegister, UserCreate, UserLogin, UserUpdate
 
 # How long an emailed password-reset link stays valid.
 RESET_TOKEN_TTL = timedelta(hours=1)
+MAX_RESETS_PER_HOUR = 3  # reset emails one account can receive per hour
 
 # Verified when the username does not exist so both failure paths cost the same time
 # (prevents user enumeration through response timing).
 _DUMMY_HASH = hash_password("timing-equalisation-only")
+
+
+def issue_session_token(user: User, auth_time: Optional[int] = None) -> str:
+    """A signed-in session token. `auth_time` is when the password/OTP was
+    entered (now, for a fresh sign-in); refreshes carry it over unchanged so
+    a session can't be extended past SESSION_MAX_HOURS. `ver` ties the token
+    to the user's token_version - see revoke_sessions. Roles are not included:
+    the API always re-reads them from the database."""
+    return create_access_token({
+        "sub": user.username,
+        "user_id": user.id,
+        "typ": "access",
+        "ver": user.token_version or 0,
+        "auth_time": auth_time if auth_time is not None else int(time.time()),
+    })
+
+
+def revoke_sessions(user: User) -> None:
+    """Invalidates every session token issued to `user` so far (caller commits)."""
+    user.token_version = (user.token_version or 0) + 1
 
 
 class AuthService:
@@ -28,20 +51,42 @@ class AuthService:
         self.logger = logging.getLogger(__name__)
 
     # ---- login -----------------------------------------------------------------
+    def resolve_identifier(self, identifier: str) -> Optional[User]:
+        """The sign-in field accepts a username, an email address, or a mobile
+        number. Username is tried first (its own account always wins if a
+        number happens to collide with someone else's phone). Phone only
+        resolves when it's unambiguous - phone has no unique constraint, so a
+        shared number must not let one attempt sign in as an arbitrary match."""
+        identifier = identifier.strip()
+        user = self.user_repository.get_by_username(identifier)
+        if user:
+            return user
+        if "@" in identifier:
+            return self.user_repository.get_by_email(identifier)
+        try:
+            phone = normalize_mobile(identifier)
+        except ValueError:
+            return None
+        matches = self.user_repository.get_by_phone(phone)
+        return matches[0] if len(matches) == 1 else None
+
     def authenticate_user(self, data: UserLogin) -> User:
-        user = self.user_repository.get_by_username(data.username.strip())
+        user = self.resolve_identifier(data.username)
         password_ok = verify_password(data.password, user.hashed_password if user else _DUMMY_HASH)
         if not user or not password_ok or not user.is_active:
-            self.logger.warning("Authentication failed for username: %s", data.username)
+            self.logger.warning("Authentication failed for identifier: %s", data.username)
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
         user.last_login = datetime.now(timezone.utc).replace(tzinfo=None)
         self.user_repository.update(user)
         return user
 
-    def create_access_token(self, user: User) -> str:
-        # Roles are informational only; the API always re-reads them from the database.
-        return create_access_token({"sub": user.username, "user_id": user.id})
+    def create_access_token(self, user: User, auth_time: Optional[int] = None) -> str:
+        return issue_session_token(user, auth_time)
+
+    def logout(self, user: User) -> None:
+        revoke_sessions(user)
+        self.user_repository.update(user)
 
     # ---- user creation -----------------------------------------------------------
     def _ensure_unique(self, username: Optional[str], email: Optional[str], exclude_id: Optional[int] = None):
@@ -69,7 +114,9 @@ class AuthService:
         return self.user_repository.create(user)
 
     def create_general_user(self, data: PublicRegister) -> User:
-        """Public self-registration: always GENERAL_USER, no admin access."""
+        """Public self-registration: always GENERAL_USER, no admin access.
+        data.accept_terms is already validated True by the schema - this just
+        records when, as proof of consent."""
         self._ensure_unique(data.username, data.email)
         user = User(
             username=data.username,
@@ -78,8 +125,20 @@ class AuthService:
             hashed_password=hash_password(data.password),
             roles=["GENERAL_USER"],
             must_change_password=False,
+            terms_accepted_at=datetime.now(timezone.utc),
+            email_verified_at=datetime.now(timezone.utc).replace(tzinfo=None),  # proven by the sign-up code
         )
         return self.user_repository.create(user)
+
+    def check_available(self, username: str, email: str) -> None:
+        """Sign-up step 1: fail early if the username or email is taken."""
+        self._ensure_unique(username, email)
+
+    @staticmethod
+    def mark_email_verified(db, user: User) -> None:
+        if user.email and not user.email_verified_at:
+            user.email_verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            db.commit()
 
     # ---- management ----------------------------------------------------------------
     def query_users(self):
@@ -111,6 +170,9 @@ class AuthService:
         if fields.get("password"):
             user.hashed_password = hash_password(fields["password"])
             user.must_change_password = True
+        # Also on deactivation: re-activating later must not bring old tokens back.
+        if deactivating or fields.get("password"):
+            revoke_sessions(user)
         return self.user_repository.update(user)
 
     def change_password(self, user: User, data: PasswordChange) -> User:
@@ -121,6 +183,7 @@ class AuthService:
 
         user.hashed_password = hash_password(data.new_password)
         user.must_change_password = False
+        revoke_sessions(user)  # signs out every other device; /auth/change-password re-issues this one
         return self.user_repository.update(user)
 
     def delete_own_account(self, user: User, password: str) -> None:
@@ -154,6 +217,33 @@ class AuthService:
             raise HTTPException(status_code=400, detail="At least one active Super Admin is required")
         self._unlink_and_delete(user)
 
+    # ---- sign-ups that never proved their email ----------------------------------------
+    UNVERIFIED_GRACE = timedelta(days=1)
+
+    def unverified_signups(self) -> list:
+        """Devotee accounts created by the old sign-up (before the emailed code was
+        required) that have never signed in, never booked and aren't linked to a
+        committee member - i.e. nothing shows the address ever belonged to whoever
+        registered it. Older than a day, so nothing mid-sign-up is caught."""
+        db = self.user_repository.db
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - self.UNVERIFIED_GRACE
+        candidates = db.query(User).filter(
+            User.email_verified_at.is_(None), User.last_login.is_(None), User.created_at < cutoff,
+        ).order_by(User.created_at).all()
+        booked = {uid for (uid,) in db.query(SevaTicket.booked_by_user_id).filter(
+            SevaTicket.booked_by_user_id.in_([u.id for u in candidates])).distinct()} if candidates else set()
+        linked = {uid for (uid,) in db.query(Member.user_id).filter(
+            Member.user_id.in_([u.id for u in candidates])).all()} if candidates else set()
+        return [u for u in candidates
+                if list(u.roles or []) == ["GENERAL_USER"] and u.id not in booked and u.id not in linked]
+
+    def purge_unverified_signups(self) -> list:
+        users = self.unverified_signups()
+        names = [u.username for u in users]
+        for user in users:
+            self._unlink_and_delete(user)
+        return names
+
     def _unlink_and_delete(self, user: User) -> None:
         db = self.user_repository.db
         db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.id).delete()
@@ -163,6 +253,11 @@ class AuthService:
         db.commit()
 
     # ---- forgot password (email link) ------------------------------------------
+    def _recent_reset_count(self, user: User) -> int:
+        since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)
+        return self.user_repository.db.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == user.id, PasswordResetToken.created_at >= since).count()
+
     def _issue_reset_token(self, user: User) -> str:
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
@@ -186,6 +281,10 @@ class AuthService:
         no active account for that address - callers must show the same
         "check your email" message either way, to avoid leaking which is true."""
         user = self.user_repository.get_by_email(email.strip())
+        if user and user.is_active and self._recent_reset_count(user) >= MAX_RESETS_PER_HOUR:
+            # The same "check your email" reply, but no more mail: one address can't be
+            # flooded with reset emails, however many IPs the requests come from.
+            return None
         if not user or not user.is_active:
             # Same token-generation/hashing cost as the real path below, so response
             # time doesn't reveal whether the account exists - only the DB write is
@@ -193,6 +292,43 @@ class AuthService:
             hashlib.sha256(secrets.token_urlsafe(32).encode()).hexdigest()
             return None
         return user, self._issue_reset_token(user)
+
+    # ---- forgot username/email --------------------------------------------------
+    def request_username_recovery(self, identifier: str) -> None:
+        """Looks up the account by email or phone (never by username - the
+        point is the caller doesn't have it) and, only when it has an email on
+        file, sends the username there. Same email either way (or matched
+        only by phone, with no email to send to) - the caller can't tell
+        which, so nothing about which accounts exist leaks."""
+        identifier = identifier.strip()
+        user: Optional[User] = None
+        if "@" in identifier:
+            user = self.user_repository.get_by_email(identifier)
+        else:
+            try:
+                phone = normalize_mobile(identifier)
+            except ValueError:
+                phone = None
+            if phone:
+                matches = self.user_repository.get_by_phone(phone)
+                user = matches[0] if len(matches) == 1 else None
+
+        if user and user.is_active and user.email:
+            from app.core.config import settings
+            from app.services.email_service import EmailService
+
+            EmailService().send(
+                user.email,
+                "Your SVVD Thorur username",
+                f"Hello,\n\n"
+                "We received a request to recover the username for this SVVD Thorur account.\n\n"
+                f"Your username is: {user.username}\n\n"
+                f"You can sign in here: {settings.FRONTEND_BASE_URL}/login\n\n"
+                "If you didn't request this, you can safely ignore this email.\n\n"
+                "Thank you,\nSVVD Thorur",
+                code=user.username, cta=("Sign in", f"{settings.FRONTEND_BASE_URL}/login"),
+                heading="Your username",
+            )
 
     def reset_password(self, token: str, new_password: str) -> None:
         db = self.user_repository.db
@@ -208,6 +344,7 @@ class AuthService:
 
         user.hashed_password = hash_password(new_password)
         user.must_change_password = False
+        revoke_sessions(user)
         record.used_at = now
         db.add(user)
         db.add(record)

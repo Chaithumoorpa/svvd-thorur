@@ -4,26 +4,28 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Banknote, Calendar, Church, Clock, HandHeart, Heart, History,
-  Image as ImageIcon, LayoutDashboard, LogOut, Mail, Megaphone, Menu, ShieldCheck, Sparkles,
+  BarChart3, Banknote, Calendar, Church, Clock, FileSignature, HandHeart, Heart, History,
+  Image as ImageIcon, LayoutDashboard, LogOut, Mail, Megaphone, Menu, Package, Receipt, ShieldCheck, Sparkles,
   Ticket, Users, X,
 } from 'lucide-react';
 
 import { AuthContext } from '@/components/admin/AuthContext';
 import { LoadingBlock } from '@/components/ui/States';
-import { getMe, setStoredToken, getStoredToken } from '@/lib/api';
+import { getMe, logout as endSession } from '@/lib/api';
 import type { Me, Permission } from '@/lib/types';
 
 interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  permission?: Permission;
+  /** Shown to anyone holding this permission (or any one of these). */
+  permission?: Permission | Permission[];
   group: string;
 }
 
 const NAV: NavItem[] = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, permission: 'dashboard:view', group: 'Overview' },
+  { name: 'Analytics', href: '/admin/analytics', icon: BarChart3, permission: ['finance:read', 'inventory:read', 'audit:read'], group: 'Overview' },
   { name: 'Temple Info', href: '/admin/temple', icon: Church, permission: 'temple:write', group: 'Website' },
   { name: 'Timings', href: '/admin/timings', icon: Clock, permission: 'temple:write', group: 'Website' },
   { name: 'Announcements', href: '/admin/announcements', icon: Megaphone, permission: 'content:write', group: 'Website' },
@@ -33,9 +35,12 @@ const NAV: NavItem[] = [
   { name: 'Seva Tickets', href: '/admin/seva-tickets', icon: Ticket, permission: 'tickets:manage', group: 'Temple' },
   { name: 'Messages', href: '/admin/messages', icon: Mail, permission: 'messages:manage', group: 'Temple' },
   { name: 'Members', href: '/admin/members', icon: Users, permission: 'members:read', group: 'Temple' },
+  { name: 'Inventory', href: '/admin/inventory', icon: Package, permission: 'inventory:read', group: 'Temple' },
+  { name: 'Letters', href: '/admin/letters', icon: FileSignature, permission: 'letters:read', group: 'Temple' },
   { name: 'Donors', href: '/admin/donors', icon: Heart, permission: 'donors:read', group: 'Finance' },
   { name: 'Donations', href: '/admin/donations', icon: HandHeart, permission: 'donations:read', group: 'Finance' },
   { name: 'Finance', href: '/admin/finance', icon: Banknote, permission: 'finance:read', group: 'Finance' },
+  { name: 'Expenses', href: '/admin/expenses', icon: Receipt, permission: ['expenses:submit', 'finance:read'], group: 'Finance' },
   { name: 'Users', href: '/admin/users', icon: ShieldCheck, permission: 'users:manage', group: 'Administration' },
   { name: 'Audit Log', href: '/admin/audit', icon: History, permission: 'audit:read', group: 'Administration' },
 ];
@@ -50,10 +55,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     let cancelled = false;
     async function check() {
-      if (!getStoredToken()) {
-        router.replace('/login');
-        return;
-      }
+      // Ask the server: the session is an HttpOnly cookie this page can't inspect.
       try {
         const current = await getMe();
         if (cancelled) return;
@@ -63,10 +65,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         }
         setMe(current);
       } catch {
-        if (!cancelled) {
-          setStoredToken(null);
-          router.replace('/login');
-        }
+        if (!cancelled) router.replace('/login');
       } finally {
         if (!cancelled) setChecking(false);
       }
@@ -82,8 +81,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const can = useCallback((p: Permission) => !!me?.permissions.includes(p), [me]);
   const ctx = useMemo(() => (me ? { me, can } : null), [me, can]);
 
-  const logout = () => {
-    setStoredToken(null);
+  const logout = async () => {
+    await endSession();
     router.push('/');
   };
 
@@ -96,9 +95,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
   if (!ctx || !me) return null;
 
-  const visible = NAV.filter((item) => !item.permission || can(item.permission));
+  const permitted = (item?: NavItem) =>
+    !item?.permission || (Array.isArray(item.permission) ? item.permission.some(can) : can(item.permission));
+  const visible = NAV.filter((item) => permitted(item));
   const current = NAV.find((item) => (item.href === '/admin' ? pathname === '/admin' : pathname.startsWith(item.href)));
-  const allowed = pathname.startsWith('/admin/change-password') || !current?.permission || can(current.permission);
+  const allowed = pathname.startsWith('/admin/change-password') || permitted(current);
   const hasAnyAccess = can('dashboard:view');
   const groups = Array.from(new Set(visible.map((i) => i.group)));
 

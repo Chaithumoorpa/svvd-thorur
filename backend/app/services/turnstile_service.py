@@ -41,7 +41,16 @@ class TurnstileService:
                 data["remoteip"] = remote_ip
             response = httpx.post(_VERIFY_URL, data=data, timeout=5)
             response.raise_for_status()
-            return bool(response.json().get("success"))
+            result = response.json()
         except Exception:
             logger.warning("Turnstile verification request failed", exc_info=True)
             return False
+        if result.get("success"):
+            return True
+        # Cloudflare's reason (e.g. timeout-or-duplicate, invalid-input-response) is the
+        # only way to tell an expired/reused token from a rejected visitor in the logs.
+        logger.warning(
+            "Turnstile rejected a token: error-codes=%s hostname=%s",
+            result.get("error-codes"), result.get("hostname"),
+        )
+        return False

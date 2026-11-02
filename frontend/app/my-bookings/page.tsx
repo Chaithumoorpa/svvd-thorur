@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Download, LogIn } from 'lucide-react';
-import { apiError, deleteMyAccount, downloadTicketPdf, getMyTickets, getStoredToken, saveBlob, setStoredToken } from '@/lib/api';
+import { apiError, deleteMyAccount, downloadTicketPdf, getMyTickets, isProbablySignedIn, markSignedIn, saveBlob } from '@/lib/api';
 import type { SevaTicket } from '@/lib/types';
 import Modal from '@/components/ui/Modal';
 import { EmptyBlock, ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
@@ -74,7 +74,7 @@ function DeleteAccountSection() {
     setError('');
     try {
       await deleteMyAccount(password);
-      setStoredToken(null);
+      markSignedIn(false);
       window.location.href = '/';
     } catch (err) {
       setError(apiError(err, 'Could not delete your account. Please try again.'));
@@ -137,7 +137,7 @@ export default function MyBookingsPage() {
   }
 
   useEffect(() => {
-    setSignedIn(!!getStoredToken());
+    setSignedIn(isProbablySignedIn());
   }, []);
 
   useEffect(() => {

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Eye, EyeOff, LogIn, Mail } from 'lucide-react';
-import { apiError, getMe, getStoredToken, login, setStoredToken, verifyLoginOtp } from '@/lib/api';
+import { apiError, getMe, isProbablySignedIn, login, verifyLoginOtp } from '@/lib/api';
 import type { Me } from '@/lib/types';
 import { LoadingBlock, Notice } from '@/components/ui/States';
 import TurnstileWidget from '@/components/ui/TurnstileWidget';
@@ -14,8 +14,14 @@ import { useTurnstile } from '@/hooks/useTurnstile';
 type Step = 'credentials' | 'otp';
 
 /** Same login for everyone; where it lands depends on the account's roles. */
+/** Pages that send people here to sign in and expect them back (?next=...). Only these exact
+ * paths are honoured, so the parameter can't bounce anyone to another site. */
+const RETURN_PATHS = new Set(['/sign-letters']);
+
 function landingPath(me: Me): string {
   if (me.must_change_password) return '/admin/change-password';
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (next && RETURN_PATHS.has(next)) return next;
   return me.is_admin || me.is_trustee || me.permissions.length > 0 ? '/admin' : '/my-bookings';
 }
 
@@ -33,9 +39,9 @@ export default function LoginPage() {
   // Already signed in - e.g. "Staff login" clicked from the public site mid-
   // session: go where a fresh sign-in would, instead of asking again. replace()
   // keeps this page out of history, so Back doesn't bounce through it. An
-  // expired token 401s here, which clears it (see lib/api.ts), and the form shows.
+  // expired session 401s here, which clears the hint (see lib/api.ts), and the form shows.
   useEffect(() => {
-    if (!getStoredToken()) {
+    if (!isProbablySignedIn()) {
       setCheckingSession(false);
       return;
     }
@@ -52,8 +58,7 @@ export default function LoginPage() {
     };
   }, []);
 
-  async function finishLogin(data: { access_token: string; must_change_password: boolean }) {
-    setStoredToken(data.access_token);
+  async function finishLogin(data: { must_change_password: boolean }) {
     if (data.must_change_password) {
       window.location.href = '/admin/change-password';
       return;
@@ -74,7 +79,7 @@ export default function LoginPage() {
         setBusy(false);
         return;
       }
-      await finishLogin({ access_token: data.access_token!, must_change_password: !!data.must_change_password });
+      await finishLogin({ must_change_password: !!data.must_change_password });
     } catch (err) {
       turnstile.reset();
       setError(apiError(err, 'Sign in failed. Please try again.'));
@@ -131,7 +136,7 @@ export default function LoginPage() {
             {error && <Notice kind="error">{error}</Notice>}
             <div>
               <label htmlFor="username" className="mb-1 block text-sm font-medium text-gray-700">
-                Username
+                Username, email, or mobile number
               </label>
               <input
                 id="username"
@@ -167,7 +172,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            <button type="submit" disabled={busy || !username || !password} className={`${btnPrimary} w-full`}>
+            <button type="submit" disabled={busy || !username || !password || turnstile.blocked} className={`${btnPrimary} w-full`}>
               <LogIn className="h-4 w-4" aria-hidden="true" />
               {busy ? 'Signing in…' : 'Sign in'}
             </button>
@@ -201,7 +206,7 @@ export default function LoginPage() {
               <button type="button" className="text-red-900 hover:underline" onClick={() => { setStep('credentials'); setCode(''); setError(''); }}>
                 ← Back
               </button>
-              <button type="button" className={btnGhost} disabled={busy} onClick={resendCode}>
+              <button type="button" className={btnGhost} disabled={busy || turnstile.blocked} onClick={resendCode}>
                 Resend code
               </button>
             </div>
@@ -209,7 +214,7 @@ export default function LoginPage() {
         )}
 
         <div className="mt-4 flex justify-center">
-          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
+          <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} onError={turnstile.setFailed} />
         </div>
 
         {step === 'credentials' && (
@@ -220,9 +225,12 @@ export default function LoginPage() {
                 Create an account
               </Link>
             </p>
-            <p className="mt-2 text-center text-sm">
+            <p className="mt-2 flex justify-center gap-4 text-center text-sm">
               <Link href="/forgot-password" className="text-red-900 hover:underline">
                 Forgot password?
+              </Link>
+              <Link href="/forgot-username" className="text-red-900 hover:underline">
+                Forgot username or email?
               </Link>
             </p>
           </>

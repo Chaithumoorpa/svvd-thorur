@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
 import { getTranslations } from 'next-intl/server'
 import PageContainer from '@/components/PageContainer'
-import { localizedAlternates } from '@/lib/site'
+import { pageMetadata } from '@/lib/site'
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { alternates: await localizedAlternates('/legal/refund-policy') }
+  return pageMetadata('/legal/refund-policy');
 }
 
 export default async function RefundPolicyPage() {
@@ -19,7 +19,7 @@ export default async function RefundPolicyPage() {
         <p className="mt-2 text-gray-600">{t('sectionText')}</p>
       </section>
 
-      <p className="mt-8 text-sm text-gray-500">{t('lastUpdated', { date: '2025-12-27' })}</p>
+      <p className="mt-8 text-sm text-gray-600">{t('lastUpdated', { date: '2025-12-27' })}</p>
     </PageContainer>
   )
 }

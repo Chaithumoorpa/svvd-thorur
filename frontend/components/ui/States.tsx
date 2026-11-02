@@ -48,9 +48,15 @@ export function EmptyBlock({
   );
 }
 
-/** Success / error banner for form results. */
-export function Notice({ kind, children }: { kind: 'success' | 'error'; children: ReactNode }) {
-  const cls = kind === 'success' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800';
+const NOTICE_CLS = {
+  success: 'border-green-200 bg-green-50 text-green-800',
+  error: 'border-red-200 bg-red-50 text-red-800',
+  info: 'border-amber-200 bg-amber-50 text-amber-900',
+};
+
+/** Success / error banner for form results; info for a heads-up. */
+export function Notice({ kind, children }: { kind: 'success' | 'error' | 'info'; children: ReactNode }) {
+  const cls = NOTICE_CLS[kind];
   return (
     <div role={kind === 'error' ? 'alert' : 'status'} className={`rounded-lg border px-4 py-3 text-sm ${cls}`}>
       {children}

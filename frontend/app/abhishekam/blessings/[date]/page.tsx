@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { CalendarDays } from 'lucide-react';
+import BlessingChant from '@/components/public/BlessingChant';
 import BlessingsCarousel from '@/components/public/BlessingsCarousel';
 import { ErrorBlock, LoadingBlock } from '@/components/ui/States';
 import { btnGhost, btnPrimary } from '@/components/ui/styles';
@@ -44,6 +45,7 @@ export default function DayBlessingsPage() {
               {data.blessing_status === 'active' && data.entries.length > 0 ? (
                 <>
                   <BlessingsCarousel entries={data.entries} />
+                  <BlessingChant />
                   <p className="mt-4 text-xs text-gray-400">On display until {formatDate(data.visible_until)}</p>
                 </>
               ) : data.entries.length === 0 ? (

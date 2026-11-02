@@ -23,8 +23,8 @@ def _devotee(db, username="devotee1", password="Password123"):
 
 
 def _headers_for(user):
-    from app.core.security import create_access_token
-    token = create_access_token({"sub": user.username, "user_id": user.id})
+    from app.services.auth_service import issue_session_token
+    token = issue_session_token(user)
     return {"Authorization": f"Bearer {token}"}
 
 

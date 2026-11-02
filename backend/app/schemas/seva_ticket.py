@@ -22,7 +22,7 @@ class SevaBookingPublic(BaseModel):
     """
     seva_id: int
     devotee_name: DevoteeName
-    mobile_number: str
+    mobile_number: Annotated[str, StringConstraints(max_length=20)]
     seva_date: date
     seva_time: Optional[time] = None
     # What this booking is for (a birthday, a wedding anniversary, ...) - optional,
@@ -46,8 +46,8 @@ class SevaBookingOnline(SevaBookingPublic):
     `photo_key`/`show_publicly` only for a seva with public_blessings; both
     wait for staff review before anything appears on the website."""
     email: EmailStr
-    booking_token: str
-    turnstile_token: Optional[str] = None
+    booking_token: str = Field(max_length=2000)
+    turnstile_token: Optional[str] = Field(default=None, max_length=4000)
     photo_key: Optional[PhotoKey] = None
     show_publicly: bool = False
 
@@ -113,7 +113,7 @@ class SevaTicketPrintData(BaseModel):
 
 class ScanRequest(BaseModel):
     """Request to scan a QR code"""
-    qr_token: str
+    qr_token: str = Field(max_length=200)
 
 
 class ScanResponse(BaseModel):

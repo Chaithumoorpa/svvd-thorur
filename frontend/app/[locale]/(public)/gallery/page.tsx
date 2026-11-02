@@ -3,11 +3,11 @@ import { getTranslations } from 'next-intl/server';
 import GalleryGrid from '@/components/public/GalleryGrid';
 import { PageShell } from '@/components/public/SectionHeading';
 import { fetchGallery } from '@/lib/server-api';
-import { localizedAlternates } from '@/lib/site';
+import { pageMetadata } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.gallery');
-  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/gallery') };
+  return pageMetadata('/gallery', { title: t('title'), description: t('description') });
 }
 
 export default async function GalleryPage() {

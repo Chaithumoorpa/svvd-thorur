@@ -1,0 +1,18 @@
+# Weekly PRs bumping pinned dependencies (not the same as dependency-audit.yml,
+# which only scans for known vulnerabilities in what's already pinned).
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

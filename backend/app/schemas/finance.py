@@ -1,12 +1,19 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Dict, Optional
+from typing import Annotated, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from app.models.finance import ExpenseCategory, IncomeSourceType, PaymentMode
-from app.schemas.common import MoneyIn, MoneyOut, blank_to_none
+from app.models.finance import ExpenseCategory, ExpenseStatus, IncomeSourceType, PaymentMode
+from app.schemas.common import MoneyIn, MoneyInOrZero, MoneyOut, blank_to_none
+
+# Bills are stored privately under receipts/ - the prefix the server's IAM role
+# can already write and read (see StorageService.upload_private).
+EXPENSE_BILL_PREFIX = "receipts/expense-bills"
+BillKey = Annotated[str, StringConstraints(pattern=rf"^{EXPENSE_BILL_PREFIX}/[0-9a-f]{{32}}\.(jpg|png|webp|gif|pdf)$")]
+Text255 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=255)]
+Reason = Annotated[str, StringConstraints(strip_whitespace=True, min_length=3, max_length=500)]
 
 
 class IncomeTransactionCreate(BaseModel):
@@ -50,17 +57,57 @@ class IncomeTransactionOut(BaseModel):
 
 class ExpenseTransactionCreate(BaseModel):
     category: ExpenseCategory
-    description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=255)]
+    description: Text255
     amount: MoneyIn
     payment_mode: PaymentMode
-    paid_to: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=255)]
+    paid_to: Text255
     expense_date: date
     notes: Optional[str] = Field(default=None, max_length=2000)
+    bill_key: Optional[BillKey] = None
+    festival_id: Optional[int] = Field(default=None, ge=1)
 
-    @field_validator("notes", mode="before")
+    @field_validator("notes", "bill_key", mode="before")
     @classmethod
     def _blank(cls, v):
         return blank_to_none(v)
+
+    @field_validator("expense_date")
+    @classmethod
+    def _not_future(cls, v: date) -> date:
+        if v > date.today():
+            raise ValueError("The expense date can't be in the future")
+        return v
+
+
+class ExpenseUpdate(BaseModel):
+    """A correction. Changing an already-approved expense needs a reason,
+    which goes into the audit log together with the old and new values."""
+    category: Optional[ExpenseCategory] = None
+    description: Optional[Text255] = None
+    amount: Optional[MoneyIn] = None
+    payment_mode: Optional[PaymentMode] = None
+    paid_to: Optional[Text255] = None
+    expense_date: Optional[date] = None
+    notes: Optional[str] = Field(default=None, max_length=2000)
+    bill_key: Optional[BillKey] = None
+    festival_id: Optional[int] = Field(default=None, ge=1)
+    reason: Optional[Reason] = None
+
+    @field_validator("notes", "bill_key", "reason", mode="before")
+    @classmethod
+    def _blank(cls, v):
+        return blank_to_none(v)
+
+    @field_validator("expense_date")
+    @classmethod
+    def _not_future(cls, v: Optional[date]) -> Optional[date]:
+        if v and v > date.today():
+            raise ValueError("The expense date can't be in the future")
+        return v
+
+
+class ExpenseReason(BaseModel):
+    reason: Reason
 
 
 class ExpenseTransactionOut(BaseModel):
@@ -72,8 +119,59 @@ class ExpenseTransactionOut(BaseModel):
     paid_to: str
     expense_date: date
     notes: Optional[str] = None
-    approved_by: int
+    status: ExpenseStatus
+    submitted_by: Optional[int] = None
+    approved_by: Optional[int] = None
+    decided_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    voided_by: Optional[int] = None
+    voided_at: Optional[datetime] = None
+    void_reason: Optional[str] = None
+    has_bill: bool = False
+    festival_id: Optional[int] = None
+    created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class ExpenseListItem(ExpenseTransactionOut):
+    """An expense with the names a reviewer needs (no extra lookups in the UI)."""
+    submitted_by_name: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    festival_name: Optional[str] = None
+    # Set when the expense was created by an inventory purchase
+    inventory_item_id: Optional[int] = None
+
+
+class BillLink(BaseModel):
+    url: str
+    content_type: str
+
+
+class BudgetLine(BaseModel):
+    category: ExpenseCategory
+    amount: MoneyInOrZero
+
+
+class BudgetSet(BaseModel):
+    lines: List[BudgetLine] = Field(max_length=len(ExpenseCategory))
+
+
+class BudgetStatusLine(BaseModel):
+    category: ExpenseCategory
+    budget: Optional[MoneyOut] = None
+    spent: MoneyOut          # approved expenses in the month
+    pending: MoneyOut        # submitted, awaiting approval
+    remaining: Optional[MoneyOut] = None
+    percent_used: Optional[float] = None
+    over_budget: bool = False
+
+
+class BudgetStatus(BaseModel):
+    month: str  # YYYY-MM
+    lines: List[BudgetStatusLine]
+    total_budget: MoneyOut
+    total_spent: MoneyOut
+    total_pending: MoneyOut
 
 
 class FinanceSummary(BaseModel):

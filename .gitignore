@@ -83,3 +83,9 @@ svvd-thorur-fix-finish-site.bundle
 # Coverage / build artefacts
 coverage.xml
 *.tsbuildinfo
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/playwright/.cache/

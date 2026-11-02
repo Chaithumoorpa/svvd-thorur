@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { getLocale } from 'next-intl/server';
 import './globals.css';
 import { fetchTemple } from '@/lib/server-api';
-import { SITE_FALLBACK, SITE_URL, templeName } from '@/lib/site';
+import { SITE_FALLBACK, SITE_URL, socialImage, templeName } from '@/lib/site';
 
 // Public pages read live data from the API (cached per-request via fetch revalidate), so nothing
 // is frozen at build time when the backend is not reachable.
@@ -12,20 +12,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const temple = await fetchTemple();
   const name = templeName(temple);
   const description = temple?.tagline || SITE_FALLBACK.description;
+  const image = socialImage(temple, name);
   return {
     metadataBase: new URL(SITE_URL),
     title: { default: name, template: `%s | ${name}` },
     description,
     applicationName: name,
-    openGraph: {
-      type: 'website',
-      siteName: name,
-      title: name,
-      description,
-      locale: 'en_IN',
-      ...(temple?.hero_image_url ? { images: [{ url: temple.hero_image_url }] } : {}),
-    },
-    twitter: { card: 'summary_large_image', title: name, description },
+    openGraph: { type: 'website', siteName: name, title: name, description, locale: 'en_IN', images: [image] },
+    twitter: { card: 'summary_large_image', title: name, description, images: [image.url] },
     robots: { index: true, follow: true },
   };
 }

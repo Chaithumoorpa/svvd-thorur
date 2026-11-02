@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from app.core.rbac import Permission, has_permission
 from app.models.contact import ContactMessage, ContactStatus
 from app.models.festival import Festival
+from app.models.finance import ExpenseStatus, ExpenseTransaction
+from app.models.inventory import InventoryItem, ItemKind
 from app.models.user import User
 from app.repositories.announcement_repo import AnnouncementRepository
 from app.repositories.donor_repo import DonorRepository
@@ -36,6 +38,8 @@ class DashboardStats(BaseModel):
     seva_tickets_today: int
     pending_messages: int = 0
     upcoming_festivals: int = 0
+    pending_expenses: int = 0   # waiting for an admin's approval
+    low_stock_items: int = 0    # consumables at or below their reorder level
 
 
 class ActivityItem(BaseModel):
@@ -81,6 +85,17 @@ def get_dashboard_stats(
         upcoming_festivals=db.query(Festival).filter(
             Festival.is_active.is_(True), Festival.festival_date >= today
         ).count(),
+        pending_expenses=(
+            db.query(ExpenseTransaction).filter(ExpenseTransaction.status == ExpenseStatus.PENDING).count()
+            if can(Permission.FINANCE_WRITE) else 0
+        ),
+        low_stock_items=(
+            db.query(InventoryItem).filter(
+                InventoryItem.is_active.is_(True), InventoryItem.kind == ItemKind.CONSUMABLE,
+                InventoryItem.reorder_level.isnot(None), InventoryItem.quantity <= InventoryItem.reorder_level,
+            ).count()
+            if can(Permission.INVENTORY_READ) else 0
+        ),
     )
 
 

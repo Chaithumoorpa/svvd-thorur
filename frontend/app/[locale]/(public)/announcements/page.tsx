@@ -4,11 +4,11 @@ import { Bell, Megaphone } from 'lucide-react';
 import { PageShell } from '@/components/public/SectionHeading';
 import { formatDate } from '@/lib/format';
 import { fetchAnnouncements } from '@/lib/server-api';
-import { localizedAlternates } from '@/lib/site';
+import { pageMetadata } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.announcements');
-  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/announcements') };
+  return pageMetadata('/announcements', { title: t('title'), description: t('description') });
 }
 
 export default async function AnnouncementsPage() {
@@ -22,8 +22,8 @@ export default async function AnnouncementsPage() {
           {items.map((a) => (
             <li key={a.id}>
               <article className="rounded-2xl border border-amber-100 bg-white p-6 shadow-sm sm:p-8">
-                <header className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
-                  <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-saffron">
+                <header className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
+                  <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-saffron-dark">
                     <Bell className="h-3.5 w-3.5" aria-hidden="true" /> {t('notice')}
                   </span>
                   <time dateTime={(a.start_date ?? a.created_at).slice(0, 10)}>{formatDate(a.start_date ?? a.created_at, { day: 'numeric', month: 'long', year: 'numeric' })}</time>
@@ -39,7 +39,7 @@ export default async function AnnouncementsPage() {
         <div className="rounded-2xl border border-dashed border-amber-300 bg-white p-12 text-center">
           <Megaphone className="mx-auto mb-3 h-12 w-12 text-amber-200" aria-hidden="true" />
           <h2 className="font-serif text-xl font-bold text-gray-600">{t('emptyTitle')}</h2>
-          <p className="text-gray-500">{t('emptyText')}</p>
+          <p className="text-gray-600">{t('emptyText')}</p>
         </div>
       )}
     </PageShell>

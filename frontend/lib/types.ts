@@ -16,6 +16,12 @@ export type Permission =
   | 'donations:write'
   | 'finance:read'
   | 'finance:write'
+  | 'expenses:submit'
+  | 'inventory:read'
+  | 'inventory:write'
+  | 'inventory:manage'
+  | 'letters:read'
+  | 'letters:write'
   | 'users:manage'
   | 'audit:read';
 
@@ -45,9 +51,30 @@ export interface Temple {
   youtube_url: string | null;
   /** Sections the lobby TV (/tv) shows; every section by default. */
   tv_sections: string[];
+  upi_vpa: string | null;
+  /** Account holder name the bank shows in a devotee's UPI app. */
+  bank_account_name: string | null;
+  registration_number: string | null;
+  pan_number: string | null;
+  eighty_g_number: string | null;
 }
 
 export type TempleUpdate = Partial<Omit<Temple, 'id'>>;
+
+/** e-Hundi: a UPI deep-link QR built from the temple's own VPA. A direct
+ * devotee-to-temple transfer - never processed by this backend. */
+export interface HundiQrInfo {
+  configured: boolean;
+  upi_vpa: string | null;
+  payee_name: string | null;
+  qr_base64: string | null;
+  /** The payment link the QR encodes - opened directly by the "Donate via UPI" button. */
+  upi_uri: string | null;
+  /** Printed with the QR so devotees can verify they're paying the registered temple. */
+  registration_number: string | null;
+  pan_number: string | null;
+  eighty_g_number: string | null;
+}
 
 export interface TempleTiming {
   id: number;
@@ -332,6 +359,9 @@ export interface AppUser {
   is_active: boolean;
   roles: Role[];
   must_change_password: boolean;
+  email_verified_at?: string | null;
+  created_at?: string | null;
+  last_login?: string | null;
 }
 
 export interface UserCreateInput {
@@ -372,6 +402,8 @@ export interface DashboardStats {
   seva_tickets_today: number;
   pending_messages: number;
   upcoming_festivals: number;
+  pending_expenses: number;
+  low_stock_items: number;
 }
 
 export interface ActivityItem {
@@ -404,7 +436,10 @@ export interface HomePayload {
 }
 
 export type IncomeSource = 'SEVA' | 'DONATION' | 'HUNDI' | 'MANUAL';
-export type ExpenseCategory = 'SALARY' | 'MATERIAL' | 'MAINTENANCE' | 'FESTIVAL' | 'OTHER';
+export type ExpenseCategory =
+  | 'POOJA_SUPPLIES' | 'ANNADANAM' | 'FESTIVAL' | 'SALARY' | 'UTILITIES' | 'MAINTENANCE'
+  | 'CONSTRUCTION' | 'ASSETS' | 'MATERIAL' | 'OTHER';
+export type ExpenseStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'VOID';
 
 export interface FinanceSummary {
   total_income: number;
@@ -440,6 +475,158 @@ export interface ExpenseInput {
   paid_to: string;
   expense_date: string;
   notes?: string | null;
+  bill_key?: string | null;
+  festival_id?: number | null;
+}
+
+export interface Expense {
+  id: string;
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
+  payment_mode: PaymentMode;
+  paid_to: string;
+  expense_date: string;
+  notes: string | null;
+  status: ExpenseStatus;
+  submitted_by: number | null;
+  approved_by: number | null;
+  decided_at: string | null;
+  rejection_reason: string | null;
+  voided_at: string | null;
+  void_reason: string | null;
+  has_bill: boolean;
+  festival_id: number | null;
+  created_at: string | null;
+  submitted_by_name?: string | null;
+  approved_by_name?: string | null;
+  festival_name?: string | null;
+  /** Set when this expense was created by an inventory purchase. */
+  inventory_item_id?: number | null;
+}
+
+export interface BudgetStatusLine {
+  category: ExpenseCategory;
+  budget: number | null;
+  spent: number;
+  pending: number;
+  remaining: number | null;
+  percent_used: number | null;
+  over_budget: boolean;
+}
+
+export interface BudgetStatus {
+  month: string;
+  lines: BudgetStatusLine[];
+  total_budget: number;
+  total_spent: number;
+  total_pending: number;
+}
+
+// ------------------------------------------------------------------------------ inventory
+export type ItemKind = 'CONSUMABLE' | 'ASSET';
+export type AssetCondition = 'GOOD' | 'NEEDS_REPAIR' | 'DAMAGED' | 'MISSING';
+export type MovementType = 'PURCHASE' | 'DONATION_IN' | 'USAGE' | 'ADJUSTMENT' | 'WRITE_OFF';
+
+/** Quantities are exact decimals sent as strings ("2.500"). */
+export interface InventoryItem {
+  id: number;
+  name: string;
+  kind: ItemKind;
+  category: string;
+  unit: string;
+  quantity: string;
+  reorder_level: string | null;
+  avg_unit_cost: string;
+  location: string | null;
+  notes: string | null;
+  is_active: boolean;
+  material: string | null;
+  weight_grams: string | null;
+  estimated_value: number | null;
+  acquired_on: string | null;
+  identification: string | null;
+  condition: AssetCondition | null;
+  has_photo: boolean;
+  last_verified_on: string | null;
+  low_stock: boolean;
+  stock_value: number;
+}
+
+export interface InventoryItemInput {
+  name?: string;
+  kind?: ItemKind;
+  category?: string;
+  unit?: string;
+  reorder_level?: string | null;
+  location?: string | null;
+  notes?: string | null;
+  material?: string | null;
+  weight_grams?: string | null;
+  estimated_value?: string | null;
+  acquired_on?: string | null;
+  identification?: string | null;
+  condition?: AssetCondition | null;
+  photo_key?: string | null;
+  opening_quantity?: string;
+  opening_unit_cost?: string | null;
+  is_active?: boolean;
+}
+
+export interface StockMovement {
+  id: number;
+  item_id: number;
+  item_name: string | null;
+  unit: string | null;
+  type: MovementType;
+  quantity: string;
+  balance_after: string;
+  unit_cost: string | null;
+  total_value: number | null;
+  movement_date: string;
+  notes: string | null;
+  expense_id: string | null;
+  expense_status: ExpenseStatus | null;
+  vendor: string | null;
+  donor_name: string | null;
+  donor_phone: string | null;
+  receipt_number: string | null;
+  pooja_id: number | null;
+  pooja_name: string | null;
+  festival_id: number | null;
+  festival_name: string | null;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+export interface AssetVerification {
+  id: number;
+  item_id: number;
+  verified_on: string;
+  condition: AssetCondition;
+  weight_grams: string | null;
+  notes: string | null;
+  verified_by_name: string | null;
+  weight_mismatch: boolean;
+}
+
+export interface FestivalCost {
+  festival_id: number;
+  festival_name: string;
+  festival_date: string | null;
+  stock_used_value: number;
+  expenses_total: number;
+  total_cost: number;
+  items: Array<{ item_name: string; unit: string; quantity: string; value: number }>;
+}
+
+export interface InventorySummary {
+  consumables: number;
+  valuables: number;
+  low_stock: number;
+  stock_value: number;
+  valuables_value: number;
+  valuables_unverified: number;
 }
 
 export interface VisitorStats {
@@ -504,4 +691,157 @@ export interface BlessingReview {
   payment_status: PaymentStatus;
   review_status: ReviewStatus;
   photo_preview_url: string | null;
+}
+
+// ------------------------------------------------------------------------------ analytics
+export interface NamedAmount { name: string; amount: number }
+export interface NamedCount { name: string; count: number }
+
+export interface FinanceAnalytics {
+  months: Array<{ month: string; income: number; expenses: number; net: number }>;
+  totals: { income: number; expenses: number; net: number };
+  previous: { income: number; expenses: number; net: number };
+  income_by_source: NamedAmount[];
+  expense_by_category: NamedAmount[];
+  payment_modes: Array<{ mode: string; count: number; amount: number }>;
+  top_payees: Array<{ name: string; count: number; amount: number }>;
+  donations: { count: number; total: number; donors: number; average: number };
+}
+
+export interface InventoryAnalytics {
+  stock_by_category: NamedAmount[];
+  consumption: Array<{ month: string; used: number; written_off: number; donated_in: number }>;
+  top_used: Array<{ item_name: string; unit: string; quantity: string; value: number }>;
+}
+
+export interface AuditAnalytics {
+  days: number;
+  totals: { events: number; active_users: number; logins: number; failed_logins: number; deletions: number; off_hours: number };
+  per_day: Array<{ date: string; count: number }>;
+  by_hour: number[];
+  by_actor: Array<{ name: string; count: number; deletions: number }>;
+  by_action: NamedCount[];
+  by_entity: NamedCount[];
+  failed_login_ips: NamedCount[];
+  sensitive: Array<{
+    id: number; created_at: string; actor: string | null; action: string; entity_type: string;
+    summary: string | null; ip_address: string | null; off_hours: boolean;
+  }>;
+}
+
+// ---------------------------------------------------------------------------- official letters
+export type LetterKind =
+  | 'GENERAL' | 'APPOINTMENT' | 'MEMBERSHIP_CERTIFICATE' | 'SERVICE_CERTIFICATE' | 'TO_WHOM_IT_MAY_CONCERN'
+  | 'DONATION_ACKNOWLEDGEMENT' | 'NOC' | 'INVITATION' | 'POWER_OF_ATTORNEY' | 'RESOLUTION' | 'AUTHORISATION';
+export type LetterStatus = 'DRAFT' | 'AWAITING_SIGNATURES' | 'ISSUED' | 'REVOKED';
+export type SignatoryRole = 'SIGNATORY' | 'ATTESTOR';
+export type SignatoryStatus = 'PENDING' | 'SIGNED' | 'PAPER' | 'DECLINED';
+
+export interface LetterSignatory {
+  id: number;
+  member_id: number | null;
+  name: string;
+  designation: string | null;
+  role: SignatoryRole;
+  status: SignatoryStatus;
+  signed_at: string | null;
+  decline_reason: string | null;
+  has_login: boolean;
+  has_signature: boolean;
+}
+
+export interface Letter {
+  id: number;
+  reference_number: string | null;
+  kind: LetterKind;
+  status: LetterStatus;
+  letter_date: string;
+  subject: string;
+  recipient_name: string | null;
+  recipient_address: string | null;
+  salutation: string | null;
+  body: string;
+  closing: string | null;
+  include_seal: boolean;
+  created_at: string;
+  created_by_name: string | null;
+  sent_at: string | null;
+  issued_at: string | null;
+  revoked_at: string | null;
+  revoke_reason: string | null;
+  verify_url: string | null;
+  signatories: LetterSignatory[];
+}
+
+export interface LetterInput {
+  kind: LetterKind;
+  letter_date: string;
+  subject: string;
+  recipient_name?: string | null;
+  recipient_address?: string | null;
+  salutation?: string | null;
+  body: string;
+  closing?: string | null;
+  include_seal: boolean;
+  signatories: Array<{ member_id: number; role: SignatoryRole; designation?: string | null }>;
+}
+
+export interface LetterTemplate {
+  kind: LetterKind;
+  label: string;
+  certificate_title: string | null;
+  subject: string;
+  salutation: string;
+  body: string;
+  closing: string;
+}
+
+export interface SignatureStatus {
+  member_id: number;
+  name: string;
+  position: string | null;
+  is_active: boolean;
+  has_login: boolean;
+  linked_username: string | null;
+  has_signature: boolean;
+  uploaded_at: string | null;
+}
+
+export interface SealStatus {
+  has_seal: boolean;
+  uploaded_at: string | null;
+}
+
+export interface PendingSignature {
+  letter_id: number;
+  signatory_id: number;
+  role: SignatoryRole;
+  subject: string;
+  kind: LetterKind;
+  letter_date: string;
+  recipient_name: string | null;
+  sent_at: string | null;
+  requested_by: string | null;
+}
+
+export interface MySignature {
+  member_id: number | null;
+  member_name: string | null;
+  has_signature: boolean;
+  uploaded_at: string | null;
+  pending: PendingSignature[];
+}
+
+export interface LetterVerification {
+  reference_number: string;
+  status: 'ISSUED' | 'REVOKED';
+  kind_label: string;
+  subject: string;
+  recipient_name: string | null;
+  letter_date: string;
+  issued_at: string;
+  revoked_at: string | null;
+  revoke_reason: string | null;
+  temple_name: string;
+  signatories: Array<{ name: string; designation: string | null; role: SignatoryRole; method: 'digital' | 'ink'; signed_at: string | null }>;
 }

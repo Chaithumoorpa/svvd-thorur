@@ -3,21 +3,22 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { LayoutDashboard, LogIn, LogOut, Ticket } from 'lucide-react';
-import { getMe, getStoredToken, setStoredToken } from '@/lib/api';
+import { getMe, isProbablySignedIn, logout } from '@/lib/api';
 import type { Me } from '@/lib/types';
 
 /**
  * Devotee sign-in/My Bookings link for the public header. Client-only since
- * the session lives in localStorage - the server-rendered header can't know
- * who's signed in, so this renders nothing until the check resolves (avoids
- * a "Sign in" flash for a devotee who is actually already signed in).
+ * the session is a browser cookie the server-rendered (cached) header can't
+ * see, so this renders nothing until the check resolves (avoids a "Sign in"
+ * flash for a devotee who is actually already signed in). Anonymous visitors
+ * skip the server check entirely (see isProbablySignedIn).
  */
 export default function AccountNav({ className = '' }: { className?: string }) {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
-    if (!getStoredToken()) {
+    if (!isProbablySignedIn()) {
       setMe(null);
       return;
     }
@@ -55,8 +56,8 @@ export default function AccountNav({ className = '' }: { className?: string }) {
       </Link>
       <button
         type="button"
-        onClick={() => {
-          setStoredToken(null);
+        onClick={async () => {
+          await logout();
           window.location.href = '/';
         }}
         className="inline-flex items-center gap-1 hover:underline"

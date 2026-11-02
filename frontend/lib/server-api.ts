@@ -1,4 +1,7 @@
-import type { CommitteeMember, Festival, GalleryItem, HomePayload, Pooja, Temple, TempleTiming, Announcement } from './types';
+import type {
+  CommitteeMember, Festival, GalleryItem, HomePayload, HundiQrInfo, LetterVerification, Pooja, Temple, TempleTiming,
+  Announcement,
+} from './types';
 
 /**
  * Server-side (React Server Component) data access for the public site.
@@ -30,3 +33,23 @@ export const fetchFestivals = () => get<Festival[]>('/festivals/', []);
 export const fetchPoojas = () => get<Pooja[]>('/poojas/', []);
 export const fetchGallery = () => get<GalleryItem[]>('/gallery/?page_size=200', []);
 export const fetchCommittee = () => get<CommitteeMember[]>('/public/committee', []);
+export const fetchHundiQr = () =>
+  get<HundiQrInfo>('/temple/hundi-qr', {
+    configured: false, upi_vpa: null, payee_name: null, qr_base64: null, upi_uri: null,
+    registration_number: null, pan_number: null, eighty_g_number: null,
+  });
+
+/** A letter's public verification record. 'not-found' only when the server says no issued letter
+ * matches; 'unavailable' when it couldn't be asked - never tell a recipient a genuine letter is
+ * fake because of an outage. Never cached: a revocation must show at once. */
+export async function fetchLetterVerification(token: string): Promise<LetterVerification | 'not-found' | 'unavailable'> {
+  try {
+    const res = await fetch(`${BASE}/letters/verify/${encodeURIComponent(token)}`, {
+      cache: 'no-store', headers: { Accept: 'application/json' },
+    });
+    if (res.status === 404) return 'not-found';
+    return res.ok ? ((await res.json()) as LetterVerification) : 'unavailable';
+  } catch {
+    return 'unavailable';
+  }
+}

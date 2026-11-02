@@ -3,11 +3,11 @@ import { getTranslations } from 'next-intl/server';
 import { Users } from 'lucide-react';
 import { PageShell } from '@/components/public/SectionHeading';
 import { fetchCommittee } from '@/lib/server-api';
-import { localizedAlternates } from '@/lib/site';
+import { pageMetadata } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.committee');
-  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/committee') };
+  return pageMetadata('/committee', { title: t('title'), description: t('description') });
 }
 
 export default async function CommitteePage() {
@@ -29,14 +29,14 @@ export default async function CommitteePage() {
                 </span>
               )}
               <h2 className="font-serif text-lg font-bold text-maroon-dark">{m.name}</h2>
-              {m.position && <p className="text-sm text-gray-500">{m.position}</p>}
+              {m.position && <p className="text-sm text-gray-600">{m.position}</p>}
             </li>
           ))}
         </ul>
       ) : (
         <div className="rounded-2xl border border-dashed border-amber-300 bg-white p-12 text-center">
           <Users className="mx-auto mb-3 h-10 w-10 text-amber-200" aria-hidden="true" />
-          <p className="text-gray-500">{t('empty')}</p>
+          <p className="text-gray-600">{t('empty')}</p>
         </div>
       )}
     </PageShell>

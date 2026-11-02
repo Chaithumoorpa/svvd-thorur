@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.pagination import PageParams, page_params, set_total
 from app.core.rbac import Permission
 from app.utils.dependencies import AuditContext, get_audit, get_db, require_permission
+from app.services.expense_service import ExpenseService
 from app.services.finance_service import FinanceService
 from app.services.finance_report_service import FinanceReportService
 from app.services.ledger_service import LedgerService
@@ -39,7 +40,8 @@ def add_expense(
     audit: AuditContext = Depends(get_audit),
     current_user: User = Depends(_write),
 ):
-    row = FinanceService.add_expense(db, expense_in, current_user.id)
+    """Kept for older clients - same as POST /finance/expenses by an admin."""
+    row = ExpenseService(db).create(expense_in, current_user, can_approve=True)
     audit.log("CREATE", "expense", row.id, f"Recorded expense Rs. {row.amount} ({row.category.value})",
               {"amount": row.amount, "category": row.category, "paid_to": row.paid_to})
     return row

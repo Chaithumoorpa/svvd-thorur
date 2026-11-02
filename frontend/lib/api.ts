@@ -1,8 +1,13 @@
 import axios, { AxiosError } from 'axios';
+import { prepareImageForUpload, reencodeAsJpeg } from './imageUpload';
 import type {
-  ActivityItem, Announcement, AnnouncementInput, AppUser, AuditLog, BlessingReview, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
-  Donation, DonationInput, Donor, DonorInput, ExpenseInput, Festival, FestivalInput, FinanceSummary,
-  GalleryInput, GalleryItem, HomePayload, IncomeInput, LedgerEntry, Me, Member, MemberInput,
+  ActivityItem, Announcement, AnnouncementInput, AppUser, AssetCondition, AssetVerification, AuditLog, BlessingReview,
+  BudgetStatus, CommitteeMember, ContactInput, ContactMessage, ContactStatus, CounterTicketInput, DashboardStats,
+  Donation, DonationInput, Donor, DonorInput, Expense, ExpenseCategory, ExpenseInput, ExpenseStatus, Festival,
+  FestivalCost, FestivalInput, FinanceSummary, InventoryItem, InventoryItemInput, InventorySummary, ItemKind,
+  MovementType, PaymentMode, StockMovement, FinanceAnalytics, InventoryAnalytics, AuditAnalytics,
+  GalleryInput, GalleryItem, HomePayload, HundiQrInfo, IncomeInput, LedgerEntry, Me, Member, MemberInput,
+  Letter, LetterInput, LetterStatus, LetterTemplate, MySignature, SealStatus, SignatureStatus,
   Paged, PersonalBlessing, Pooja, PoojaInput, SevaBookingOnlineInput, SevaCalendarDay, SevaDay, SevaTicket,
   Temple, TempleTiming,
   TempleTimingInput, TempleUpdate, TicketStatus, UploadUrlResponse, UserCreateInput,
@@ -14,36 +19,55 @@ export * from './types';
 /**
  * Browser calls go through the Next.js rewrite (/api/v1 -> backend). Server-side calls
  * (see lib/server-api.ts) talk to the backend directly.
+ *
+ * The session itself is an HttpOnly cookie the backend sets at sign-in: the browser
+ * sends it with every /api/v1 request, and no JavaScript here can read it (so a script
+ * injected into the page couldn't steal it either). X-Requested-With is required by
+ * the backend on cookie-authenticated writes - another site can't add that header.
  */
 export const api = axios.create({
   baseURL: '/api/v1',
-  headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+  headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
 });
 
-const TOKEN_KEY = 'token';
+// Not a secret - just "this browser signed in", so the public header can skip asking
+// the server for anonymous visitors. The server's answer (getMe) is always the truth.
+const SIGNED_IN_KEY = 'signedIn';
 
-export function getStoredToken(): string | null {
+export function isProbablySignedIn(): boolean {
   try {
-    return typeof window === 'undefined' ? null : window.localStorage.getItem(TOKEN_KEY);
+    return typeof window !== 'undefined' && window.localStorage.getItem(SIGNED_IN_KEY) === '1';
   } catch {
-    return null;
+    return false;
   }
 }
 
-export function setStoredToken(token: string | null): void {
+export function markSignedIn(signedIn: boolean): void {
   try {
-    if (token) window.localStorage.setItem(TOKEN_KEY, token);
-    else window.localStorage.removeItem(TOKEN_KEY);
+    if (signedIn) window.localStorage.setItem(SIGNED_IN_KEY, '1');
+    else window.localStorage.removeItem(SIGNED_IN_KEY);
   } catch {
-    /* storage unavailable (private mode) - session simply will not persist */
+    /* storage unavailable (private mode) - the header just checks with the server */
   }
 }
 
-api.interceptors.request.use((config) => {
-  const token = getStoredToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+if (typeof window !== 'undefined') {
+  try {
+    window.localStorage.removeItem('token'); // the old readable session token, from before cookies
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** Ends the session on every device (see POST /auth/logout). Never fails. */
+export async function logout(): Promise<void> {
+  markSignedIn(false);
+  try {
+    await api.post('/auth/logout');
+  } catch {
+    /* already signed out / offline - the cookie expires on its own */
+  }
+}
 
 api.interceptors.response.use(
   (response) => response,
@@ -51,41 +75,30 @@ api.interceptors.response.use(
     const url = error.config?.url ?? '';
     // An expired/invalid session anywhere in the admin area sends the user back to sign in.
     if (error.response?.status === 401 && typeof window !== 'undefined' && !url.includes('/auth/login')) {
-      setStoredToken(null);
+      markSignedIn(false);
       if (window.location.pathname.startsWith('/admin')) window.location.href = '/login';
     }
     return Promise.reject(error);
   },
 );
 
-// Sliding session: the token itself is short-lived (ACCESS_TOKEN_EXPIRE_MINUTES on the
-// backend), but as long as the user is actually doing something, this silently exchanges
-// it for a fresh one every so often - stop being active and the token simply expires,
-// and the next request's 401 signs them out via the interceptor above. Module-scoped
-// (not a React effect) so it covers the whole site - admin and devotee pages alike -
-// with one set of listeners, regardless of which page mounted first.
+// Sliding session: the cookie is short-lived (ACCESS_TOKEN_EXPIRE_MINUTES on the
+// backend), but as long as the user is actually doing something, this silently renews
+// it every so often - stop being active and it simply expires, and the next request's
+// 401 signs them out via the interceptor above. Renewal never extends a session past
+// SESSION_MAX_HOURS from sign-in (enforced by the backend). Module-scoped (not a React
+// effect) so it covers the whole site with one set of listeners.
 const REFRESH_MIN_INTERVAL_MS = 10 * 60 * 1000;
 let lastRefreshAt = 0;
 
 function refreshSessionOnActivity() {
-  const token = getStoredToken();
-  if (!token) return;
+  if (!isProbablySignedIn()) return;
   const now = Date.now();
   if (now - lastRefreshAt < REFRESH_MIN_INTERVAL_MS) return;
   lastRefreshAt = now;
-  api
-    .post<{ access_token: string }>('/auth/refresh')
-    .then((res) => {
-      // Only apply the refreshed token if the stored token is still the exact
-      // one this call refreshed - a click that lands mid-login (e.g. signing
-      // in as a different account without a full page reload in between)
-      // could otherwise let this stale background refresh silently overwrite
-      // the session that just replaced it.
-      if (getStoredToken() === token) setStoredToken(res.data.access_token);
-    })
-    .catch(() => {
-      /* token already expired/invalid - leave it; the next real request 401s and signs out */
-    });
+  api.post('/auth/refresh').catch(() => {
+    /* already expired/ended - the next real request 401s and signs out */
+  });
 }
 
 if (typeof window !== 'undefined') {
@@ -127,24 +140,35 @@ async function page<T>(url: string, params?: Record<string, unknown>): Promise<P
  * otp_required: true (a sign-in code was just emailed) instead of a session -
  * call verifyLoginOtp next. An account with no email gets a session directly,
  * same as login always worked before two-factor existed. */
-export const login = async (username: string, password: string, turnstile_token?: string) =>
-  (await api.post<{
-    otp_required: boolean;
-    access_token?: string;
-    token_type?: string;
-    must_change_password?: boolean;
-  }>('/auth/login', { username, password, turnstile_token })).data;
+export async function login(username: string, password: string, turnstile_token?: string) {
+  const { data } = await api.post<{ otp_required: boolean; must_change_password?: boolean }>(
+    '/auth/login', { username, password, turnstile_token },
+  );
+  if (!data.otp_required) markSignedIn(true);
+  return data;
+}
 /** Step 2, only when login() returned otp_required: true. */
-export const verifyLoginOtp = async (username: string, code: string) =>
-  (await api.post<{ access_token: string; token_type: string; must_change_password: boolean }>(
-    '/auth/login/verify-otp', { username, code },
-  )).data;
+export async function verifyLoginOtp(username: string, code: string) {
+  const { data } = await api.post<{ must_change_password: boolean }>('/auth/login/verify-otp', { username, code });
+  markSignedIn(true);
+  return data;
+}
 export const forgotPassword = async (email: string, turnstile_token?: string) =>
   (await api.post<{ message: string }>('/auth/forgot-password', { email, turnstile_token })).data;
+export const forgotUsername = async (identifier: string, turnstile_token?: string) =>
+  (await api.post<{ message: string }>('/auth/forgot-username', { identifier, turnstile_token })).data;
 export const resetPassword = async (token: string, new_password: string) =>
   (await api.post<{ message: string }>('/auth/reset-password', { token, new_password })).data;
-export const register = async (data: { username: string; password: string; email: string; phone: string; turnstile_token?: string }) =>
-  (await api.post<AppUser>('/auth/register', data)).data;
+/** Sign-up step 1: checks the details and emails a code - no account exists yet. */
+export const requestRegisterCode = async (data: { username: string; email: string; phone: string; turnstile_token?: string }) =>
+  (await api.post<{ message: string }>('/auth/register/request-code', data)).data;
+/** Sign-up step 2: the emailed code proves the address; the account is created and signed in. */
+export const register = async (data: {
+  username: string; password: string; email: string; phone: string; accept_terms: boolean; email_code: string;
+}) => { const user = (await api.post<AppUser>('/auth/register', data)).data; markSignedIn(true); return user; };
+export const listUnverifiedSignups = async () => (await api.get<AppUser[]>('/auth/admin/users/unverified')).data;
+export const purgeUnverifiedSignups = async () =>
+  (await api.post<{ deleted: number }>('/auth/admin/users/purge-unverified')).data;
 export const getMe = async () => (await api.get<Me>('/auth/verify')).data;
 export const changePassword = async (current_password: string, new_password: string) =>
   (await api.post('/auth/change-password', { current_password, new_password })).data;
@@ -160,6 +184,7 @@ export const deleteUser = async (id: number) => (await api.delete(`/auth/admin/u
 export const getTemple = async () => (await api.get<Temple>('/temple/')).data;
 export const updateTemple = async (data: TempleUpdate) => (await api.put<Temple>('/temple/', data)).data;
 export const listAllTimings = async () => (await api.get<TempleTiming[]>('/temple/timings/all')).data;
+export const getHundiQr = async () => (await api.get<HundiQrInfo>('/temple/hundi-qr')).data;
 export const createTiming = async (data: TempleTimingInput) => (await api.post<TempleTiming>('/temple/timings', data)).data;
 export const updateTiming = async (id: number, data: Partial<TempleTimingInput>) =>
   (await api.put<TempleTiming>(`/temple/timings/${id}`, data)).data;
@@ -190,16 +215,26 @@ export const getSevaDay = async (poojaId: number, date: string) =>
 export const getPersonalBlessing = async (ticketId: string) =>
   (await api.get<PersonalBlessing>(`/seva-tickets/${ticketId}/blessing`)).data;
 
-/** Uploads a devotee's occasion photo straight to S3 (presigned POST, public
- * but rate limited - nobody is signed in while booking) and returns its key.
- * The object is private: it reaches the website only once staff approve it. */
-export async function uploadBlessingPhoto(file: File): Promise<string> {
-  const { data } = await api.post<UploadUrlResponse>('/seva-tickets/booking/upload-url', { content_type: file.type });
+/** Presigned S3 POST upload of an already-prepared photo via `endpoint`. */
+async function uploadPhoto(endpoint: string, photo: File): Promise<UploadUrlResponse> {
+  const { data } = await api.post<UploadUrlResponse>(endpoint, { content_type: photo.type });
   const form = new FormData();
   Object.entries(data.fields).forEach(([key, value]) => form.append(key, value));
-  form.append('file', file);
+  form.append('file', photo);
+  // Plain axios, not the `api` instance: it must not carry a bearer token to S3.
   await axios.post(data.upload_url, form);
-  return data.key;
+  return data;
+}
+
+/** Uploads a devotee's occasion photo straight to S3 (presigned POST, public
+ * but rate limited - nobody is signed in while booking). The object is
+ * private: it reaches the website only once staff approve it. Always
+ * re-encoded first (strips EXIF/GPS, since it may be published); returns the
+ * stored key and that re-encoded photo, which is what the form should preview.
+ * Throws UnsupportedImageError if this browser can't read the file. */
+export async function uploadBlessingPhoto(file: File): Promise<{ key: string; photo: File }> {
+  const photo = await reencodeAsJpeg(file);
+  return { key: (await uploadPhoto('/seva-tickets/booking/upload-url', photo)).key, photo };
 }
 
 // -------------------------------------------------------------------- announcements
@@ -241,13 +276,7 @@ export const deleteGallery = async (id: number) => (await api.delete<GalleryItem
 
 /** Uploads a gallery photo straight to S3 (presigned POST) and returns its public URL. */
 export async function uploadGalleryPhoto(file: File): Promise<string> {
-  const { data } = await api.post<UploadUrlResponse>('/gallery/upload-url', { content_type: file.type });
-  const form = new FormData();
-  Object.entries(data.fields).forEach(([key, value]) => form.append(key, value));
-  form.append('file', file);
-  // Plain axios, not the `api` instance: it must not carry the admin's bearer token to S3.
-  await axios.post(data.upload_url, form);
-  return data.public_url;
+  return (await uploadPhoto('/gallery/upload-url', await prepareImageForUpload(file))).public_url;
 }
 
 // ------------------------------------------------------------------------------- members
@@ -259,12 +288,7 @@ export const deleteMember = async (id: number) => (await api.delete<Member>(`/te
 
 /** Uploads a member's photo straight to S3 (presigned POST) and returns its public URL. */
 export async function uploadMemberPhoto(file: File): Promise<string> {
-  const { data } = await api.post<UploadUrlResponse>('/temple-members/upload-url', { content_type: file.type });
-  const form = new FormData();
-  Object.entries(data.fields).forEach(([key, value]) => form.append(key, value));
-  form.append('file', file);
-  await axios.post(data.upload_url, form);
-  return data.public_url;
+  return (await uploadPhoto('/temple-members/upload-url', await prepareImageForUpload(file))).public_url;
 }
 
 // ------------------------------------------------------------------- donors & donations
@@ -311,17 +335,164 @@ export const getFinanceSummary = async () => (await api.get<FinanceSummary>('/fi
 export const getLedger = (p = 1, startDate?: string, endDate?: string, pageSize = 25) =>
   page<LedgerEntry>('/finance/ledger', { page: p, page_size: pageSize, start_date: startDate || undefined, end_date: endDate || undefined });
 export const addIncome = async (data: IncomeInput) => (await api.post('/finance/income', data)).data;
-export const addExpense = async (data: ExpenseInput) => (await api.post('/finance/expense', data)).data;
+
+// ----------------------------------------------------------------------------- expenses
+export interface ExpenseFilters {
+  status?: ExpenseStatus; category?: ExpenseCategory; start_date?: string; end_date?: string;
+  festival_id?: number; mine?: boolean; q?: string;
+}
+export const listExpenses = (p = 1, filters: ExpenseFilters = {}, pageSize = 25) =>
+  page<Expense>('/finance/expenses', { page: p, page_size: pageSize, ...filters });
+export const createExpense = async (data: ExpenseInput) => (await api.post<Expense>('/finance/expenses', data)).data;
+export const updateExpense = async (id: string, data: Partial<ExpenseInput> & { reason?: string | null }) =>
+  (await api.patch<Expense>(`/finance/expenses/${id}`, data)).data;
+export const approveExpense = async (id: string) => (await api.post<Expense>(`/finance/expenses/${id}/approve`)).data;
+export const rejectExpense = async (id: string, reason: string) =>
+  (await api.post<Expense>(`/finance/expenses/${id}/reject`, { reason })).data;
+export const voidExpense = async (id: string, reason: string) =>
+  (await api.post<Expense>(`/finance/expenses/${id}/void`, { reason })).data;
+export const getExpenseBill = async (id: string) =>
+  (await api.get<{ url: string; content_type: string }>(`/finance/expenses/${id}/bill`)).data;
+export const getBudgetStatus = async (month: string) =>
+  (await api.get<BudgetStatus>('/finance/budgets', { params: { month } })).data;
+export const setBudgets = async (month: string, lines: Array<{ category: ExpenseCategory; amount: number }>) =>
+  (await api.put<BudgetStatus>(`/finance/budgets/${month}`, { lines })).data;
+export const copyBudgets = async (month: string, fromMonth: string) =>
+  (await api.post<BudgetStatus>(`/finance/budgets/${month}/copy-from/${fromMonth}`)).data;
+
+/** A bill photo is shrunk and stripped of EXIF like any photo; a PDF goes up as is. */
+export async function uploadExpenseBill(file: File): Promise<string> {
+  const prepared = file.type === 'application/pdf' ? file : await prepareImageForUpload(file);
+  return (await uploadPhoto('/finance/expenses/bill-upload-url', prepared)).key;
+}
+
+// ---------------------------------------------------------------------------- inventory
+export const getInventorySummary = async () => (await api.get<InventorySummary>('/inventory/summary')).data;
+export const listInventoryItems = async (filters: { kind?: ItemKind; low_stock?: boolean; q?: string; include_inactive?: boolean } = {}) =>
+  (await api.get<InventoryItem[]>('/inventory/items', { params: filters })).data;
+export const listInventoryCategories = async () => (await api.get<string[]>('/inventory/categories')).data;
+export const createInventoryItem = async (data: InventoryItemInput) =>
+  (await api.post<InventoryItem>('/inventory/items', data)).data;
+export const updateInventoryItem = async (id: number, data: InventoryItemInput) =>
+  (await api.patch<InventoryItem>(`/inventory/items/${id}`, data)).data;
+export const deleteInventoryItem = async (id: number) => (await api.delete(`/inventory/items/${id}`)).data;
+export const getInventoryPhoto = async (id: number) => (await api.get<{ url: string }>(`/inventory/items/${id}/photo`)).data;
+export async function uploadInventoryPhoto(file: File): Promise<string> {
+  return (await uploadPhoto('/inventory/items/photo-upload-url', await prepareImageForUpload(file))).key;
+}
+export const listStockMovements = (p = 1, filters: { item_id?: number; type?: MovementType; festival_id?: number } = {}, pageSize = 25) =>
+  page<StockMovement>('/inventory/movements', { page: p, page_size: pageSize, ...filters });
+export const recordPurchase = async (data: {
+  item_id: number; quantity: string; total_cost: string; vendor: string; payment_mode: PaymentMode;
+  movement_date: string; notes?: string | null; bill_key?: string | null; expense_category?: ExpenseCategory | null;
+}) => (await api.post<StockMovement>('/inventory/purchases', data)).data;
+export const recordDonationInKind = async (data: {
+  item_id: number; quantity: string; donor_name: string; donor_phone?: string | null; donor_address?: string | null;
+  estimated_value?: string | null; movement_date: string; notes?: string | null;
+}) => (await api.post<StockMovement>('/inventory/donations-in', data)).data;
+export const recordUsage = async (data: {
+  item_id: number; quantity: string; movement_date: string; pooja_id?: number | null; festival_id?: number | null;
+  notes?: string | null;
+}) => (await api.post<StockMovement>('/inventory/usage', data)).data;
+export const recordAdjustment = async (data: {
+  item_id: number; counted_quantity: string; reason: string; movement_date: string; notes?: string | null;
+}) => (await api.post<StockMovement>('/inventory/adjustments', data)).data;
+export const recordWriteOff = async (data: {
+  item_id: number; quantity: string; reason: string; movement_date: string; notes?: string | null;
+}) => (await api.post<StockMovement>('/inventory/write-offs', data)).data;
+export const downloadInKindReceipt = async (movementId: number) =>
+  (await api.get<Blob>(`/inventory/movements/${movementId}/receipt`, { responseType: 'blob' })).data;
+export const verifyAsset = async (itemId: number, data: {
+  verified_on: string; condition: AssetCondition; weight_grams?: string | null; notes?: string | null;
+}) => (await api.post<AssetVerification>(`/inventory/items/${itemId}/verifications`, data)).data;
+export const listAssetVerifications = async (itemId: number) =>
+  (await api.get<AssetVerification[]>(`/inventory/items/${itemId}/verifications`)).data;
+export const getFestivalCosts = async () => (await api.get<FestivalCost[]>('/inventory/festival-costs')).data;
 export const exportLedger = async (kind: 'csv' | 'pdf', startDate: string, endDate: string) =>
   (await api.get<Blob>(`/finance/ledger/${kind}`, { params: { start_date: startDate, end_date: endDate }, responseType: 'blob' })).data;
 export const getMonthlyReportPdf = async (year: number, month: number) =>
   (await api.get<Blob>('/finance/reports/monthly/pdf', { params: { year, month }, responseType: 'blob' })).data;
+
+// ---------------------------------------------------------------------------- analytics
+export const getFinanceAnalytics = async (months: number) =>
+  (await api.get<FinanceAnalytics>('/analytics/finance', { params: { months } })).data;
+export const getInventoryAnalytics = async (months: number) =>
+  (await api.get<InventoryAnalytics>('/analytics/inventory', { params: { months } })).data;
+export const getAuditAnalytics = async (days: number) =>
+  (await api.get<AuditAnalytics>('/analytics/audit', { params: { days } })).data;
+
+// ---------------------------------------------------------------------------- official letters
+/** A signature/seal photo goes to the server as a data URL: re-drawn as a JPEG first (any
+ * format the browser can open, at most 2048 px, no EXIF), then cleaned server-side into a
+ * transparent mark. */
+export async function imageAsDataUrl(file: File): Promise<string> {
+  const jpeg = await reencodeAsJpeg(file);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(jpeg);
+  });
+}
+export const listLetters = (p = 1, filters: { status?: LetterStatus; q?: string } = {}, pageSize = 25) =>
+  page<Letter>('/letters', { page: p, page_size: pageSize, ...filters });
+export const getLetter = async (id: number) => (await api.get<Letter>(`/letters/${id}`)).data;
+export const getLetterTemplates = async () => (await api.get<LetterTemplate[]>('/letters/templates')).data;
+export const createLetter = async (data: LetterInput) => (await api.post<Letter>('/letters', data)).data;
+export const updateLetter = async (id: number, data: LetterInput) => (await api.put<Letter>(`/letters/${id}`, data)).data;
+export const deleteLetter = async (id: number) => (await api.delete(`/letters/${id}`)).data;
+export const letterAction = async (id: number, action: 'send' | 'recall' | 'issue') =>
+  (await api.post<Letter>(`/letters/${id}/${action}`)).data;
+export const revokeLetter = async (id: number, reason: string) =>
+  (await api.post<Letter>(`/letters/${id}/revoke`, { reason })).data;
+export const markSignatoryInk = async (id: number, signatoryId: number) =>
+  (await api.post<Letter>(`/letters/${id}/signatories/${signatoryId}/paper`)).data;
+export const signLetter = async (id: number, password: string) =>
+  (await api.post<Letter>(`/letters/${id}/sign`, { password })).data;
+export const declineLetter = async (id: number, reason: string) =>
+  (await api.post<Letter>(`/letters/${id}/decline`, { reason })).data;
+export const getLetterPdf = async (id: number) =>
+  (await api.get<Blob>(`/letters/${id}/pdf`, { responseType: 'blob' })).data;
+export const getMySignature = async () => (await api.get<MySignature>('/letters/mine')).data;
+export const uploadMySignature = async (file: File) =>
+  (await api.put<MySignature>('/letters/mine/signature', { image: await imageAsDataUrl(file) })).data;
+export const getMySignatureImage = async () =>
+  (await api.get<Blob>('/letters/mine/signature.png', { responseType: 'blob' })).data;
+export const listSignatures = async () => (await api.get<SignatureStatus[]>('/letters/signatures')).data;
+export const uploadSignature = async (memberId: number, file: File) =>
+  (await api.put<SignatureStatus>(`/letters/signatures/${memberId}`, { image: await imageAsDataUrl(file) })).data;
+/** Super Admin: which login signs letters as this member (null unlinks). */
+export const linkMemberLogin = async (memberId: number, userId: number | null) =>
+  (await api.put<SignatureStatus>(`/letters/signatures/${memberId}/login`, { user_id: userId })).data;
+export const removeSignature = async (memberId: number) => (await api.delete(`/letters/signatures/${memberId}`)).data;
+export const getSignatureImage = async (memberId: number) =>
+  (await api.get<Blob>(`/letters/signatures/${memberId}.png`, { responseType: 'blob' })).data;
+export const getSeal = async () => (await api.get<SealStatus>('/letters/seal')).data;
+export const uploadSeal = async (file: File) =>
+  (await api.put<SealStatus>('/letters/seal', { image: await imageAsDataUrl(file) })).data;
+export const removeSeal = async () => (await api.delete('/letters/seal')).data;
+export const getSealImage = async () => (await api.get<Blob>('/letters/seal.png', { responseType: 'blob' })).data;
 
 // ---------------------------------------------------------------------------- dashboard
 export const getDashboardStats = async () => (await api.get<DashboardStats>('/meta/stats')).data;
 export const getRecentActivity = async () => (await api.get<ActivityItem[]>('/meta/activity')).data;
 export const listAuditLogs = (p = 1, filters: { entity_type?: string; action?: string } = {}, pageSize = 50) =>
   page<AuditLog>('/audit-logs/', { page: p, page_size: pageSize, ...filters });
+
+/** Show a PDF (or any blob) in a new tab. The tab is opened during the click, before the
+ * download finishes, so pop-up blockers allow it. */
+export async function openBlobInNewTab(load: () => Promise<Blob>): Promise<void> {
+  const tab = window.open('', '_blank');
+  try {
+    const url = URL.createObjectURL(await load());
+    if (tab) tab.location.href = url;
+    else window.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (err) {
+    tab?.close();
+    throw err;
+  }
+}
 
 /** Save a Blob response as a file download. */
 export function saveBlob(blob: Blob, filename: string): void {

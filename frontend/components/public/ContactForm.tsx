@@ -60,8 +60,8 @@ export default function ContactForm() {
       <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
         <label>Website<input tabIndex={-1} autoComplete="off" value={form.website} onChange={set('website')} /></label>
       </div>
-      <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} />
-      <button type="submit" className={`${btnPrimary} w-full sm:w-auto`} disabled={busy || form.name.trim().length < 2 || !form.email || form.subject.trim().length < 3 || form.message.trim().length < 5}>
+      <TurnstileWidget key={turnstile.widgetKey} onToken={turnstile.setToken} onError={turnstile.setFailed} />
+      <button type="submit" className={`${btnPrimary} w-full sm:w-auto`} disabled={busy || form.name.trim().length < 2 || !form.email || form.subject.trim().length < 3 || form.message.trim().length < 5 || turnstile.blocked}>
         <Send className="h-4 w-4" aria-hidden="true" /> {busy ? 'Sending…' : 'Send message'}
       </button>
     </form>

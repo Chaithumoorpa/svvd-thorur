@@ -1,13 +1,15 @@
 import logging
+import time
 from typing import Callable
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db  # noqa: F401  (re-exported for routers)
 from app.core.rbac import Permission, has_permission, permissions_for
-from app.core.security import decode_access_token
+from app.core.security import SESSION_COOKIE, decode_access_token
 from app.models.user import User
 from app.repositories.announcement_repo import AnnouncementRepository
 from app.repositories.contact_repo import ContactRepository
@@ -37,48 +39,76 @@ logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- auth
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def authenticate(request: Request, credentials: HTTPAuthorizationCredentials | None, db: Session) -> tuple[User, dict]:
+    """
+    Resolves the signed-in user and their token's claims, or raises 401/403.
+
+    The token comes from an `Authorization: Bearer` header if one is sent (API
+    clients, tests), else from the HttpOnly session cookie the browser holds.
+    Another site can make a browser send the cookie but can't set a custom
+    header, so a cookie-authenticated write must also carry X-Requested-With
+    (the cookie is SameSite=Strict too - this is the second line of defence).
+
+    Roles and active status are ALWAYS taken from the database row, never from
+    the token, so demoting/deactivating a user takes effect immediately.
+    """
+    if credentials is not None:
+        token = credentials.credentials
+    else:
+        token = request.cookies.get(SESSION_COOKIE)
+        if token and request.method not in _SAFE_METHODS and not request.headers.get("x-requested-with"):
+            raise HTTPException(status_code=403, detail="Missing X-Requested-With header")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer"})
+
+    payload = decode_access_token(token)
+    if not payload or payload.get("typ") != "access" or not payload.get("user_id"):
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user = db.query(User).filter(User.id == payload["user_id"]).first()
+    if not user or not user.is_active:
+        logger.warning("Authentication failed for user_id=%s (missing or inactive)", payload["user_id"])
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+    if payload.get("ver") != (user.token_version or 0):
+        raise HTTPException(status_code=401, detail="This session has ended. Please sign in again.")
+    auth_time = payload.get("auth_time")
+    if not isinstance(auth_time, int) or time.time() - auth_time > settings.SESSION_MAX_HOURS * 3600:
+        raise HTTPException(status_code=401, detail="Your session has expired. Please sign in again.")
+    return user, payload
+
+
+def get_current_session(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: Session = Depends(get_db),
+) -> tuple[User, dict]:
+    """The signed-in user plus their token's claims (refresh needs auth_time)."""
+    return authenticate(request, credentials, db)
+
+
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
-    """
-    Validate the JWT and load the user. Roles are ALWAYS taken from the database row,
-    never from the token, so demoting/deactivating a user takes effect immediately.
-    """
-    if credentials is None:
-        raise HTTPException(
-            status_code=401, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer"}
-        )
-
-    payload = decode_access_token(credentials.credentials)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user or not user.is_active:
-        logger.warning("Authentication failed for user_id=%s (missing or inactive)", user_id)
-        raise HTTPException(status_code=401, detail="User not found or inactive")
-    return user
+    return authenticate(request, credentials, db)[0]
 
 
 def get_current_user_optional(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: Session = Depends(get_db),
 ) -> User | None:
-    """Like get_current_user, but a missing/invalid/expired token means "anonymous"
-    instead of a 401 - for endpoints that work either way (e.g. online booking links
+    """Like get_current_user, but no valid session means "anonymous" instead of
+    an error - for endpoints that work either way (e.g. online booking links
     the ticket to the devotee's account when they happen to be signed in)."""
-    if credentials is None:
+    try:
+        return authenticate(request, credentials, db)[0]
+    except HTTPException:
         return None
-    payload = decode_access_token(credentials.credentials)
-    if not payload:
-        return None
-    user = db.query(User).filter(User.id == payload.get("user_id")).first()
-    return user if user and user.is_active else None
 
 
 def require_permission(*required: Permission) -> Callable[..., User]:

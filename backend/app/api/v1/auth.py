@@ -2,16 +2,19 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.pagination import PageParams, page_params, paginate, set_total
 from app.core.rbac import Permission, permissions_for
+from app.core.security import SESSION_COOKIE, SESSION_COOKIE_PATH
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import (
     DeleteAccountConfirm, LoginOtpVerify, LoginResponse, PasswordChange, PasswordResetConfirm,
-    PasswordResetRequest, PublicRegister, TokenOut, UserCreate, UserLogin, UserOut, UserUpdate,
+    PasswordResetRequest, PublicRegister, RegisterCodeRequest, SessionOut, UsernameRecoveryRequest, UserCreate,
+    UserLogin, UserOut, UserUpdate,
 )
 from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
@@ -19,10 +22,13 @@ from app.services.email_service import EmailService
 from app.services.otp_service import OtpService
 from app.services.turnstile_service import TurnstileService
 from app.utils.dependencies import (
-    AuditContext, get_audit, get_current_user, get_db, get_otp_service, get_turnstile_service,
-    require_permission,
+    AuditContext, authenticate, get_audit, get_current_session, get_current_user, get_db, get_otp_service,
+    get_turnstile_service, require_permission, security,
 )
-from app.utils.rate_limiter import enforce, get_client_ip, login_limiter, password_reset_limiter, register_limiter
+from app.utils.rate_limiter import (
+    enforce, get_client_ip, login_limiter, login_user_limiter, password_reset_limiter, register_code_limiter,
+    register_limiter, username_recovery_limiter,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 logger = logging.getLogger(__name__)
@@ -32,10 +38,40 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     return AuthService(UserRepository(db))
 
 
+def _start_session(response: Response, service: AuthService, user: User, auth_time: int | None = None) -> None:
+    """Puts a session token for `user` in an HttpOnly cookie: page JavaScript
+    can't read it, SameSite=Strict keeps other sites from sending it, and it
+    only goes to the API. Same lifetime as the token; /auth/refresh renews both."""
+    response.set_cookie(
+        SESSION_COOKIE,
+        service.create_access_token(user, auth_time),
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path=SESSION_COOKIE_PATH,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="strict",
+    )
+
+
+def _end_session(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE, path=SESSION_COOKIE_PATH, httponly=True,
+                           secure=settings.is_production, samesite="strict")
+
+
+def _record_failed_login(db: Session, request: Request, identifier: str, why: str) -> None:
+    """Failed sign-ins go to the audit log (with the IP) so repeated guessing
+    shows up in the audit analytics. The identifier is what was typed -
+    trimmed, since someone may type a password into the wrong box."""
+    shown = (identifier or "").strip()[:40]
+    AuditService(db).record(None, "LOGIN_FAILED", "user", None, f"Failed sign-in for '{shown}': {why}",
+                            request=request, actor_username=shown or None)
+
+
 @router.post("/login", response_model=LoginResponse)
 def login(
     payload: UserLogin,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
     otp_service: OtpService = Depends(get_otp_service),
     turnstile: TurnstileService = Depends(get_turnstile_service),
@@ -54,27 +90,35 @@ def login(
         raise HTTPException(status_code=429, detail="Too many login attempts. Please try again in a minute.")
     if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
         raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
+    # Per account as well as per IP: password guessing spread over many IPs
+    # still hits this. Keyed by what was typed, so it reveals nothing about
+    # whether the account exists.
+    if not login_user_limiter.is_allowed(payload.username.strip().lower()):
+        raise HTTPException(status_code=429, detail=(
+            "Too many sign-in attempts for this account. Please wait 15 minutes, or reset your password."))
 
-    user = service.authenticate_user(payload)
+    try:
+        user = service.authenticate_user(payload)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            _record_failed_login(db, request, payload.username, "wrong password or unknown account")
+        raise
 
     if not user.email:
         AuditService(db).record(user, "LOGIN", "user", user.id,
                                 f"{user.username} signed in (no email on file - single factor)", request=request)
-        return LoginResponse(
-            otp_required=False,
-            access_token=service.create_access_token(user),
-            token_type="bearer",
-            must_change_password=user.must_change_password,
-        )
+        _start_session(response, service, user)
+        return LoginResponse(otp_required=False, must_change_password=user.must_change_password)
 
     otp_service.request_login_otp(user.email)
     return LoginResponse(otp_required=True)
 
 
-@router.post("/login/verify-otp", response_model=TokenOut)
+@router.post("/login/verify-otp", response_model=SessionOut)
 def verify_login_otp(
     payload: LoginOtpVerify,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
     otp_service: OtpService = Depends(get_otp_service),
     db: Session = Depends(get_db),
@@ -84,35 +128,66 @@ def verify_login_otp(
     if not login_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many attempts. Please try again in a minute.")
 
-    user = service.user_repository.get_by_username(payload.username.strip())
+    user = service.resolve_identifier(payload.username)
     if not user or not user.email:
         raise HTTPException(status_code=400, detail="Invalid sign-in attempt. Please start again.")
 
-    otp_service.verify_login_otp(user.email, payload.code)
+    try:
+        otp_service.verify_login_otp(user.email, payload.code)
+    except HTTPException:
+        _record_failed_login(db, request, user.username, "wrong or expired sign-in code")
+        raise
 
+    AuthService.mark_email_verified(db, user)  # the code reached this inbox
     AuditService(db).record(user, "LOGIN", "user", user.id, f"{user.username} signed in", request=request)
-    return {
-        "access_token": service.create_access_token(user),
-        "token_type": "bearer",
-        "must_change_password": user.must_change_password,
-    }
+    _start_session(response, service, user)
+    return SessionOut(must_change_password=user.must_change_password)
+
+
+@router.post("/register/request-code", response_model=dict)
+def request_register_code(
+    payload: RegisterCodeRequest,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+    otp_service: OtpService = Depends(get_otp_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
+):
+    """Sign-up step 1: checks the details and emails a 6-digit code. Nothing
+    is created yet - an account exists only once its email is proven (step 2).
+    Turnstile + per-IP limit here; per-address limit inside OtpService."""
+    if not settings.ALLOW_PUBLIC_REGISTRATION:
+        raise HTTPException(status_code=403, detail="Registration is disabled")
+    enforce(register_code_limiter, get_client_ip(request), "Too many sign-up attempts. Please try again later.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
+    service.check_available(payload.username, payload.email)
+    otp_service.request_register_otp(payload.email)
+    return {"message": "A sign-up code has been sent to your email."}
 
 
 @router.post("/register", response_model=UserOut, status_code=201)
 def register(
     payload: PublicRegister,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
-    turnstile: TurnstileService = Depends(get_turnstile_service),
+    otp_service: OtpService = Depends(get_otp_service),
+    db: Session = Depends(get_db),
 ):
-    """Public self-registration. Always creates a GENERAL_USER (no admin access)."""
+    """Sign-up step 2: the emailed code proves the address, then the account is
+    created (always GENERAL_USER - no admin access) and signed in. A wrong code
+    counts against that code's 5 attempts."""
     if not settings.ALLOW_PUBLIC_REGISTRATION:
         raise HTTPException(status_code=403, detail="Registration is disabled")
     if not register_limiter.is_allowed(get_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many registration attempts. Please try again in a minute.")
-    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
-        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
-    return service.create_general_user(payload)
+    service.check_available(payload.username, payload.email)
+    otp_service.verify_register_otp(payload.email, payload.email_code)
+    user = service.create_general_user(payload)
+    AuditService(db).record(user, "REGISTER", "user", user.id, f"{user.username} signed up (email verified)",
+                            request=request)
+    _start_session(response, service, user)
+    return user
 
 
 @router.post("/forgot-password", response_model=dict)
@@ -140,8 +215,27 @@ def forgot_password(
             "If you didn't request this, you can safely ignore this email - your password "
             "will not change.\n\n"
             "Thank you,\nSVVD Thorur",
+            cta=("Reset password", link), heading="Reset your password", tone="alert",
         )
     return {"message": "If that email is registered, a reset link has been sent."}
+
+
+@router.post("/forgot-username", response_model=dict)
+def forgot_username(
+    payload: UsernameRecoveryRequest,
+    request: Request,
+    service: AuthService = Depends(get_auth_service),
+    turnstile: TurnstileService = Depends(get_turnstile_service),
+):
+    """Recovers a forgotten username/email by identifier (email or mobile
+    number) - same generic response either way, so it never reveals which
+    accounts exist. Only delivers when the account has an email on file;
+    there is no SMS channel to reach a phone-only account."""
+    enforce(username_recovery_limiter, get_client_ip(request), "Too many requests. Please try again later.")
+    if not turnstile.verify(payload.turnstile_token, get_client_ip(request)):
+        raise HTTPException(status_code=400, detail="Security check failed. Please reload and try again.")
+    service.request_username_recovery(payload.identifier)
+    return {"message": "If that email or mobile number is registered, we've emailed the username to the account's address."}
 
 
 @router.post("/reset-password", response_model=dict)
@@ -173,26 +267,56 @@ def verify_token(current_user: User = Depends(get_current_user)):
 
 @router.post("/refresh", response_model=dict)
 def refresh_token(
-    current_user: User = Depends(get_current_user),
+    response: Response,
+    session: tuple[User, dict] = Depends(get_current_session),
     service: AuthService = Depends(get_auth_service),
 ):
-    """Issues a fresh access token for the same session, extending it another
-    ACCESS_TOKEN_EXPIRE_MINUTES from now. Requires the CURRENT token to still be
-    valid - an already-expired or revoked session cannot refresh itself. Called
-    silently by the frontend while the user is active (see lib/api.ts); an idle
-    session simply stops being refreshed and expires on schedule."""
-    return {"access_token": service.create_access_token(current_user)}
+    """Renews the session cookie, extending it another ACCESS_TOKEN_EXPIRE_MINUTES
+    from now. Requires the CURRENT session to still be valid - an expired or
+    revoked one cannot refresh itself - and keeps its original sign-in time, so
+    no amount of refreshing outlives SESSION_MAX_HOURS. Called silently by the
+    frontend while the user is active (see lib/api.ts); an idle session simply
+    stops being refreshed and expires on schedule."""
+    user, claims = session
+    _start_session(response, service, user, auth_time=claims["auth_time"])
+    return {"message": "Session refreshed"}
+
+
+@router.post("/logout", response_model=dict)
+def logout(
+    request: Request,
+    response: Response,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    service: AuthService = Depends(get_auth_service),
+    db: Session = Depends(get_db),
+):
+    """Signs the user out on every device: their token_version moves on, so
+    every token issued before - including any copy someone else holds - stops
+    working. Always clears this browser's cookie, even for an already-expired
+    session, so logging out never fails."""
+    try:
+        user, _ = authenticate(request, credentials, db)
+    except HTTPException:
+        user = None
+    if user:
+        service.logout(user)
+        AuditService(db).record(user, "LOGOUT", "user", user.id, f"{user.username} signed out", request=request)
+    _end_session(response)
+    return {"message": "Signed out"}
 
 
 @router.post("/change-password", response_model=dict)
 def change_password(
     payload: PasswordChange,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     service.change_password(current_user, payload)
+    # Every other device is now signed out; this one continues with a new session.
+    _start_session(response, service, current_user)
     AuditService(db).record(current_user, "PASSWORD_CHANGE", "user", current_user.id,
                             f"{current_user.username} changed their password", request=request)
     return {"message": "Password changed successfully"}
@@ -202,6 +326,7 @@ def change_password(
 def delete_my_account(
     payload: DeleteAccountConfirm,
     request: Request,
+    response: Response,
     service: AuthService = Depends(get_auth_service),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -225,7 +350,9 @@ def delete_my_account(
             "link between them and this account has been removed.\n\n"
             "If you didn't request this, please contact the temple office immediately.\n\n"
             "Thank you,\nSVVD Thorur",
+            heading="Your account has been deleted", tone="alert",
         )
+    _end_session(response)
     return {"message": "Account deleted"}
 
 
@@ -263,6 +390,7 @@ def create_user_admin(
             f"If the link expires, use \"Forgot password?\" at {settings.FRONTEND_BASE_URL}/login\n\n"
             "If you weren't expecting this account, please contact the temple office.\n\n"
             "Thank you,\nSVVD Thorur",
+            cta=("Set your password", link), heading="Welcome to the temple admin portal",
         )
     return user
 
@@ -288,8 +416,28 @@ def update_user_admin(
             f"If the link expires, use \"Forgot password?\" at {settings.FRONTEND_BASE_URL}/login\n\n"
             "If you weren't expecting this, please contact the temple office immediately.\n\n"
             "Thank you,\nSVVD Thorur",
+            cta=("Set a new password", link), heading="Your password was reset", tone="alert",
         )
     return user
+
+
+@router.get("/admin/users/unverified", response_model=List[UserOut])
+def list_unverified_signups(service: AuthService = Depends(get_auth_service),
+                            _: User = Depends(require_permission(Permission.USERS_MANAGE))):
+    """Devotee sign-ups that never proved their email (see AuthService.unverified_signups)."""
+    return service.unverified_signups()
+
+
+@router.post("/admin/users/purge-unverified", response_model=dict)
+def purge_unverified_signups(service: AuthService = Depends(get_auth_service),
+                             audit: AuditContext = Depends(get_audit),
+                             _: User = Depends(require_permission(Permission.USERS_MANAGE))):
+    """Removes them all at once - one audit entry for the batch."""
+    names = service.purge_unverified_signups()
+    if names:
+        audit.log("PURGE_UNVERIFIED", "user", None, f"Removed {len(names)} unverified sign-up(s)",
+                  {"usernames": names[:200]})
+    return {"deleted": len(names)}
 
 
 @router.delete("/admin/users/{user_id}", response_model=dict)

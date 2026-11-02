@@ -3,25 +3,28 @@ import { getTranslations } from 'next-intl/server';
 import TempleTime from '@/components/public/TempleTime';
 import { CalendarDays, Clock, HandHeart, MapPin, Megaphone, Sparkles } from 'lucide-react';
 import DeityCarousel from '@/components/DeityCarousel';
+import DonateUpi from '@/components/public/DonateUpi';
 import JsonLd from '@/components/public/JsonLd';
 import SectionHeading from '@/components/public/SectionHeading';
 import { Link } from '@/i18n/navigation';
 import { formatDate, parseDate } from '@/lib/format';
-import { fetchHome } from '@/lib/server-api';
-import { SITE_URL, localizedAlternates, templeAddress, templeName } from '@/lib/site';
+import { fetchHome, fetchHundiQr } from '@/lib/server-api';
+import { SITE_URL, pageMetadata, templeAddress, templeName } from '@/lib/site';
 
 
 const HH_MM = (t: string) => t.slice(0, 5);
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { alternates: await localizedAlternates('/') };
+  return pageMetadata('/');
 }
 
 export default async function HomePage() {
-  const { temple, timings, announcements, festivals, poojas } = await fetchHome();
+  const [{ temple, timings, announcements, festivals, poojas }, hundiQr] = await Promise.all([fetchHome(), fetchHundiQr()]);
   const name = templeName(temple);
   const address = templeAddress(temple);
-  const [t, tCommon] = await Promise.all([getTranslations('home'), getTranslations('common')]);
+  const [t, tCommon, tDonate] = await Promise.all([
+    getTranslations('home'), getTranslations('common'), getTranslations('donate'),
+  ]);
 
   const jsonLd: Record<string, unknown> = {
     '@context': 'https://schema.org',
@@ -46,7 +49,8 @@ export default async function HomePage() {
 
   const waysToParticipate = [
     { href: '/poojas', icon: Sparkles, title: t('bookSevaTitle'), text: t('bookSevaText') },
-    { href: '/donations', icon: HandHeart, title: t('supportTempleTitle'), text: t('supportTempleText') },
+    // Straight to the working UPI donation page once the temple's UPI ID is set.
+    { href: hundiQr.configured ? '/hundi' : '/donations', icon: HandHeart, title: t('supportTempleTitle'), text: t('supportTempleText') },
     { href: '/contact', icon: CalendarDays, title: t('planVisitTitle'), text: t('planVisitText') },
   ];
 
@@ -68,15 +72,15 @@ export default async function HomePage() {
             <ul className="flex flex-wrap gap-x-8 gap-y-2">
               {timings.map((timing) => (
                 <li key={timing.id} className="text-sm">
-                  <span className="text-gray-500">{timing.label}</span>
+                  <span className="text-gray-600">{timing.label}</span>
                   <span className="ml-2 font-semibold text-gray-900"><TempleTime start={timing.start_time} end={timing.end_time} yourTimeLabel={tCommon('yourTime')} /></span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">{t('timingsSoon')}</p>
+            <p className="text-sm text-gray-600">{t('timingsSoon')}</p>
           )}
-          <Link href="/timings" className="text-sm font-semibold text-saffron hover:underline">{t('fullSchedule')}</Link>
+          <Link href="/timings" className="text-sm font-semibold text-saffron-dark hover:underline">{t('fullSchedule')}</Link>
         </div>
       </section>
 
@@ -88,7 +92,7 @@ export default async function HomePage() {
           <div className="grid gap-6 md:grid-cols-3">
             {announcements.map((a) => (
               <article key={a.id} className="rounded-xl border-l-4 border-saffron bg-white p-6 shadow-sm">
-                <p className="mb-2 flex items-center gap-1.5 text-xs text-gray-500">
+                <p className="mb-2 flex items-center gap-1.5 text-xs text-gray-600">
                   <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
                   <time dateTime={(a.start_date ?? a.created_at).slice(0, 10)}>{formatDate(a.start_date ?? a.created_at)}</time>
                 </p>
@@ -98,7 +102,7 @@ export default async function HomePage() {
             ))}
           </div>
         ) : (
-          <p className="text-center italic text-gray-500">{t('noAnnouncements')}</p>
+          <p className="text-center italic text-gray-600">{t('noAnnouncements')}</p>
         )}
       </section>
 
@@ -121,7 +125,7 @@ export default async function HomePage() {
                       <h3 className="font-serif text-lg font-bold">{f.name}</h3>
                     </div>
                     <div className="p-5">
-                      {f.location && <p className="mb-1 flex items-center gap-1 text-xs text-gray-500"><MapPin className="h-3 w-3" aria-hidden="true" />{f.location}</p>}
+                      {f.location && <p className="mb-1 flex items-center gap-1 text-xs text-gray-600"><MapPin className="h-3 w-3" aria-hidden="true" />{f.location}</p>}
                       {f.description && <p className="line-clamp-3 text-sm text-gray-600">{f.description}</p>}
                     </div>
                   </article>
@@ -129,7 +133,7 @@ export default async function HomePage() {
               })}
             </div>
           ) : (
-            <p className="text-center italic text-gray-500">{t('noFestivals')}</p>
+            <p className="text-center italic text-gray-600">{t('noFestivals')}</p>
           )}
         </div>
       </section>
@@ -152,11 +156,22 @@ export default async function HomePage() {
           ) : (
             <p className="mt-8 italic text-amber-100">{t('ritualsSoon')}</p>
           )}
-          <Link href="/poojas" className="mt-10 inline-block rounded-full bg-saffron px-8 py-3 font-bold text-white shadow hover:bg-saffron-light hover:text-maroon-dark">
+          <Link href="/poojas" className="mt-10 inline-block rounded-full bg-saffron-dark px-8 py-3 font-bold text-white shadow hover:bg-saffron-light hover:text-maroon-dark">
             {t('viewAllPoojas')}
           </Link>
         </div>
       </section>
+
+      {hundiQr.configured && (
+        <section aria-labelledby="donate-heading" className="bg-white py-14">
+          <div className="mx-auto max-w-xl px-4">
+            <DonateUpi qr={hundiQr} />
+            <p className="mt-4 text-center text-sm">
+              <Link href="/hundi" className="font-medium text-maroon hover:underline">{tDonate('details')}</Link>
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* Ways to help */}
       <section aria-label={t('waysToParticipate')} className="mx-auto grid max-w-6xl gap-6 px-4 py-14 md:grid-cols-3">

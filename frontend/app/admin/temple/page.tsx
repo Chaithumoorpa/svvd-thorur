@@ -1,21 +1,24 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Save } from 'lucide-react';
+import { Printer, Save } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
 import TvSectionsCard from '@/components/admin/TvSectionsCard';
 import Field from '@/components/ui/Field';
 import { ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
 import { btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
 import { useAction } from '@/hooks/useAction';
-import { getTemple, updateTemple } from '@/lib/api';
+import { getHundiQr, getTemple, updateTemple } from '@/lib/api';
 import { emptyToNull } from '@/lib/format';
-import type { Temple } from '@/lib/types';
+import type { HundiQrInfo, Temple } from '@/lib/types';
 import axios from 'axios';
 
 type Form = Record<Exclude<keyof Temple, 'id' | 'tv_sections'>, string>;
 
-const FIELDS: Array<{ key: keyof Form; label: string; hint?: string; type?: string; wide?: boolean; area?: boolean; required?: boolean }> = [
+const FIELDS: Array<{
+  key: keyof Form; label: string; hint?: string; type?: string; wide?: boolean; area?: boolean; required?: boolean;
+  section?: string; upper?: boolean;
+}> = [
   { key: 'name', label: 'Temple name', required: true, wide: true },
   { key: 'deity_name', label: 'Presiding deity' },
   { key: 'tagline', label: 'Tagline', hint: 'One line shown under the name.' },
@@ -32,16 +35,38 @@ const FIELDS: Array<{ key: keyof Form; label: string; hint?: string; type?: stri
   { key: 'facebook_url', label: 'Facebook page' },
   { key: 'instagram_url', label: 'Instagram page' },
   { key: 'youtube_url', label: 'YouTube channel' },
-  { key: 'history', label: 'Temple history', area: true, wide: true, hint: 'Shown on the About page. Separate paragraphs with a blank line.' },
+  {
+    key: 'upi_vpa', label: 'UPI ID for e-Hundi', section: 'Trust & bank details',
+    hint: 'e.g. temple@upi. Devotees scan a QR built from this to pay the Hundi directly - clear it to remove the Online Hundi page.',
+  },
+  {
+    key: 'bank_account_name', label: 'Bank account name',
+    hint: 'Exactly as the bank shows it in UPI apps. Printed so devotees can check they are paying the temple.',
+  },
+  { key: 'registration_number', label: 'Trust / Endowments registration no.', hint: 'As on the registration certificate.' },
+  { key: 'pan_number', label: 'Temple PAN', hint: '10 characters, e.g. AAATS1234F.', upper: true },
+  {
+    key: 'eighty_g_number', label: '80G approval number', wide: true,
+    hint: 'If set, the Hundi page and poster say offerings are eligible for 80G tax deduction.',
+  },
+  { key: 'history', label: 'Temple history', section: 'About', area: true, wide: true, hint: 'Shown on the About page. Separate paragraphs with a blank line.' },
 ];
 
 const toForm = (t: Temple | null): Form =>
   Object.fromEntries(FIELDS.map(({ key }) => [key, (t?.[key as keyof Temple] as string | null) ?? ''])) as Form;
 
+/** The printable poster is a public page (it only shows public details), one per language. */
+const POSTER_LANGUAGES = [
+  { label: 'తెలుగు', path: '/te/hundi-poster' },
+  { label: 'English', path: '/hundi-poster' },
+  { label: 'हिन्दी', path: '/hi/hundi-poster' },
+];
+
 export default function TempleAdmin() {
   const [form, setForm] = useState<Form | null>(null);
   const [tvSections, setTvSections] = useState<string[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [hundiQr, setHundiQr] = useState<HundiQrInfo | null>(null);
   const action = useAction();
 
   useEffect(() => {
@@ -52,7 +77,8 @@ export default function TempleAdmin() {
         if (axios.isAxiosError(err) && err.response?.status === 404) { setForm(toForm(null)); setTvSections(null); }
         else setLoadError('Could not load the temple profile.');
       });
-  }, []);
+    getHundiQr().then(setHundiQr).catch(() => setHundiQr(null));
+  }, [action.success]);
 
   if (loadError) return <ErrorBlock message={loadError} onRetry={() => window.location.reload()} />;
   if (!form) return <LoadingBlock />;
@@ -71,14 +97,24 @@ export default function TempleAdmin() {
         {action.success && <Notice kind="success">{action.success}</Notice>}
         {action.error && <Notice kind="error">{action.error}</Notice>}
         <div className="grid gap-4 sm:grid-cols-2">
-          {FIELDS.map(({ key, label, hint, type, wide, area, required }) => (
-            <Field key={key} label={label} hint={hint} required={required} className={wide ? 'sm:col-span-2' : undefined}>
-              {area ? (
-                <textarea className={inputCls} rows={8} maxLength={20000} value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-              ) : (
-                <input type={type ?? 'text'} className={inputCls} value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+          {FIELDS.map(({ key, label, hint, type, wide, area, required, section, upper }) => (
+            <React.Fragment key={key}>
+              {section && (
+                <h2 className="border-t border-gray-100 pt-4 font-serif text-lg font-semibold text-maroon sm:col-span-2">{section}</h2>
               )}
-            </Field>
+              <Field label={label} hint={hint} required={required} className={wide ? 'sm:col-span-2' : undefined}>
+                {area ? (
+                  <textarea className={inputCls} rows={8} maxLength={20000} value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+                ) : (
+                  <input
+                    type={type ?? 'text'}
+                    className={`${inputCls}${upper ? ' uppercase' : ''}`}
+                    value={form[key]}
+                    onChange={(e) => setForm({ ...form, [key]: upper ? e.target.value.toUpperCase() : e.target.value })}
+                  />
+                )}
+              </Field>
+            </React.Fragment>
           ))}
         </div>
         <div className="flex justify-end">
@@ -88,6 +124,28 @@ export default function TempleAdmin() {
         </div>
       </form>
       {tvSections && <TvSectionsCard initial={tvSections} />}
+
+      {hundiQr?.configured && (
+        <div className={`${cardCls} mt-6 flex flex-wrap items-center gap-4 p-5`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`data:image/png;base64,${hundiQr.qr_base64}`} alt="Hundi UPI QR" className="h-24 w-24 rounded border border-gray-200" />
+          <div className="flex-1">
+            <p className="font-medium text-gray-800">Online Hundi QR</p>
+            <p className="text-sm text-gray-500">{hundiQr.upi_vpa} - shown on the public &quot;Online Hundi&quot; page.</p>
+            {!hundiQr.registration_number && (
+              <p className="mt-1 text-xs text-amber-700">Tip: add the registration number above - devotees trust a poster that shows it.</p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-gray-600">Print A4 poster:</span>
+            {POSTER_LANGUAGES.map(({ label, path }) => (
+              <a key={path} href={path} target="_blank" rel="noopener" className={btnPrimary}>
+                <Printer className="h-4 w-4" aria-hidden="true" /> {label}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </AdminPage>
   );
 }

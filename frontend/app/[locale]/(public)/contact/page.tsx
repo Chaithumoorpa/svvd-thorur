@@ -4,11 +4,11 @@ import { Mail, MapPin, MessageCircle, Phone } from 'lucide-react';
 import ContactForm from '@/components/public/ContactForm';
 import { PageShell } from '@/components/public/SectionHeading';
 import { fetchTemple } from '@/lib/server-api';
-import { isEmbeddableMap, localizedAlternates, templeAddress } from '@/lib/site';
+import { isEmbeddableMap, pageMetadata, templeAddress } from '@/lib/site';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('metadata.contact');
-  return { title: t('title'), description: t('description'), alternates: await localizedAlternates('/contact') };
+  return pageMetadata('/contact', { title: t('title'), description: t('description') });
 }
 
 export default async function ContactPage() {
@@ -36,13 +36,13 @@ export default async function ContactPage() {
               ))}
             </ul>
           ) : (
-            <p className="rounded-xl border border-dashed border-amber-300 bg-white p-6 text-sm text-gray-500">{t('empty')}</p>
+            <p className="rounded-xl border border-dashed border-amber-300 bg-white p-6 text-sm text-gray-600">{t('empty')}</p>
           )}
           {temple?.map_url && (
             isEmbeddableMap(temple.map_url) ? (
               <iframe title={t('mapTitle')} src={temple.map_url} className="h-56 w-full rounded-xl border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" sandbox="allow-scripts allow-same-origin allow-popups" />
             ) : (
-              <a href={temple.map_url} target="_blank" rel="noopener noreferrer" className="inline-block font-semibold text-saffron hover:underline">{tCommon('getDirections')}</a>
+              <a href={temple.map_url} target="_blank" rel="noopener noreferrer" className="inline-block font-semibold text-saffron-dark hover:underline">{tCommon('getDirections')}</a>
             )
           )}
         </div>
