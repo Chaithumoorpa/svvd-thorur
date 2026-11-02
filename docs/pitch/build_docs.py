@@ -149,7 +149,7 @@ def srs():
              ["FR-SEC-05", "Alert Super Admins on bursts of repeated deletions by one actor", "Could"]], widths=[2.4, 11.2, 2.4])
     D.h("3.5 Future / optional modules (not in reference build)", 2)
     D.ul(["Online payment gateway for sevas and donations (UPI / cards) with reconciliation.",
-          "TV display page: fullscreen split screen of a live stream and staff-approved donor blessings (FR-FUT-01); live-stream page on the website with an admin-set stream link (FR-FUT-02).",
+          "TV display page (/tv): fullscreen animated display of darshan timings, staff-approved donor blessings, festivals and announcements, with QR codes so devotees register, sign in and book from their phone (FR-FUT-01, built); live-stream page on the website with an admin-set stream link (FR-FUT-02).",
           "WhatsApp / SMS notifications.",
           "Live darshan / video streaming embed.",
           "Annadanam and accommodation booking.",
@@ -346,13 +346,12 @@ def budget():
              ["WhatsApp / SMS notifications", "₹20,000 + usage", "Provider fees extra"],
              ["Content entry & photo digitisation", "₹8,000–20,000", "Depends on volume"],
              ["Professional photography / drone video", "At actuals", "Third party"],
-             ["TV display page (/tv): live video + donor blessings split screen", "₹12,000", "Fullscreen, auto-refreshing, shows staff-approved blessings only. Needs Standard or Complete (booking and blessings)"],
-             ["Live-stream page on website + admin field for the stream link", "₹8,000", "Embeds YouTube Live; the stream itself runs on YouTube, not the temple server"],
-             ["Bundle: TV display + live-stream page", "₹18,000", "Saves ₹2,000 against buying both separately"],
+             ["TV display page (/tv): animated timings, today's donor blessings, festivals, announcements, plus QR codes to register, sign in and book a seva", "₹12,000", "Fullscreen, auto-refreshing, staff-approved blessings only; built and demonstrated. Needs Standard or Complete (booking and blessings)"],
+             ["Live-stream page on website + admin field for the stream link", "₹8,000", "Embeds YouTube Live for devotees online; separate from the TV page; the stream itself runs on YouTube, not the temple server"],
              ["Live-stream setup and festival-day support", "₹7,000", "OBS/YouTube setup, test run, on-site support for one event"],
              ["Annual DPDPA/legal text review", "₹6,000", "By legal advisor; optional"]], widths=[6.5, 3, 6.5])
 
-    D.p("Optional on-site hardware for TV display and live stream (bought by the temple, not part of the software fee; "
+    D.p("Optional on-site hardware for the live stream (the TV page itself needs only the TV and a small Android box or the TV's browser) (bought by the temple, not part of the software fee; "
         "estimates, confirm with a local dealer):", bold=True)
     D.table([["Item", "Estimate", "Note"],
              ["Smart/Android TV (40 inch)", "Temple's purchase", "Opens /tv in a browser; an Android box can be added if the TV browser is weak"],

@@ -20,7 +20,7 @@ def clean(name, box, sample):
     return SH + name + "_c.png"
 
 
-imgs = {k: f"shots2/{k}.png" for k in ["home", "telugu", "mobile", "login", "poojas", "admin_dashboard", "admin_tickets", "admin_finance", "gallery"]}
+imgs = {k: f"shots2/{k}.png" for k in ["home", "telugu", "mobile", "login", "poojas", "admin_dashboard", "admin_tickets", "admin_finance", "gallery", "tv_1", "tv_2"]}
 
 prs = Presentation(); prs.slide_width = Inches(13.333); prs.slide_height = Inches(7.5)
 blank = prs.slide_layouts[6]
@@ -150,6 +150,13 @@ text(s, 0.6, 5.85, 12, 1.2, ["Dashboard shows what needs attention; recent chang
 # 7c Video
 s = slide("Walkthrough video", "Click to play: public site, sign-in, admin (about 1 min)")
 s.shapes.add_movie("video/walkthrough.mp4", Inches(2.45), Inches(1.6), Inches(8.4), Inches(5.25), poster_frame_image=imgs["home"], mime_type="video/mp4")
+
+# 7d Lobby TV
+s = slide("Lobby TV display", "Open /tv fullscreen on the temple's TV: animated, refreshes itself, no keyboard needed")
+shot(s, "tv_1", 0.6, 1.7, 5.9)
+shot(s, "tv_2", 6.8, 1.7, 5.9)
+text(s, 0.6, 5.6, 12.2, 1.4, ["Timings, today's approved donor blessings, festivals and announcements rotate with animation; announcements scroll along the bottom.",
+     "A TV has no keyboard, so devotees scan the QR codes on screen: Register, Sign in, Book a seva, and finish on their own phone."], 16)
 
 # 8 Architecture
 s = slide("How it is built", "Modern, tested, containerised: low cost to run, easy to hand over")

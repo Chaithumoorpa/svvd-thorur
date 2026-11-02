@@ -29,6 +29,14 @@ module.exports = {
           '90%': { opacity: '0.9' },
           '100%': { transform: 'translateY(340%) rotate(200deg)', opacity: '0' },
         },
+        fadeUp: {
+          '0%': { opacity: '0', transform: 'translateY(30px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        marquee: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
         glowPulse: {
           '0%, 100%': { opacity: '0.55', transform: 'scale(1)' },
           '50%': { opacity: '1', transform: 'scale(1.08)' },
@@ -38,6 +46,8 @@ module.exports = {
         slideIn: 'slideIn 0.6s ease-out',
         petalFall: 'petalFall 6s linear infinite',
         glowPulse: 'glowPulse 3.5s ease-in-out infinite',
+        fadeUp: 'fadeUp 0.9s ease-out both',
+        marquee: 'marquee 40s linear infinite',
       },
     },
   },

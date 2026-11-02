@@ -59,3 +59,25 @@ def committee(response: Response, db: Session = Depends(get_db)):
     """Members the temple chose to publish. Never includes phone or email."""
     response.headers["Cache-Control"] = "public, max-age=60"
     return MemberRepository(db).get_public()
+
+
+# Only these site paths can be encoded, so this can never be used as a generic QR service.
+QR_PATHS = {"/", "/register", "/login", "/poojas", "/abhishekam"}
+
+
+@router.get("/qr")
+def qr_code(path: str = "/"):
+    """PNG QR code for a page on the temple's own site - shown on the lobby TV (/tv)
+    so devotees can register, sign in or book a seva from their phone."""
+    import io
+
+    import qrcode
+    from fastapi import HTTPException
+
+    from app.core.config import settings
+
+    if path not in QR_PATHS:
+        raise HTTPException(status_code=400, detail="Unsupported path")
+    buf = io.BytesIO()
+    qrcode.make(settings.FRONTEND_BASE_URL.rstrip("/") + path, box_size=10, border=2).save(buf, format="PNG")
+    return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
