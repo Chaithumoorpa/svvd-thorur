@@ -38,5 +38,8 @@ class Temple(Base):
     instagram_url = Column(String(300), nullable=True)
     youtube_url = Column(String(300), nullable=True)
 
+    # Lobby TV (/tv): comma-separated section keys to show. NULL = every section (the default).
+    tv_sections = Column(Text, nullable=True)
+
     # Status
     is_active = Column(Boolean, default=True, nullable=False)

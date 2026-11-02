@@ -149,7 +149,7 @@ def srs():
              ["FR-SEC-05", "Alert Super Admins on bursts of repeated deletions by one actor", "Could"]], widths=[2.4, 11.2, 2.4])
     D.h("3.5 Future / optional modules (not in reference build)", 2)
     D.ul(["Online payment gateway for sevas and donations (UPI / cards) with reconciliation.",
-          "TV display page (/tv): fullscreen animated display of darshan timings, staff-approved donor blessings, festivals and announcements, with QR codes so devotees register, sign in and book from their phone (FR-FUT-01, built); live-stream page on the website with an admin-set stream link (FR-FUT-02).",
+          "TV display page (/tv): fullscreen animated display of darshan timings, staff-approved donor blessings, festivals and announcements, with QR codes so devotees register, sign in and book from their phone (FR-FUT-01, built; sections selectable per temple in the admin panel, private data never shown); live-stream page on the website with an admin-set stream link (FR-FUT-02).",
           "WhatsApp / SMS notifications.",
           "Live darshan / video streaming embed.",
           "Annadanam and accommodation booking.",
@@ -346,7 +346,7 @@ def budget():
              ["WhatsApp / SMS notifications", "₹20,000 + usage", "Provider fees extra"],
              ["Content entry & photo digitisation", "₹8,000–20,000", "Depends on volume"],
              ["Professional photography / drone video", "At actuals", "Third party"],
-             ["TV display page (/tv): animated timings, today's donor blessings, festivals, announcements, plus QR codes to register, sign in and book a seva", "₹12,000", "Fullscreen, auto-refreshing, staff-approved blessings only; built and demonstrated. Needs Standard or Complete (booking and blessings)"],
+             ["TV display page (/tv): animated, branded scenes (timings, sevas, today's donor blessings, festivals, announcements, gallery, committee) with QR codes to register, sign in and book a seva; staff pick the sections with checkboxes in the admin panel", "₹12,000", "Fullscreen, auto-refreshing, staff-approved blessings only; built and demonstrated. Needs Standard or Complete (booking and blessings)"],
              ["Live-stream page on website + admin field for the stream link", "₹8,000", "Embeds YouTube Live for devotees online; separate from the TV page; the stream itself runs on YouTube, not the temple server"],
              ["Live-stream setup and festival-day support", "₹7,000", "OBS/YouTube setup, test run, on-site support for one event"],
              ["Annual DPDPA/legal text review", "₹6,000", "By legal advisor; optional"]], widths=[6.5, 3, 6.5])

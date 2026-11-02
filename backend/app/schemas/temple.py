@@ -1,5 +1,5 @@
 from datetime import datetime, time
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional, get_args
 
 from pydantic import (
     AfterValidator, BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator,
@@ -7,6 +7,12 @@ from pydantic import (
 )
 
 from app.schemas.common import OptionalSafeUrl, blank_to_none
+
+# Sections the lobby TV (/tv) can show. Only public content - tickets, messages, donors,
+# donations, finance, users and the audit log are private and can never appear on a screen.
+TvSection = Literal["welcome", "timings", "poojas", "blessings", "festivals", "announcements",
+                    "gallery", "committee", "qr", "ticker"]
+TV_SECTIONS: List[str] = list(get_args(TvSection))
 
 Name150 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=150)]
 
@@ -30,6 +36,7 @@ class TempleUpdate(BaseModel):
     facebook_url: OptionalSafeUrl = None
     instagram_url: OptionalSafeUrl = None
     youtube_url: OptionalSafeUrl = None
+    tv_sections: Optional[List[TvSection]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -59,7 +66,16 @@ class TempleOut(BaseModel):
     facebook_url: Optional[str] = None
     instagram_url: Optional[str] = None
     youtube_url: Optional[str] = None
+    tv_sections: List[str] = Field(default_factory=lambda: list(TV_SECTIONS))
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("tv_sections", mode="before")
+    @classmethod
+    def _split_tv_sections(cls, v):
+        # stored as comma-separated text; NULL means "show everything"
+        if v is None:
+            return list(TV_SECTIONS)
+        return [x for x in v.split(",") if x in TV_SECTIONS] if isinstance(v, str) else v
 
 
 class TimingBase(BaseModel):

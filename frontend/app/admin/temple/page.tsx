@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Save } from 'lucide-react';
 import AdminPage from '@/components/admin/AdminPage';
+import TvSectionsCard from '@/components/admin/TvSectionsCard';
 import Field from '@/components/ui/Field';
 import { ErrorBlock, LoadingBlock, Notice } from '@/components/ui/States';
 import { btnPrimary, cardCls, inputCls } from '@/components/ui/styles';
@@ -12,7 +13,7 @@ import { emptyToNull } from '@/lib/format';
 import type { Temple } from '@/lib/types';
 import axios from 'axios';
 
-type Form = Record<Exclude<keyof Temple, 'id'>, string>;
+type Form = Record<Exclude<keyof Temple, 'id' | 'tv_sections'>, string>;
 
 const FIELDS: Array<{ key: keyof Form; label: string; hint?: string; type?: string; wide?: boolean; area?: boolean; required?: boolean }> = [
   { key: 'name', label: 'Temple name', required: true, wide: true },
@@ -39,15 +40,16 @@ const toForm = (t: Temple | null): Form =>
 
 export default function TempleAdmin() {
   const [form, setForm] = useState<Form | null>(null);
+  const [tvSections, setTvSections] = useState<string[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const action = useAction();
 
   useEffect(() => {
     getTemple()
-      .then((t) => setForm(toForm(t)))
+      .then((t) => { setForm(toForm(t)); setTvSections(t.tv_sections); })
       .catch((err) => {
         // 404 = profile not created yet: start from an empty form
-        if (axios.isAxiosError(err) && err.response?.status === 404) setForm(toForm(null));
+        if (axios.isAxiosError(err) && err.response?.status === 404) { setForm(toForm(null)); setTvSections(null); }
         else setLoadError('Could not load the temple profile.');
       });
   }, []);
@@ -85,6 +87,7 @@ export default function TempleAdmin() {
           </button>
         </div>
       </form>
+      {tvSections && <TvSectionsCard initial={tvSections} />}
     </AdminPage>
   );
 }

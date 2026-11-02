@@ -20,7 +20,7 @@ def clean(name, box, sample):
     return SH + name + "_c.png"
 
 
-imgs = {k: f"shots2/{k}.png" for k in ["home", "telugu", "mobile", "login", "poojas", "admin_dashboard", "admin_tickets", "admin_finance", "gallery", "tv_1", "tv_2"]}
+imgs = {k: f"shots2/{k}.png" for k in ["home", "telugu", "mobile", "login", "poojas", "admin_dashboard", "admin_tickets", "admin_finance", "gallery", "tv_1", "tv_3", "tv_10", "admin_tv_card"]}
 
 prs = Presentation(); prs.slide_width = Inches(13.333); prs.slide_height = Inches(7.5)
 blank = prs.slide_layouts[6]
@@ -153,10 +153,13 @@ s.shapes.add_movie("video/walkthrough.mp4", Inches(2.45), Inches(1.6), Inches(8.
 
 # 7d Lobby TV
 s = slide("Lobby TV display", "Open /tv fullscreen on the temple's TV: animated, refreshes itself, no keyboard needed")
-shot(s, "tv_1", 0.6, 1.7, 5.9)
-shot(s, "tv_2", 6.8, 1.7, 5.9)
-text(s, 0.6, 5.6, 12.2, 1.4, ["Timings, today's approved donor blessings, festivals and announcements rotate with animation; announcements scroll along the bottom.",
-     "A TV has no keyboard, so devotees scan the QR codes on screen: Register, Sign in, Book a seva, and finish on their own phone."], 16)
+shot(s, "tv_10", 0.6, 1.6, 4.0)
+shot(s, "tv_1", 4.8, 1.6, 4.0)
+shot(s, "tv_3", 9.0, 1.6, 4.0)
+shot(s, "admin_tv_card", 0.6, 4.45, 4.6)
+text(s, 5.6, 4.4, 7.2, 2.6, ["Staff choose what the TV shows with checkboxes in Admin > Temple Information: welcome, timings, sevas, blessings, festivals, announcements, gallery, committee, QR panel, ticker.",
+     "Private sections (tickets, donors, finance, messages) can never appear on a screen.",
+     "Devotees scan the QR codes on screen to register, sign in and book from their own phone."], 15)
 
 # 8 Architecture
 s = slide("How it is built", "Modern, tested, containerised: low cost to run, easy to hand over")

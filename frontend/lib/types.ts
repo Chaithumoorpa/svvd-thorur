@@ -43,6 +43,8 @@ export interface Temple {
   facebook_url: string | null;
   instagram_url: string | null;
   youtube_url: string | null;
+  /** Sections the lobby TV (/tv) shows; every section by default. */
+  tv_sections: string[];
 }
 
 export type TempleUpdate = Partial<Omit<Temple, 'id'>>;
